@@ -1,0 +1,47 @@
+{
+  "name": "@minit-games/sdk",
+  "version": "1.0.0",
+  "description": "Official SDK for building Minit Games HTML5 mini-games",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./ui": {
+      "import": "./dist/ui/index.js",
+      "types": "./dist/ui/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "check": "tsc --project tsconfig.json --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "minit",
+    "games",
+    "sdk",
+    "html5"
+  ],
+  "author": "Drop GmbH",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Drop-GmbH/minit-sdk.git"
+  },
+  "homepage": "https://github.com/Drop-GmbH/minit-sdk",
+  "dependencies": {
+    "seedrandom": "^3.0.5"
+  },
+  "devDependencies": {
+    "@types/seedrandom": "^3.0.8",
+    "typescript": "^5.0.0"
+  }
+}
