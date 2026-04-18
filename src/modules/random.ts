@@ -1,10 +1,10 @@
 import seedrandom from 'seedrandom';
-import { getDropConfigValue } from './config';
+import { getConfigValue } from './config';
 
 export type RandomModule = { seedParam?: string; fallbackSeed?: string;  patchGlobal?: boolean };
 
 
-const seed = getDropConfigValue("seed") ?? Date.now().toString();
+const seed = getConfigValue("seed") ?? Date.now().toString();
 console.log("[DropSDK] Random seed =", seed);
 let random = seedrandom(seed, { global: false });
 

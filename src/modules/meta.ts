@@ -1,4 +1,4 @@
-export function applyDropMetaTags() {
+export function applyMetaTags() {
     const head = document.head;
 
     // Add charset meta tag
@@ -12,3 +12,6 @@ export function applyDropMetaTags() {
     viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1.0');
     head.appendChild(viewportMeta);
 }
+
+// Backward-compat alias
+export const applyDropMetaTags = applyMetaTags;

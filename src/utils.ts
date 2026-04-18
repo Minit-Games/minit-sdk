@@ -1,15 +1,14 @@
 
-
-export function getDropEnvironment() {
+export function getEnvironment() {
     return window.minit?.environment || "testing";
 }
 
 export function isApp() {
-    return getDropEnvironment() === "app";
+    return getEnvironment() === "app";
 }
 
 export function isTestEnvironment() {
-    return getDropEnvironment() === "testing";
+    return getEnvironment() === "testing";
 }
 
 export function callApiFunction(callback: () => void, testMessage: string | (() => string)) {
@@ -22,4 +21,8 @@ export function callApiFunction(callback: () => void, testMessage: string | (() 
     }
 }
 
-export type DropEnvironment = ReturnType<typeof getDropEnvironment>;
+export type Environment = ReturnType<typeof getEnvironment>;
+
+// Backward-compat aliases
+export const getDropEnvironment = getEnvironment;
+export type DropEnvironment = Environment;

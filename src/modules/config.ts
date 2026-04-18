@@ -1,5 +1,5 @@
 
-export function getDropConfig(): Record<string, string> {
+export function getConfig(): Record<string, string> {
     const urlParams = new URLSearchParams(window.location.search);
     const config: Record<string, string> = {};
     urlParams.forEach((value, key) => {
@@ -8,12 +8,12 @@ export function getDropConfig(): Record<string, string> {
     return config;
 }
 
-export function getDropConfigValue(key: string): string | undefined;
-export function getDropConfigValue(
+export function getConfigValue(key: string): string | undefined;
+export function getConfigValue(
   key: string,
   defaultValue: string | (() => string)
 ): string;
-export function getDropConfigValue(
+export function getConfigValue(
   key: string,
   defaultValue?: string | (() => string)
 ): string | undefined {
@@ -32,3 +32,7 @@ export function getDropConfigValue(
     ? defaultValue()
     : defaultValue;
 }
+
+// Backward-compat aliases
+export const getDropConfig = getConfig;
+export { getConfigValue as getDropConfigValue };

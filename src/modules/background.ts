@@ -23,13 +23,16 @@ export interface ImageOptions {
     fit?: 'cover' | 'contain';  // How to fit the image, default: 'cover'
 }
 
-export type DropBackground = {
+export type Background = {
     backgroundColor: string,
     containerId?: string,
     shadow?: ShadowOptions,
     shapes?: ShapeOptions,
     image?: ImageOptions
 };
+
+// Backward-compat alias
+export type DropBackground = Background;
 
 // Generate color variations from a base hex color
 // variation: 0-1 value representing how much of the lightness range to use (0.5 = ±25% from base)
@@ -163,7 +166,7 @@ function createShapesBackground(bg: HTMLElement, options: ShapeOptions, backgrou
     bg.appendChild(shapesContainer);
 }
 
-export function addDropBackground(options?: DropBackground): void {
+export function addBackground(options?: Background): void {
 
     const containerId = options?.containerId || "game-background";
 
@@ -216,3 +219,6 @@ export function addDropBackground(options?: DropBackground): void {
         createShapesBackground(bg, options.shapes, options.backgroundColor ?? DEFAULT_BACKGROUND_COLOR);
     }
 }
+
+// Backward-compat alias
+export const addDropBackground = addBackground;

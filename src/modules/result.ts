@@ -1,7 +1,7 @@
-import type { DropResultOptions } from "../minitApi";
+import type { ResultOptions } from "../minitApi";
 import { callApiFunction, isTestEnvironment } from "../utils";
 
-export function reportDropResult(result: number|string, options?: DropResultOptions): void {
+export function reportResult(result: number|string, options?: ResultOptions): void {
 
     if(isTestEnvironment()) {
 
@@ -18,10 +18,13 @@ export function reportDropResult(result: number|string, options?: DropResultOpti
 
     callApiFunction(() => {
         window.minit?.reportResult(result, options);
-    }, `reportDropResult => ${result}\nOptions: ${JSON.stringify(options)}`);
+    }, `reportResult => ${result}\nOptions: ${JSON.stringify(options)}`);
 }
 
-function showResultScreen(result: number | string, options?: DropResultOptions) {
+// Backward-compat alias
+export const reportDropResult = reportResult;
+
+function showResultScreen(result: number | string, options?: ResultOptions) {
     const flavorText = options?.flavorText || "No flavor text provided";
     const delay = options?.delay || 0;
 
