@@ -24,6 +24,13 @@
     "check": "tsc --project tsconfig.json --noEmit",
     "prepublishOnly": "npm run build"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "keywords": [
     "minit",
     "games",
