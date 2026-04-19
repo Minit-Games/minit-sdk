@@ -14,7 +14,7 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 
 | Import path | Description |
 |---|---|
-| `@minit-games/sdk` | Core SDK — `initializeDropSDK`, `reportDropResult`, etc. |
+| `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
 ## Release Process

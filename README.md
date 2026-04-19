@@ -13,10 +13,10 @@ npm install @minit-games/sdk
 ### Core entry point
 
 ```ts
-import { initializeDropSDK, getDropConfigValue, reportDropResult, loadingDone } from '@minit-games/sdk';
+import { initializeSDK, getConfigValue, reportResult, loadingDone } from '@minit-games/sdk';
 
 // Initialize with optional background
-initializeDropSDK({
+initializeSDK({
     background: {
         backgroundColor: '#1a1a2e',
         shapes: { enabled: true }
@@ -24,13 +24,13 @@ initializeDropSDK({
 });
 
 // Read URL-param config (passed by the app)
-const difficulty = getDropConfigValue('difficulty', 'normal');
+const difficulty = getConfigValue('difficulty', 'normal');
 
 // Signal that assets are loaded and the game is ready
 loadingDone();
 
 // At game end, report the result
-reportDropResult(1500, { flavorText: 'Great run!' });
+reportResult(1500, { flavorText: 'Great run!' });
 ```
 
 ### UI entry point
@@ -65,15 +65,19 @@ score.flyToPanel({
 
 | Export | Description |
 |--------|-------------|
-| `initializeDropSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
+| `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
-| `reportDropResult(result, options?)` | Submit the final game result |
-| `getDropConfigValue(key, default?)` | Read a URL-param config value injected by the app |
-| `getDropConfig()` | Get all URL-param config values as a plain object |
+| `reportResult(result, options?)` | Submit the final game result |
+| `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
+| `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
 | `patchSeed(seed)` | Override the random seed at runtime |
-| `addDropBackground(options?)` | Apply a styled background to the game container |
-| `applyDropMetaTags()` | Inject charset + viewport meta tags |
+| `addBackground(options?)` | Apply a styled background to the game container |
+| `applyMetaTags()` | Inject charset + viewport meta tags |
+
+#### Legacy aliases
+
+For backward compatibility with games written against earlier versions, the old `Drop`-prefixed names are exported as aliases: `reportDropResult`, `getDropConfigValue`, `getDropConfig`, `initializeDropSDK`, `addDropBackground`, `applyDropMetaTags`, `getDropEnvironment`, and the types `DropBackground`/`DropResultOptions`/`DropEnvironment`.
 
 ### `@minit-games/sdk/ui`
 
