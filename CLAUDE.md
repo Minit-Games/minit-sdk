@@ -1,6 +1,6 @@
 # CLAUDE.md — minit-sdk
 
-Internal ops reference for the `@minit-games/sdk` package. Public npm package; GitHub repo: `Drop-GmbH/minit-sdk`.
+Internal ops reference for the `@minit-games/sdk` package. Public npm package; GitHub repo: `Minit-Games/minit-sdk`.
 
 ## Commands
 

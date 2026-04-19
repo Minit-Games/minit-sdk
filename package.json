@@ -41,9 +41,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Drop-GmbH/minit-sdk.git"
+    "url": "git+https://github.com/Minit-Games/minit-sdk.git"
   },
-  "homepage": "https://github.com/Drop-GmbH/minit-sdk",
+  "homepage": "https://github.com/Minit-Games/minit-sdk",
   "dependencies": {
     "seedrandom": "^3.0.5"
   },
