@@ -1,6 +1,6 @@
 {
   "name": "@minit-games/sdk",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Official SDK for building Minit Games HTML5 mini-games",
   "type": "module",
   "main": "dist/index.js",
