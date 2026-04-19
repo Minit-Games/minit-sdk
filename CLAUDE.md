@@ -31,4 +31,4 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 3. GitHub Actions (`publish.yml`) detects the `v*.*.*` tag and runs `npm publish` automatically with npm provenance.
 4. Verify the release at: https://www.npmjs.com/package/@minit-games/sdk
 
-> The `NPM_TOKEN` secret must be set in the GitHub repo settings (`Settings → Secrets → Actions`). The npm org `@minit-games` must exist on npmjs.com before the first publish.
+> Publishing uses npm Trusted Publishing (OIDC) — no token secret required. The trusted publisher is configured at npmjs.com under the package's Settings → Trusted publishing, pointing at `Minit-Games/minit-sdk` + workflow `publish.yml`.
