@@ -13,4 +13,5 @@ export type MinitApi = {
     dropConfig: Record<string, string>,
 
     reportResult: (result: number|string, options?: ResultOptions) => void,
+    loadingDone: () => void,
 }

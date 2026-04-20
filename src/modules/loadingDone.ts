@@ -1,4 +1,4 @@
-import { isTestEnvironment } from "../utils";
+import { callApiFunction, isTestEnvironment } from "../utils";
 
 let _loadingDonePosted = false;
 
@@ -12,9 +12,5 @@ export function loadingDone(): void {
         return;
     }
 
-    if (!window.ReactNativeWebView) {
-        return;
-    }
-
-    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'minitApi.loadingDone' }));
+    callApiFunction(() => { window.minit?.loadingDone(); }, 'loadingDone');
 }
