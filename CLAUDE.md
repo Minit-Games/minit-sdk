@@ -14,8 +14,16 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 
 | Import path | Description |
 |---|---|
-| `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, etc. |
+| `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
+
+## Persistent user data (DROP-910, shipped in v1.0.7)
+
+`getUserData(): string | undefined` — returns the per-creator blob injected by the host app. `undefined` = no record; `""` = explicitly stored empty (distinct from `undefined`).
+
+`reportResult(result, { userData?: string })` — write path: pass the blob alongside the result and the app+backend will persist it. Omit to leave the stored value unchanged. Cap: 4096 UTF-8 bytes. Exceeding the cap returns `400 { "message": "USER_DATA_TOO_LARGE" }`.
+
+The record is keyed by `(userId, creatorId)` — shared across all games by that creator and across mods. Creators with multiple games should namespace with JSON (e.g. `{"gameA": {...}}`). Convenience helpers coming in DROP-930.
 
 ## Release Process
 
