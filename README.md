@@ -69,8 +69,8 @@ score.flyToPanel({
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
 | `reportResult(result, options?)` | Submit the final game result |
 | `getUserData()` | Read the per-creator persistent string blob (see [Persistent user data](#persistent-user-data)) |
-| `getGameUserData<T>()` | Read this game's namespaced slice of the userData blob (v1.0.8+) |
-| `patchGameUserData(value)` | Write this game's namespaced slice and return the serialised string (v1.0.8+) |
+| `getScopedData<T>(scope?)` | Read this game's slot (default) or the creator-wide `'global'` slot (v1.0.8+) |
+| `patchScopedData(value, scope?)` | Write this game's slot (default) or the `'global'` slot and return the serialised string (v1.0.8+) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
@@ -123,16 +123,20 @@ Because the blob is keyed by `creatorId` — not by individual drop — all your
 
 The host app injects `window.minit.baseDropId` at runtime. The helpers use it as the namespace key automatically:
 
-```javascript
-import { getGameUserData, patchGameUserData, reportResult } from '@minit-games/sdk'
+```ts
+import { getScopedData, patchScopedData, reportResult } from '@minit-games/sdk'
 
-const saved = getGameUserData<{ level: number }>()
-const gameState = saved ?? { level: 1 }
-
+// Per-game state (default)
+const state = getScopedData<{ level: number }>() ?? { level: 1 }
 // ... game logic ...
+reportResult(score, { userData: patchScopedData(state) })
 
-reportResult(score, { userData: patchGameUserData(gameState) })
+// Creator-wide shared state
+const prefs = getScopedData<{ darkMode: boolean }>('global') ?? { darkMode: false }
+reportResult(score, { userData: patchScopedData(prefs, 'global') })
 ```
+
+Use `'global'` for state shared across all your games (e.g. preferences, cross-game unlocks). Defaults to `'game'` which scopes per title.
 
 **Manual approach** (use if you need full control):
 
