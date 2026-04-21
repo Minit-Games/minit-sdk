@@ -7,6 +7,7 @@ import { getEnvironment, isTestEnvironment } from "./utils";
 // New clean names
 export { getConfig, getConfigValue } from "./modules/config";
 export { reportResult } from "./modules/result";
+export { getUserData } from "./modules/userData";
 export { loadingDone } from "./modules/loadingDone";
 export { seededRandom, patchSeed } from "./modules/random";
 export type { RandomModule } from "./modules/random";
