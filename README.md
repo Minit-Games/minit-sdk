@@ -69,6 +69,8 @@ score.flyToPanel({
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
 | `reportResult(result, options?)` | Submit the final game result |
 | `getUserData()` | Read the per-creator persistent string blob (see [Persistent user data](#persistent-user-data)) |
+| `getGameUserData<T>()` | Read this game's namespaced slice of the userData blob (v1.0.8+) |
+| `patchGameUserData(value)` | Write this game's namespaced slice and return the serialised string (v1.0.8+) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
@@ -113,20 +115,37 @@ The blob is written to the backend when the result is reported. Omitting `userDa
 
 ### Multiple games
 
-Because the blob is keyed by `creatorId` — not by individual drop — all your games share the same record. If you publish more than one game, namespace your data with JSON keys so games don't overwrite each other:
+Because the blob is keyed by `creatorId` — not by individual drop — all your games share the same record. If you publish more than one game, namespace your data with JSON keys so games don't overwrite each other.
+
+> Convenience helpers available in 1.0.8+.
+
+**Recommended — use the built-in helpers (v1.0.8+):**
+
+The host app injects `window.minit.baseDropId` at runtime. The helpers use it as the namespace key automatically:
+
+```javascript
+import { getGameUserData, patchGameUserData, reportResult } from '@minit-games/sdk'
+
+const saved = getGameUserData<{ level: number }>()
+const gameState = saved ?? { level: 1 }
+
+// ... game logic ...
+
+reportResult(score, { userData: patchGameUserData(gameState) })
+```
+
+**Manual approach** (use if you need full control):
 
 ```ts
 const data = JSON.parse(getUserData() ?? '{}');
-const gameState = data['my-platformer'] ?? { level: 1 };
+const gameState = data[window.minit?.baseDropId ?? 'my-game'] ?? { level: 1 };
 
 // ... game logic ...
 
 reportResult(score, {
-  userData: JSON.stringify({ ...data, 'my-platformer': gameState })
+  userData: JSON.stringify({ ...data, [window.minit?.baseDropId ?? 'my-game']: gameState })
 });
 ```
-
-> Convenience helpers for named-slot access are planned (available in a future SDK release) but not yet shipped.
 
 ---
 
