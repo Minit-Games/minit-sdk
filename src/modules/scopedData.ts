@@ -84,6 +84,9 @@ export function getScopedData<T = unknown>(scope: "game" | "global" = "game"): T
  * ```
  */
 export function patchScopedData<T>(value: T, scope: "game" | "global" = "game"): string {
+    if (typeof window === "undefined") {
+        throw new Error("patchScopedData: not running in a browser context");
+    }
     let key: string;
     if (scope === "global") {
         key = GLOBAL_KEY;
