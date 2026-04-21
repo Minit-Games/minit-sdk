@@ -68,6 +68,7 @@ score.flyToPanel({
 | `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
 | `reportResult(result, options?)` | Submit the final game result |
+| `getUserData()` | Read the per-creator persistent string blob (see [Persistent user data](#persistent-user-data)) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
@@ -78,6 +79,56 @@ score.flyToPanel({
 #### Legacy aliases
 
 For backward compatibility with games written against earlier versions, the old `Drop`-prefixed names are exported as aliases: `reportDropResult`, `getDropConfigValue`, `getDropConfig`, `initializeDropSDK`, `addDropBackground`, `applyDropMetaTags`, `getDropEnvironment`, and the types `DropBackground`/`DropResultOptions`/`DropEnvironment`.
+
+## Persistent user data
+
+Each player has a single string blob stored per creator — shared across all of your games and across any mods of those games. Use it to persist save data, settings, high scores, or any other per-player state.
+
+### Reading
+
+```ts
+import { getUserData } from '@minit-games/sdk';
+
+const raw = getUserData();  // string | undefined
+```
+
+- Returns `undefined` when no record exists for this player (first time they play any of your games).
+- Returns `""` when the player previously stored an empty string — distinct from `undefined`.
+
+### Writing
+
+Pass `userData` as part of `reportResult`:
+
+```ts
+import { reportResult } from '@minit-games/sdk';
+
+reportResult(score, { userData: JSON.stringify({ level: 3, coins: 42 }) });
+```
+
+The blob is written to the backend when the result is reported. Omitting `userData` (or not passing `options`) leaves the previously stored value unchanged.
+
+### Limits
+
+- **4096 UTF-8 bytes** maximum. Exceeding this causes the backend to return `400 { "message": "USER_DATA_TOO_LARGE" }` and the write is rejected. Keep the blob small; store references or deltas rather than full state where possible.
+
+### Multiple games
+
+Because the blob is keyed by `creatorId` — not by individual drop — all your games share the same record. If you publish more than one game, namespace your data with JSON keys so games don't overwrite each other:
+
+```ts
+const data = JSON.parse(getUserData() ?? '{}');
+const gameState = data['my-platformer'] ?? { level: 1 };
+
+// ... game logic ...
+
+reportResult(score, {
+  userData: JSON.stringify({ ...data, 'my-platformer': gameState })
+});
+```
+
+> Convenience helpers for named-slot access are planned (available in a future SDK release) but not yet shipped.
+
+---
 
 ### `@minit-games/sdk/ui`
 
