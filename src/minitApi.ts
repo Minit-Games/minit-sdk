@@ -13,6 +13,7 @@ export type MinitApi = {
     sdkVersion: string,
     dropConfig: Record<string, string>,
     userData?: string,
+    baseDropId?: string,
 
     reportResult: (result: number|string, options?: ResultOptions) => void,
     loadingDone: () => void,
