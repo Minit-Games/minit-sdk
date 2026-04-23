@@ -37,7 +37,7 @@ export function getUserData(key: string): string | undefined {
     }
 
     const obj = parsed as Record<string, unknown>;
-    if (!(key in obj)) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) return undefined;
 
     const value = obj[key];
     // Treat null the same as absent — callers detect "unset" via === undefined.

@@ -64,4 +64,14 @@ describe("getUserData", () => {
         window.minit = { userData: '{"missing":null}' } as never;
         expect(getUserData("missing")).toBeUndefined();
     });
+
+    it("returns undefined for prototype-chain keys not present in the object (toString)", () => {
+        window.minit = { userData: '{"foo": "bar"}' } as never;
+        expect(getUserData("toString")).toBeUndefined();
+    });
+
+    it("returns undefined for prototype-chain keys not present in the object (constructor)", () => {
+        window.minit = { userData: '{"foo": "bar"}' } as never;
+        expect(getUserData("constructor")).toBeUndefined();
+    });
 });
