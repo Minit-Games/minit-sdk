@@ -17,13 +17,21 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 | `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
-## Persistent user data (DROP-910, shipped in v1.0.7)
+## Persistent user data (keyed API, shipped in v1.0.9)
 
-`getUserData(): string | undefined` — returns the per-creator blob injected by the host app. `undefined` = no record; `""` = explicitly stored empty (distinct from `undefined`).
+The per-creator userData record is shared across all of a creator's games and stored as an opaque string on the backend. The SDK owns the JSON serialisation — the backend never inspects the content.
 
-`reportResult(result, { userData?: string })` — write path: pass the blob alongside the result and the app+backend will persist it. Omit to leave the stored value unchanged. Cap: 4096 UTF-8 bytes. Exceeding the cap returns `400 { "message": "USER_DATA_TOO_LARGE" }`.
+**Wire format:** the backend stores and returns a single string. Internally the SDK serialises a `Record<string, string>` map to that string. The 4 KB cap applies to the serialised blob; exceeding it returns `400 { "message": "USER_DATA_TOO_LARGE" }`.
 
-The record is keyed by `(userId, creatorId)` — shared across all games by that creator and across mods. Creators with multiple games should namespace with JSON (e.g. `{"gameA": {...}}`). Convenience helpers coming in DROP-930.
+### Reading
+
+`getUserData(key: string): string | undefined` — looks up `key` in the parsed blob.
+
+Returns `undefined` when: no record exists for this player; the stored string is not valid JSON; the top-level value is not a plain object; or `key` is absent from the object. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`). Non-string values at a key (from legacy hand-crafted blobs) are coerced via `String()`.
+
+### Writing
+
+`reportResult(result, { userData?: Record<string, string> })` — pass a partial-patch map. The SDK merges it into the in-memory blob (accumulated since the module was loaded), then serialises and forwards the full merged blob to the host. Omitting `userData` (or passing `{}`) leaves the stored value unchanged — the host payload will not include a `userData` field.
 
 ## Branch flow
 

@@ -1,5 +1,35 @@
-import type { ResultOptions } from "../minitApi";
+import type { ResultOptions, HostResultOptions } from "../minitApi";
 import { callApiFunction, isTestEnvironment } from "../utils";
+
+/**
+ * In-memory blob accumulator for the current game session.
+ *
+ * Initialised once on module load by parsing `window.minit.userData`.
+ * If the stored string is absent, invalid JSON, or not a plain object,
+ * we start from an empty record — the next `reportResult` call with a
+ * `userData` patch will write a fresh blob.
+ */
+let currentBlob: Record<string, string> = initBlob();
+
+function initBlob(): Record<string, string> {
+    if (typeof window === "undefined") return {};
+    const raw = window.minit?.userData;
+    if (!raw) return {};
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed as Record<string, string>;
+        }
+    } catch {
+        // Malformed blob — start fresh.
+    }
+    return {};
+}
+
+/** Exposed for unit tests to reset module-level state between test cases. */
+export function _resetBlobForTests(): void {
+    currentBlob = initBlob();
+}
 
 export function reportResult(result: number|string, options?: ResultOptions): void {
 
@@ -16,9 +46,35 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
         }
     }
 
+    // Build the host-facing options, serialising the userData patch if present.
+    const hostOptions: HostResultOptions | undefined = buildHostOptions(options);
+
     callApiFunction(() => {
-        window.minit?.reportResult(result, options);
-    }, `reportResult => ${result}\nOptions: ${JSON.stringify(options)}`);
+        window.minit?.reportResult(result, hostOptions);
+    }, `reportResult => ${result}\nOptions: ${JSON.stringify(hostOptions)}`);
+}
+
+/**
+ * Converts public `ResultOptions` (with `userData: Record<string, string>`)
+ * to the wire-format `HostResultOptions` (with `userData: string`).
+ *
+ * Empty-patch semantics: an empty `{}` patch is a no-op for the blob, so
+ * we omit `userData` from the host payload entirely — same as if the caller
+ * had not passed `userData` at all.
+ */
+function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
+    if (!options) return undefined;
+
+    const { userData: patch, ...rest } = options;
+
+    if (patch === undefined || Object.keys(patch).length === 0) {
+        // No patch (or empty patch) — do not forward userData to the host.
+        return Object.keys(rest).length > 0 ? rest : undefined;
+    }
+
+    // Merge patch into the in-memory blob and serialise.
+    currentBlob = { ...currentBlob, ...patch };
+    return { ...rest, userData: JSON.stringify(currentBlob) };
 }
 
 // Backward-compat alias
