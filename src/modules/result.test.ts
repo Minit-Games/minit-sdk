@@ -8,7 +8,7 @@ function setupMinit(userData?: string): void {
     calls = [];
     window.minit = {
         environment: "app",
-        sdkVersion: "1.0.9",
+        sdkVersion: "1.1.0",
         dropConfig: {},
         userData,
         reportResult: (result: number | string, options?: HostResultOptions) => {
