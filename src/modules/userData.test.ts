@@ -59,4 +59,9 @@ describe("getUserData", () => {
         window.minit = { userData: '{"score":42}' } as never;
         expect(getUserData("score")).toBe("42");
     });
+
+    it("returns undefined when the value at the key is null (treated as absent)", () => {
+        window.minit = { userData: '{"missing":null}' } as never;
+        expect(getUserData("missing")).toBeUndefined();
+    });
 });

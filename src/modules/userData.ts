@@ -11,10 +11,12 @@
  * - The stored string is not valid JSON.
  * - The parsed JSON is not a plain object (e.g. `null`, array, or primitive).
  * - The key is not present in the object.
+ * - The value at `key` is `null` — treated identically to "key absent", so
+ *   callers can reliably detect "unset" via `=== undefined`.
  *
- * If the value stored at `key` is not a string (shouldn't happen with v2 SDK
- * data, but possible with legacy hand-crafted blobs), it is coerced via
- * `String(value)` so callers always receive a string rather than crashing.
+ * Returns `""` if the stored value at `key` is the empty string (distinct from
+ * `undefined`).  Non-null, non-string values at a key (from legacy hand-crafted
+ * blobs) are coerced via `String()` so callers always receive a string.
  */
 export function getUserData(key: string): string | undefined {
     if (typeof window === "undefined") return undefined;
@@ -38,6 +40,8 @@ export function getUserData(key: string): string | undefined {
     if (!(key in obj)) return undefined;
 
     const value = obj[key];
-    // Coerce non-string values (legacy / hand-crafted blobs) rather than returning undefined.
+    // Treat null the same as absent — callers detect "unset" via === undefined.
+    if (value === null) return undefined;
+    // Coerce other non-string values (legacy / hand-crafted blobs) rather than returning undefined.
     return typeof value === "string" ? value : String(value);
 }
