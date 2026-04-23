@@ -67,6 +67,11 @@ function buildHostOptions(options?: ResultOptions): HostResultOptions | undefine
 
     const { userData: patch, ...rest } = options;
 
+    if (patch === null || typeof patch !== "object" || Array.isArray(patch)) {
+        // Invalid patch — treat as no-op (do not forward userData to the host).
+        return Object.keys(rest).length > 0 ? rest : undefined;
+    }
+
     if (patch === undefined || Object.keys(patch).length === 0) {
         // No patch (or empty patch) — do not forward userData to the host.
         return Object.keys(rest).length > 0 ? rest : undefined;

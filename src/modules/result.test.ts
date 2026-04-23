@@ -82,4 +82,32 @@ describe("reportResult", () => {
         reportResult(42, { flavorText: "Wow", userData: { x: "1" } });
         expect(calls[0].options).toEqual({ flavorText: "Wow", userData: '{"x":"1"}' });
     });
+
+    it("omits userData when null is passed (non-object guard)", () => {
+        setupMinit();
+        reportResult(10, { userData: null as any });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+
+    it("omits userData when a string is passed (non-object guard)", () => {
+        setupMinit();
+        _resetBlobForTests();
+        reportResult(10, { userData: "string-not-object" as any });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+
+    it("omits userData when an array is passed (non-object guard)", () => {
+        setupMinit();
+        _resetBlobForTests();
+        reportResult(10, { userData: ["not", "object"] as any });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+
+    it("preserves flavorText but omits userData when null is passed with other options", () => {
+        setupMinit();
+        _resetBlobForTests();
+        reportResult(10, { userData: null as any, flavorText: "hi" });
+        expect(calls[0].options).toEqual({ flavorText: "hi" });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
 });
