@@ -68,9 +68,7 @@ score.flyToPanel({
 | `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
 | `reportResult(result, options?)` | Submit the final game result |
-| `getUserData()` | Read the per-creator persistent string blob (see [Persistent user data](#persistent-user-data)) |
-| `getScopedData<T>(scope?)` | Read this game's slot (default) or the creator-wide `'global'` slot (v1.0.8+) |
-| `patchScopedData(value, scope?)` | Write this game's slot (default) or the `'global'` slot and return the serialised string (v1.0.8+) |
+| `getUserData(key)` | Read a value from the per-creator persistent data map (see [Persistent user data](#persistent-user-data)) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
@@ -84,72 +82,47 @@ For backward compatibility with games written against earlier versions, the old 
 
 ## Persistent user data
 
-Each player has a single string blob stored per creator — shared across all of your games and across any mods of those games. Use it to persist save data, settings, high scores, or any other per-player state.
+Each player has a key-value map stored per creator — shared across all of your games. The SDK serialises it to a JSON string before sending it to the backend; the backend stores it as an opaque blob. Use it to persist save data, settings, high scores, or any other per-player state.
 
 ### Reading
 
 ```ts
 import { getUserData } from '@minit-games/sdk';
 
-const raw = getUserData();  // string | undefined
+const level = getUserData('level');  // string | undefined
 ```
 
-- Returns `undefined` when no record exists for this player (first time they play any of your games).
-- Returns `""` when the player previously stored an empty string — distinct from `undefined`.
+- Returns `undefined` when no record exists for this player, when the key is absent, or when the stored data is not parseable.
+- Returns `""` when the stored value for the key is the empty string — distinct from `undefined`.
 
 ### Writing
 
-Pass `userData` as part of `reportResult`:
+Pass a partial-patch map as `userData` in `reportResult`. The SDK merges the patch into the accumulated in-memory blob and forwards the result to the host:
 
 ```ts
 import { reportResult } from '@minit-games/sdk';
 
-reportResult(score, { userData: JSON.stringify({ level: 3, coins: 42 }) });
+// Write multiple keys in one patch
+reportResult(score, { userData: { level: '3', coins: '42' } });
 ```
 
-The blob is written to the backend when the result is reported. Omitting `userData` (or not passing `options`) leaves the previously stored value unchanged.
+Each call merges into the existing map — keys not present in the patch are left untouched. Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
+
+### Multiple keys
+
+Because all your games share the same record, use distinct key names to avoid collisions:
+
+```ts
+// Game A
+reportResult(score, { userData: { 'gameA:level': '3' } });
+
+// Game B — different key prefix, no interference
+reportResult(score, { userData: { 'gameB:highScore': '9500' } });
+```
 
 ### Limits
 
-- **4096 UTF-8 bytes** maximum. Exceeding this causes the backend to return `400 { "message": "USER_DATA_TOO_LARGE" }` and the write is rejected. Keep the blob small; store references or deltas rather than full state where possible.
-
-### Multiple games
-
-Because the blob is keyed by `creatorId` — not by individual drop — all your games share the same record. If you publish more than one game, namespace your data with JSON keys so games don't overwrite each other.
-
-> Convenience helpers available in 1.0.8+.
-
-**Recommended — use the built-in helpers (v1.0.8+):**
-
-The host app injects `window.minit.baseDropId` at runtime. The helpers use it as the namespace key automatically:
-
-```ts
-import { getScopedData, patchScopedData, reportResult } from '@minit-games/sdk'
-
-// Per-game state (default)
-const state = getScopedData<{ level: number }>() ?? { level: 1 }
-// ... game logic ...
-reportResult(score, { userData: patchScopedData(state) })
-
-// Creator-wide shared state
-const prefs = getScopedData<{ darkMode: boolean }>('global') ?? { darkMode: false }
-reportResult(score, { userData: patchScopedData(prefs, 'global') })
-```
-
-Use `'global'` for state shared across all your games (e.g. preferences, cross-game unlocks). Defaults to `'game'` which scopes per title.
-
-**Manual approach** (use if you need full control):
-
-```ts
-const data = JSON.parse(getUserData() ?? '{}');
-const gameState = data[window.minit?.baseDropId ?? 'my-game'] ?? { level: 1 };
-
-// ... game logic ...
-
-reportResult(score, {
-  userData: JSON.stringify({ ...data, [window.minit?.baseDropId ?? 'my-game']: gameState })
-});
-```
+- **4096 UTF-8 bytes** on the serialised blob. Exceeding this causes the backend to return `400 { "message": "USER_DATA_TOO_LARGE" }` and the write is rejected. Keep the map small; store references or deltas rather than full state where possible.
 
 ---
 
