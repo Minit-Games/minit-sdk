@@ -110,4 +110,38 @@ describe("reportResult", () => {
         expect(calls[0].options).toEqual({ flavorText: "hi" });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
+
+    it("coerces non-string value from host blob to string on init", () => {
+        setupMinit('{"score": 42}');
+        reportResult(10, { userData: { new: "v" } });
+        const stored = JSON.parse(calls[0].options!.userData!) as Record<string, unknown>;
+        expect(stored["score"]).toBe("42");
+        expect(stored["new"]).toBe("v");
+    });
+
+    it("drops null value from host blob on init and does not resurrect it on later patch", () => {
+        setupMinit('{"key": null}');
+        // no-op patch
+        reportResult(10, { userData: {} });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        // subsequent non-empty patch should not include the null-seeded key
+        reportResult(10, { userData: { other: "val" } });
+        const stored = JSON.parse(calls[1].options!.userData!) as Record<string, unknown>;
+        expect(Object.keys(stored)).not.toContain("key");
+        expect(stored["other"]).toBe("val");
+    });
+
+    it("coerces non-string patch value (number) to string", () => {
+        setupMinit();
+        reportResult(10, { userData: { score: 42 as any } });
+        const stored = JSON.parse(calls[0].options!.userData!) as Record<string, unknown>;
+        expect(stored["score"]).toBe("42");
+    });
+
+    it("drops null patch value — not stored as 'null' string", () => {
+        setupMinit();
+        reportResult(10, { userData: { key: null as any } });
+        // The patch contained only a null value — treated as no-op.
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
 });

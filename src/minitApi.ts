@@ -11,11 +11,10 @@ export type ResultOptions = {
 export type DropResultOptions = ResultOptions;
 
 // Wire format sent to the host: userData is serialised to a JSON string by the SDK.
-export type HostResultOptions = {
-    flavorText?: string,
-    delay?: number,
-    userData?: string,
-}
+// Derived from ResultOptions so new fields automatically propagate here too.
+export type HostResultOptions = Omit<ResultOptions, 'userData'> & {
+    userData?: string;
+};
 
 export type MinitApi = {
     environment: "app" | "web",

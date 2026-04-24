@@ -2,6 +2,25 @@ import type { ResultOptions, HostResultOptions } from "../minitApi";
 import { callApiFunction, isTestEnvironment } from "../utils";
 
 /**
+ * Normalises an unknown value into a `Record<string, string>`.
+ *
+ * - Non-plain-object input (null, primitives, arrays) → `{}`
+ * - Per entry: null/undefined values are dropped; non-string values are
+ *   coerced via `String()`; strings are kept as-is.
+ */
+function normalizeBlob(value: unknown): Record<string, string> {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+        return {};
+    }
+    const result: Record<string, string> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (v === null || v === undefined) continue;
+        result[k] = typeof v === "string" ? v : String(v);
+    }
+    return result;
+}
+
+/**
  * In-memory blob accumulator for the current game session.
  *
  * Initialised once on module load by parsing `window.minit.userData`.
@@ -18,7 +37,7 @@ function initBlob(): Record<string, string> {
     try {
         const parsed: unknown = JSON.parse(raw);
         if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-            return parsed as Record<string, string>;
+            return normalizeBlob(parsed);
         }
     } catch {
         // Malformed blob — start fresh.
@@ -77,8 +96,16 @@ function buildHostOptions(options?: ResultOptions): HostResultOptions | undefine
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
-    // Merge patch into the in-memory blob and serialise.
-    currentBlob = { ...currentBlob, ...patch };
+    // Normalise patch values before merging: drop null/undefined, coerce non-strings.
+    const normalizedPatch = normalizeBlob(patch);
+
+    if (Object.keys(normalizedPatch).length === 0) {
+        // Patch contained only null/undefined values — treat as no-op.
+        return Object.keys(rest).length > 0 ? rest : undefined;
+    }
+
+    // Merge normalised patch into the in-memory blob and serialise.
+    currentBlob = { ...currentBlob, ...normalizedPatch };
     return { ...rest, userData: JSON.stringify(currentBlob) };
 }
 
