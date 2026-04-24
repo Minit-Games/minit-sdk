@@ -102,7 +102,7 @@ Pass a partial-patch map as `userData` in `reportResult`. The SDK merges the pat
 ```ts
 import { reportResult } from '@minit-games/sdk';
 
-// Write a single key
+// Write multiple keys in one patch
 reportResult(score, { userData: { level: '3', coins: '42' } });
 ```
 
