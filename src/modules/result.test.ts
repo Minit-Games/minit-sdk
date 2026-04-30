@@ -68,7 +68,7 @@ describe("reportResult", () => {
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 
-    it("omits userData when key is missing (non-object guard)", () => {
+    it("omits userData when a string is passed (non-object guard)", () => {
         setupMinit();
         reportResult(10, { userData: "string-not-object" as any });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();

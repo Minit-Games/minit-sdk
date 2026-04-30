@@ -59,4 +59,16 @@ describe("getUserData", () => {
         window.minit = { userData: { foo: { nested: true } } } as never;
         expect(getUserData("foo")).toBeUndefined();
     });
+
+    it("returns undefined when userData is an array (host bug)", () => {
+        window.minit = { userData: ["foo", "bar"] } as never;
+        expect(getUserData("0")).toBeUndefined();
+        expect(getUserData("foo")).toBeUndefined();
+    });
+
+    it("returns undefined when userData is a string (host bug)", () => {
+        window.minit = { userData: "foo" } as never;
+        expect(getUserData("0")).toBeUndefined();
+        expect(getUserData("foo")).toBeUndefined();
+    });
 });

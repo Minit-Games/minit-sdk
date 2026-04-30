@@ -7,6 +7,8 @@
  * Returns `undefined` when:
  * - Running outside a browser (SSR / test environment without `window`).
  * - `window.minit` or `window.minit.userData` is absent or `null`.
+ * - `window.minit.userData` is not a non-null, non-array object (host bug — e.g. a
+ *   legacy JSON string or an array injected by a misconfigured host).
  * - The key is not present in the record.
  * - The value at `key` is not a string (host bug — non-string values are silently dropped).
  *
@@ -18,6 +20,7 @@ export function getUserData(key: string): string | undefined {
 
     const record = window.minit?.userData;
     if (record == null) return undefined;
+    if (typeof record !== "object" || Array.isArray(record)) return undefined;
 
     if (!Object.prototype.hasOwnProperty.call(record, key)) return undefined;
 

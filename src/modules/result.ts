@@ -27,9 +27,9 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 /**
  * Converts public `ResultOptions` to the wire-format `HostResultOptions`.
  *
- * The `userData` field, when present, is validated to be a plain object with
- * non-empty string `key` and string `value`. Invalid shapes are treated as a
- * no-op and omitted from the host payload.
+ * The `userData` field, when present, is validated to be a non-null object (not
+ * an array) with a non-empty string `key` and a string `value`. Invalid shapes
+ * are treated as a no-op and omitted from the host payload.
  */
 function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
     if (!options) return undefined;
