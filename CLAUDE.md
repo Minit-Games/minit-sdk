@@ -17,7 +17,7 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 | `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
-## Persistent user data (keyed API, shipped in v1.1.0)
+## Persistent user data (keyed API, updated in v1.2.0)
 
 The per-creator userData record is shared across all of a creator's games and stored on the backend per key. The host (app) owns deserialization — `window.minit.userData` is injected as a pre-parsed `Record<string, string>` object; the SDK never calls `JSON.parse` on it.
 

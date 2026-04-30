@@ -97,27 +97,27 @@ const level = getUserData('level');  // string | undefined
 
 ### Writing
 
-Pass a partial-patch map as `userData` in `reportResult`. The SDK merges the patch into the accumulated in-memory blob and forwards the result to the host:
+Pass a single `{ key, value }` pair as `userData` in `reportResult`. The backend stores one key per call; each write replaces only that key in the player's record, leaving all other keys untouched:
 
 ```ts
 import { reportResult } from '@minit-games/sdk';
 
-// Write multiple keys in one patch
-reportResult(score, { userData: { level: '3', coins: '42' } });
+// Write a single key/value pair
+reportResult(score, { userData: { key: 'tutorial', value: 'done' } });
 ```
 
-Each call merges into the existing map — keys not present in the patch are left untouched. Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
+Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
 
 ### Multiple keys
 
-Because all your games share the same record, use distinct key names to avoid collisions:
+Because all your games share the same record, use distinct key names to avoid collisions. Write each key in a separate `reportResult` call:
 
 ```ts
-// Game A
-reportResult(score, { userData: { 'gameA:level': '3' } });
+// Save progress level
+reportResult(score, { userData: { key: 'gameA:level', value: '3' } });
 
-// Game B — different key prefix, no interference
-reportResult(score, { userData: { 'gameB:highScore': '9500' } });
+// Save high score under a different key — no interference with the level key
+reportResult(score, { userData: { key: 'gameA:highScore', value: '9500' } });
 ```
 
 ### Limits
