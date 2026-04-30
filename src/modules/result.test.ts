@@ -1,4 +1,4 @@
-import { reportResult } from "./result";
+import { reportResult, reportDropResult } from "./result";
 import type { HostResultOptions } from "../minitApi";
 
 // Capture calls to window.minit.reportResult so we can assert on payloads.
@@ -90,6 +90,74 @@ describe("reportResult", () => {
     it("omits userData when value is a number (not a string)", () => {
         setupMinit();
         reportResult(10, { userData: { key: "score", value: 42 as any } });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+});
+
+describe("reportDropResult (backward-compat alias)", () => {
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
+    });
+
+    it("is the same function reference as reportResult", () => {
+        expect(reportDropResult).toBe(reportResult);
+    });
+
+    it("forwards a valid single-key userData to the host via the alias", () => {
+        setupMinit();
+        reportDropResult(99, { userData: { key: "level", value: "5" } });
+        expect(calls).toHaveLength(1);
+        expect(calls[0].result).toBe(99);
+        expect(calls[0].options).toEqual({ userData: { key: "level", value: "5" } });
+    });
+
+    it("omits userData from the alias host payload when null is passed", () => {
+        setupMinit();
+        reportDropResult(1, { userData: null as any });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+});
+
+describe("reportResult — web environment fallback", () => {
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
+    });
+
+    it("calls window.minit.reportResult with { key, value } shape when environment is 'web'", () => {
+        calls = [];
+        window.minit = {
+            environment: "web",
+            sdkVersion: "1.2.0",
+            dropConfig: {},
+            reportResult: (result: number | string, options?: HostResultOptions) => {
+                calls.push({ result, options });
+            },
+            loadingDone: () => {},
+        } as never;
+
+        reportResult(77, { userData: { key: "bestScore", value: "42" } });
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0].result).toBe(77);
+        expect(calls[0].options).toEqual({ userData: { key: "bestScore", value: "42" } });
+    });
+
+    it("omits userData from host payload in the web environment when shape is invalid", () => {
+        calls = [];
+        window.minit = {
+            environment: "web",
+            sdkVersion: "1.2.0",
+            dropConfig: {},
+            reportResult: (result: number | string, options?: HostResultOptions) => {
+                calls.push({ result, options });
+            },
+            loadingDone: () => {},
+        } as never;
+
+        reportResult(10, { userData: null as any });
+
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 });
