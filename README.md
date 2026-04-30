@@ -82,7 +82,7 @@ For backward compatibility with games written against earlier versions, the old 
 
 ## Persistent user data
 
-Each player has a key-value map stored per creator — shared across all of your games. The SDK serialises it to a JSON string before sending it to the backend; the backend stores it as an opaque blob. Use it to persist save data, settings, high scores, or any other per-player state.
+Each player has a key-value map stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a pre-parsed `Record<string, string>` and forwards `{ key, value }` objects as-is to the host — no JSON parsing or serialisation is performed in the SDK. Use it to persist save data, settings, high scores, or any other per-player state.
 
 ### Reading
 
@@ -92,37 +92,38 @@ import { getUserData } from '@minit-games/sdk';
 const level = getUserData('level');  // string | undefined
 ```
 
-- Returns `undefined` when no record exists for this player, when the key is absent, or when the stored data is not parseable.
+- Returns `undefined` when no record exists for this player, or when the key is absent.
 - Returns `""` when the stored value for the key is the empty string — distinct from `undefined`.
 
 ### Writing
 
-Pass a partial-patch map as `userData` in `reportResult`. The SDK merges the patch into the accumulated in-memory blob and forwards the result to the host:
+Pass a single `{ key, value }` pair as `userData` in `reportResult`. Each write replaces only that key in the player's record, leaving all other keys untouched:
 
 ```ts
 import { reportResult } from '@minit-games/sdk';
 
-// Write multiple keys in one patch
-reportResult(score, { userData: { level: '3', coins: '42' } });
+// Write a single key/value pair
+reportResult(score, { userData: { key: 'tutorial', value: 'done' } });
 ```
 
-Each call merges into the existing map — keys not present in the patch are left untouched. Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
+Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
 
 ### Multiple keys
 
-Because all your games share the same record, use distinct key names to avoid collisions:
+Each `reportResult` call writes exactly **one key** — this is intentional. If you need to persist two pieces of state across separate plays, use a single encoded value or choose which key matters most per play:
 
 ```ts
-// Game A
-reportResult(score, { userData: { 'gameA:level': '3' } });
-
-// Game B — different key prefix, no interference
-reportResult(score, { userData: { 'gameB:highScore': '9500' } });
+// Encode multiple values into one string
+const value = JSON.stringify({ level: 3, darkMode: false });
+reportResult(score, { userData: { key: 'playerState', value } });
 ```
+
+Because all your games share the same record, use distinct key names to avoid collisions (e.g. `gameA:level`, `gameA:highScore`).
 
 ### Limits
 
-- **4096 UTF-8 bytes** on the serialised blob. Exceeding this causes the backend to return `400 { "message": "USER_DATA_TOO_LARGE" }` and the write is rejected. Keep the map small; store references or deltas rather than full state where possible.
+- **1 KB (1024 UTF-8 bytes)** per stored value. Writes that exceed this limit are rejected and the existing value is left unchanged.
+- **64 characters** maximum key length.
 
 ---
 

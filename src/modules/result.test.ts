@@ -1,14 +1,14 @@
-import { reportResult, _resetBlobForTests } from "./result";
+import { reportResult, reportDropResult } from "./result";
 import type { HostResultOptions } from "../minitApi";
 
 // Capture calls to window.minit.reportResult so we can assert on payloads.
 let calls: Array<{ result: number | string; options: HostResultOptions | undefined }> = [];
 
-function setupMinit(userData?: string): void {
+function setupMinit(userData?: Record<string, string>): void {
     calls = [];
     window.minit = {
         environment: "app",
-        sdkVersion: "1.1.0",
+        sdkVersion: "1.2.0",
         dropConfig: {},
         userData,
         reportResult: (result: number | string, options?: HostResultOptions) => {
@@ -16,7 +16,6 @@ function setupMinit(userData?: string): void {
         },
         loadingDone: () => {},
     } as never;
-    _resetBlobForTests();
 }
 
 describe("reportResult", () => {
@@ -39,109 +38,126 @@ describe("reportResult", () => {
         expect((calls[0].options as Record<string, unknown>)["userData"]).toBeUndefined();
     });
 
-    it("serialises a userData patch and forwards it to the host", () => {
+    it("forwards a valid single-key userData to the host", () => {
         setupMinit();
-        reportResult(100, { userData: { foo: "bar" } });
-        expect(calls[0].options).toEqual({ userData: '{"foo":"bar"}' });
+        reportResult(100, { userData: { key: "foo", value: "bar" } });
+        expect(calls[0].options).toEqual({ userData: { key: "foo", value: "bar" } });
     });
 
-    it("accumulates patches across sequential calls", () => {
+    it("forwards userData alongside other options", () => {
         setupMinit();
-        reportResult(100, { userData: { a: "1" } });
-        reportResult(200, { userData: { b: "2" } });
-        expect(calls[1].options).toEqual({ userData: '{"a":"1","b":"2"}' });
+        reportResult(42, { flavorText: "Wow", userData: { key: "x", value: "1" } });
+        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: { key: "x", value: "1" } });
     });
 
-    it("merges patch on top of existing userData from the host", () => {
-        setupMinit('{"existing":"value"}');
-        reportResult(100, { userData: { new: "val" } });
-        expect(calls[0].options).toEqual({ userData: '{"existing":"value","new":"val"}' });
-    });
-
-    it("starts from {} when initial userData is garbage JSON", () => {
-        setupMinit("not json");
-        reportResult(100, { userData: { foo: "bar" } });
-        expect(calls[0].options).toEqual({ userData: '{"foo":"bar"}' });
-    });
-
-    it("omits userData from the host payload when an empty patch is supplied", () => {
+    it("allows an empty-string value", () => {
         setupMinit();
-        reportResult(100, { userData: {} });
-        // Empty patch → no userData in host payload.
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(100, { userData: { key: "k", value: "" } });
+        expect(calls[0].options).toEqual({ userData: { key: "k", value: "" } });
     });
 
-    it("overwrites an existing key on a subsequent patch", () => {
-        setupMinit('{"key":"old"}');
-        reportResult(100, { userData: { key: "new" } });
-        expect(calls[0].options).toEqual({ userData: '{"key":"new"}' });
-    });
-
-    it("preserves non-userData options alongside the serialised blob", () => {
-        setupMinit();
-        reportResult(42, { flavorText: "Wow", userData: { x: "1" } });
-        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: '{"x":"1"}' });
-    });
-
-    it("omits userData when null is passed (non-object guard)", () => {
+    it("omits userData from host payload when null is passed", () => {
         setupMinit();
         reportResult(10, { userData: null as any });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 
+    it("omits userData when an empty-string key is passed", () => {
+        setupMinit();
+        reportResult(10, { userData: { key: "", value: "v" } });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+
     it("omits userData when a string is passed (non-object guard)", () => {
         setupMinit();
-        _resetBlobForTests();
         reportResult(10, { userData: "string-not-object" as any });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 
-    it("omits userData when an array is passed (non-object guard)", () => {
+    it("omits userData when an array is passed", () => {
         setupMinit();
-        _resetBlobForTests();
         reportResult(10, { userData: ["not", "object"] as any });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 
     it("preserves flavorText but omits userData when null is passed with other options", () => {
         setupMinit();
-        _resetBlobForTests();
         reportResult(10, { userData: null as any, flavorText: "hi" });
         expect(calls[0].options).toEqual({ flavorText: "hi" });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 
-    it("coerces non-string value from host blob to string on init", () => {
-        setupMinit('{"score": 42}');
-        reportResult(10, { userData: { new: "v" } });
-        const stored = JSON.parse(calls[0].options!.userData!) as Record<string, unknown>;
-        expect(stored["score"]).toBe("42");
-        expect(stored["new"]).toBe("v");
-    });
-
-    it("drops null value from host blob on init and does not resurrect it on later patch", () => {
-        setupMinit('{"key": null}');
-        // no-op patch
-        reportResult(10, { userData: {} });
+    it("omits userData when value is a number (not a string)", () => {
+        setupMinit();
+        reportResult(10, { userData: { key: "score", value: 42 as any } });
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
-        // subsequent non-empty patch should not include the null-seeded key
-        reportResult(10, { userData: { other: "val" } });
-        const stored = JSON.parse(calls[1].options!.userData!) as Record<string, unknown>;
-        expect(Object.keys(stored)).not.toContain("key");
-        expect(stored["other"]).toBe("val");
+    });
+});
+
+describe("reportDropResult (backward-compat alias)", () => {
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
     });
 
-    it("coerces non-string patch value (number) to string", () => {
-        setupMinit();
-        reportResult(10, { userData: { score: 42 as any } });
-        const stored = JSON.parse(calls[0].options!.userData!) as Record<string, unknown>;
-        expect(stored["score"]).toBe("42");
+    it("is the same function reference as reportResult", () => {
+        expect(reportDropResult).toBe(reportResult);
     });
 
-    it("drops null patch value — not stored as 'null' string", () => {
+    it("forwards a valid single-key userData to the host via the alias", () => {
         setupMinit();
-        reportResult(10, { userData: { key: null as any } });
-        // The patch contained only a null value — treated as no-op.
+        reportDropResult(99, { userData: { key: "level", value: "5" } });
+        expect(calls).toHaveLength(1);
+        expect(calls[0].result).toBe(99);
+        expect(calls[0].options).toEqual({ userData: { key: "level", value: "5" } });
+    });
+
+    it("omits userData from the alias host payload when null is passed", () => {
+        setupMinit();
+        reportDropResult(1, { userData: null as any });
+        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+    });
+});
+
+describe("reportResult — web environment dispatch", () => {
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
+    });
+
+    it("calls window.minit.reportResult with { key, value } shape when environment is 'web'", () => {
+        calls = [];
+        window.minit = {
+            environment: "web",
+            sdkVersion: "1.2.0",
+            dropConfig: {},
+            reportResult: (result: number | string, options?: HostResultOptions) => {
+                calls.push({ result, options });
+            },
+            loadingDone: () => {},
+        } as never;
+
+        reportResult(77, { userData: { key: "bestScore", value: "42" } });
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0].result).toBe(77);
+        expect(calls[0].options).toEqual({ userData: { key: "bestScore", value: "42" } });
+    });
+
+    it("omits userData from host payload in the web environment when shape is invalid", () => {
+        calls = [];
+        window.minit = {
+            environment: "web",
+            sdkVersion: "1.2.0",
+            dropConfig: {},
+            reportResult: (result: number | string, options?: HostResultOptions) => {
+                calls.push({ result, options });
+            },
+            loadingDone: () => {},
+        } as never;
+
+        reportResult(10, { userData: null as any });
+
         expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
     });
 });

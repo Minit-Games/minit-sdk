@@ -1,55 +1,6 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi";
 import { callApiFunction, isTestEnvironment } from "../utils";
 
-/**
- * Normalises an unknown value into a `Record<string, string>`.
- *
- * - Non-plain-object input (null, primitives, arrays) → `{}`
- * - Per entry: null/undefined values are dropped; non-string values are
- *   coerced via `String()`; strings are kept as-is.
- */
-function normalizeBlob(value: unknown): Record<string, string> {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
-        return {};
-    }
-    const result: Record<string, string> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (v === null || v === undefined) continue;
-        result[k] = typeof v === "string" ? v : String(v);
-    }
-    return result;
-}
-
-/**
- * In-memory blob accumulator for the current game session.
- *
- * Initialised once on module load by parsing `window.minit.userData`.
- * If the stored string is absent, invalid JSON, or not a plain object,
- * we start from an empty record — the next `reportResult` call with a
- * `userData` patch will write a fresh blob.
- */
-let currentBlob: Record<string, string> = initBlob();
-
-function initBlob(): Record<string, string> {
-    if (typeof window === "undefined") return {};
-    const raw = window.minit?.userData;
-    if (!raw) return {};
-    try {
-        const parsed: unknown = JSON.parse(raw);
-        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-            return normalizeBlob(parsed);
-        }
-    } catch {
-        // Malformed blob — start fresh.
-    }
-    return {};
-}
-
-/** Exposed for unit tests to reset module-level state between test cases. */
-export function _resetBlobForTests(): void {
-    currentBlob = initBlob();
-}
-
 export function reportResult(result: number|string, options?: ResultOptions): void {
 
     if(isTestEnvironment()) {
@@ -65,7 +16,7 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
         }
     }
 
-    // Build the host-facing options, serialising the userData patch if present.
+    // Build the host-facing options, forwarding the single-key userData if present.
     const hostOptions: HostResultOptions | undefined = buildHostOptions(options);
 
     callApiFunction(() => {
@@ -74,39 +25,34 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 }
 
 /**
- * Converts public `ResultOptions` (with `userData: Record<string, string>`)
- * to the wire-format `HostResultOptions` (with `userData: string`).
+ * Converts public `ResultOptions` to the wire-format `HostResultOptions`.
  *
- * Empty-patch semantics: an empty `{}` patch is a no-op for the blob, so
- * we omit `userData` from the host payload entirely — same as if the caller
- * had not passed `userData` at all.
+ * The `userData` field, when present, is validated to be a non-null object (not
+ * an array) with a non-empty string `key` and a string `value`. Invalid shapes
+ * are treated as a no-op and omitted from the host payload.
  */
 function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
     if (!options) return undefined;
 
-    const { userData: patch, ...rest } = options;
+    const { userData, ...rest } = options;
 
-    if (patch === null || typeof patch !== "object" || Array.isArray(patch)) {
-        // Invalid patch — treat as no-op (do not forward userData to the host).
+    if (userData === undefined || userData === null) {
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
-    if (patch === undefined || Object.keys(patch).length === 0) {
-        // No patch (or empty patch) — do not forward userData to the host.
+    // Validate single-key shape: must be a plain object with key/value strings.
+    if (
+        typeof userData !== "object" ||
+        Array.isArray(userData) ||
+        typeof userData.key !== "string" ||
+        userData.key.length === 0 ||
+        typeof userData.value !== "string"
+    ) {
+        // Invalid shape — treat as no-op (do not forward userData to the host).
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
-    // Normalise patch values before merging: drop null/undefined, coerce non-strings.
-    const normalizedPatch = normalizeBlob(patch);
-
-    if (Object.keys(normalizedPatch).length === 0) {
-        // Patch contained only null/undefined values — treat as no-op.
-        return Object.keys(rest).length > 0 ? rest : undefined;
-    }
-
-    // Merge normalised patch into the in-memory blob and serialise.
-    currentBlob = { ...currentBlob, ...normalizedPatch };
-    return { ...rest, userData: JSON.stringify(currentBlob) };
+    return { ...rest, userData: { key: userData.key, value: userData.value } };
 }
 
 // Backward-compat alias

@@ -17,21 +17,19 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 | `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
-## Persistent user data (keyed API, shipped in v1.1.0)
+## Persistent user data (keyed API, updated in v1.2.0)
 
-The per-creator userData record is shared across all of a creator's games and stored as an opaque string on the backend. The SDK owns the JSON serialisation — the backend never inspects the content.
-
-**Wire format:** the backend stores and returns a single string. Internally the SDK serialises a `Record<string, string>` map to that string. The 4 KB cap applies to the serialised blob; exceeding it returns `400 { "message": "USER_DATA_TOO_LARGE" }`.
+The per-creator userData record is shared across all of a creator's games and stored on the backend per key. The host (app) owns deserialization — `window.minit.userData` is injected as a pre-parsed `Record<string, string>` object; the SDK never calls `JSON.parse` on it.
 
 ### Reading
 
-`getUserData(key: string): string | undefined` — looks up `key` in the parsed blob.
+`getUserData(key: string): string | undefined` — looks up `key` in `window.minit.userData`.
 
-Returns `undefined` when: no record exists for this player; the stored string is not valid JSON; the top-level value is not a plain object; or `key` is absent from the object. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`). Non-string values at a key (from legacy hand-crafted blobs) are coerced via `String()`.
+Returns `undefined` when: no record exists for this player; `window.minit.userData` is absent; or `key` is absent from the record. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`).
 
 ### Writing
 
-`reportResult(result, { userData?: Record<string, string> })` — pass a partial-patch map. The SDK merges it into the in-memory blob (accumulated since the module was loaded), then serialises and forwards the full merged blob to the host. Omitting `userData` (or passing `{}`) leaves the stored value unchanged — the host payload will not include a `userData` field.
+`reportResult(result, { userData?: { key: string; value: string } })` — pass a single key/value pair to store. Omitting `userData` leaves the stored value unchanged — the host payload will not include a `userData` field.
 
 ## Branch flow
 
