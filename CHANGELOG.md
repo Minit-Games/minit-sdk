@@ -29,6 +29,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
-## [1.1.0]
+## [1.1.0] — 2026-04-24
 
-Initial keyed userData API — superseded by 1.2.0.
+### Added
+
+- `getUserData(key: string): string | undefined` — reads a single key from the player's userData record. The SDK parsed the stored JSON blob internally and returned the value at the given key; `undefined` was returned when the key was absent or the blob was not parseable.
+- `reportResult` now accepts a `userData` option as a `Record<string, string>` partial-patch map. The SDK merged the patch into an in-memory blob per session and serialised it to the host wire format as a JSON string.
+
+### Changed
+
+- Removed `baseDropId` field and the `scopedData` helpers (`getScopedData`, `setScopedData`, etc.) — the keyed API replaces them.
+- `Object.prototype.hasOwnProperty` guard added to `getUserData` to prevent prototype-chain key collisions (`toString`, `constructor`, etc.).
+- Non-object, null, and array values passed as `userData` to `reportResult` are silently dropped rather than throwing.
+
+> **Note:** The `userData` option shape and the host wire format introduced in 1.1.0 were superseded in 1.2.0 by the single-key `{ key, value }` model. See [1.2.0] for the breaking change details.

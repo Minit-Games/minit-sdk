@@ -43,4 +43,20 @@ describe("getUserData", () => {
         window.minit = { userData: { foo: "bar" } } as never;
         expect(getUserData("constructor")).toBeUndefined();
     });
+
+    it("returns undefined (does not throw) when userData is null", () => {
+        window.minit = { userData: null } as never;
+        expect(() => getUserData("foo")).not.toThrow();
+        expect(getUserData("foo")).toBeUndefined();
+    });
+
+    it("returns undefined when the stored value is a non-string (number)", () => {
+        window.minit = { userData: { foo: 42 } } as never;
+        expect(getUserData("foo")).toBeUndefined();
+    });
+
+    it("returns undefined when the stored value is a non-string (object)", () => {
+        window.minit = { userData: { foo: { nested: true } } } as never;
+        expect(getUserData("foo")).toBeUndefined();
+    });
 });

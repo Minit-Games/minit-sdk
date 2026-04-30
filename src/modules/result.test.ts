@@ -119,7 +119,7 @@ describe("reportDropResult (backward-compat alias)", () => {
     });
 });
 
-describe("reportResult — web environment fallback", () => {
+describe("reportResult — web environment dispatch", () => {
     afterEach(() => {
         delete window.minit;
         calls = [];
