@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [1.2.1] — 2026-05-06
+
+### Added
+
+- **Local-development fallback for `getUserData(key)`.** When `window.minit?.userData` is `undefined` or `null` (no host injection — typical of local Vite dev), `getUserData` now reads from `?userData.<key>=<url-encoded-value>` URL parameters. Lets creators seed userData state when testing games locally without a host app. Production behaviour is unchanged: any host-injected value (including `{}`, the "no stored data" record) wins over URL params.
+
+  ```
+  # Local URL: http://localhost:5173/?userData.my_game=tutorialPlayed%3Dtrue
+  getUserData('my_game'); // → 'tutorialPlayed=true'
+  ```
+
+### Changed
+
+- **`userData.*` is now a reserved URL-param namespace.** `getConfig()` and `getConfigValue()` filter out keys starting with `userData.` so they never bleed into the config API. Calling `getConfigValue('userData.foo')` returns `undefined` (or the supplied default).
+
+---
+
 ## [1.2.0] — 2026-04-30
 
 ### Breaking Changes
