@@ -101,6 +101,12 @@ describe("getUserData", () => {
         expect(getUserData("foo")).toBe("fromUrl");
     });
 
+    it("falls back to URL params when window.minit is set but userData property is absent", () => {
+        window.minit = {} as never;
+        setQuery("userData.foo=fromUrl");
+        expect(getUserData("foo")).toBe("fromUrl");
+    });
+
     it("host-injected empty record {} wins over URL params", () => {
         window.minit = { userData: {} } as never;
         setQuery("userData.foo=fromUrl");

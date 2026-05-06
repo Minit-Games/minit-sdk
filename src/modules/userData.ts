@@ -52,13 +52,11 @@ export function getUserData(key: string): string | undefined {
  *
  * Same-key-twice semantics: first occurrence wins, matching `URLSearchParams.get()`.
  * Empty key after the prefix (`userData.=value`) is ignored.
+ *
+ * Only called from {@link getUserData}, which already guards against `window` being
+ * undefined — this function can therefore assume a browser environment.
  */
 function getUserDataFromUrlParams(key: string): string | undefined {
-    // SSR guard: window.location may not exist in non-browser environments.
-    if (typeof window === "undefined" || typeof window.location === "undefined") {
-        return undefined;
-    }
-
     const PREFIX = "userData.";
     const urlParams = new URLSearchParams(window.location.search);
 
