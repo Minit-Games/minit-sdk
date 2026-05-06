@@ -43,37 +43,30 @@ export function getUserData(key: string): string | undefined {
 }
 
 /**
- * Parses `?userData.<key>=<value>` entries from the current URL search string and
- * returns the value for `key`, or `undefined` if not present.
+ * Reserved URL-param namespace for the userData local-dev fallback.
+ * Keys that start with this prefix are read by {@link getUserDataFromUrlParams} and
+ * filtered out of `getConfig()` / `getConfigValue()` so the two namespaces stay distinct.
  *
- * Uses `Object.create(null)` internally so prototype-chain keys (e.g. `toString`,
- * `constructor`) cannot pollute the result — mirroring the `hasOwnProperty` guard used
- * for the host-injected record.
+ * Exported so `config.ts` can import it — not re-exported from the package entry point.
+ */
+export const USER_DATA_PARAM_PREFIX = "userData.";
+
+/**
+ * Reads a single `?userData.<key>=<value>` entry from the current URL search string and
+ * returns its value, or `undefined` if not present.
  *
- * Same-key-twice semantics: first occurrence wins, matching `URLSearchParams.get()`.
- * Empty key after the prefix (`userData.=value`) is ignored.
+ * Same-key-twice semantics: first occurrence wins, via `URLSearchParams.get()`.
+ * Empty key after the prefix (`userData.=value`) is ignored — guarded by the explicit
+ * `key === ""` check below.
  *
  * Only called from {@link getUserData}, which already guards against `window` being
  * undefined — this function can therefore assume a browser environment.
  */
 function getUserDataFromUrlParams(key: string): string | undefined {
-    const PREFIX = "userData.";
-    const urlParams = new URLSearchParams(window.location.search);
+    // An empty key would match `?userData.=value`, which we intentionally ignore.
+    if (key === "") return undefined;
 
-    // Build a null-prototype map so prototype-chain keys cannot leak through.
-    const parsed: Record<string, string> = Object.create(null) as Record<string, string>;
-
-    urlParams.forEach((value, rawKey) => {
-        if (!rawKey.startsWith(PREFIX)) return;
-        const udKey = rawKey.slice(PREFIX.length);
-        // Skip entries with an empty key after the prefix.
-        if (udKey === "") return;
-        // First occurrence wins — only set if not already present.
-        if (!Object.prototype.hasOwnProperty.call(parsed, udKey)) {
-            parsed[udKey] = value;
-        }
-    });
-
-    if (!Object.prototype.hasOwnProperty.call(parsed, key)) return undefined;
-    return parsed[key];
+    const value = new URLSearchParams(window.location.search).get(USER_DATA_PARAM_PREFIX + key);
+    // URLSearchParams.get returns null when absent; normalise to undefined.
+    return value !== null ? value : undefined;
 }

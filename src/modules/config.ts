@@ -1,8 +1,4 @@
-
-// URL params whose keys start with this prefix are reserved for the userData local-dev
-// fallback (see userData.ts). They must not appear in getConfig() / getConfigValue()
-// results so that config and userData namespaces remain distinct.
-const USER_DATA_PARAM_PREFIX = "userData.";
+import { USER_DATA_PARAM_PREFIX } from "./userData";
 
 export function getConfig(): Record<string, string> {
     const urlParams = new URLSearchParams(window.location.search);
