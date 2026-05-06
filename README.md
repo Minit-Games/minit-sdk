@@ -95,6 +95,20 @@ const level = getUserData('level');  // string | undefined
 - Returns `undefined` when no record exists for this player, or when the key is absent.
 - Returns `""` when the stored value for the key is the empty string — distinct from `undefined`.
 
+### Local userData testing
+
+During `npm run dev`, you can seed `getUserData` via URL params — no app host required:
+
+```
+?userData.my_game=tutorialPlayed%3Dtrue
+```
+
+`getUserData('my_game')` will return `'tutorialPlayed=true'`.
+
+URL-param values apply only when the host has not injected `window.minit.userData` (i.e. the property is `undefined` or `null`). A host-injected empty record (`{}`) still wins — URL params are a local-dev convenience only.
+
+> `userData.*` is a reserved URL-param namespace. These keys are stripped from `getConfig()` and `getConfigValue()`, so `getConfigValue('userData.my_game')` always returns `undefined` (or its default). Read userData exclusively via `getUserData`.
+
 ### Writing
 
 Pass a single `{ key, value }` pair as `userData` in `reportResult`. Each write replaces only that key in the player's record, leaving all other keys untouched:

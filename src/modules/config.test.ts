@@ -18,6 +18,11 @@ describe("config", () => {
             setQuery("a=1&b=two&c=");
             expect(getConfig()).toEqual({ a: "1", b: "two", c: "" });
         });
+
+        it("excludes userData.* params from the result", () => {
+            setQuery("difficulty=hard&userData.foo=bar");
+            expect(getConfig()).toEqual({ difficulty: "hard" });
+        });
     });
 
     describe("getConfigValue", () => {
@@ -50,6 +55,21 @@ describe("config", () => {
         it("returns empty string when the param is present but empty", () => {
             setQuery("k=");
             expect(getConfigValue("k", "fallback")).toBe("");
+        });
+
+        it("returns undefined for a userData.* key even when the URL param is present", () => {
+            setQuery("userData.foo=bar");
+            expect(getConfigValue("userData.foo")).toBeUndefined();
+        });
+
+        it("returns string default for a userData.* key", () => {
+            setQuery("userData.foo=bar");
+            expect(getConfigValue("userData.foo", "default")).toBe("default");
+        });
+
+        it("returns function default for a userData.* key", () => {
+            setQuery("userData.foo=bar");
+            expect(getConfigValue("userData.foo", () => "lazy")).toBe("lazy");
         });
     });
 });

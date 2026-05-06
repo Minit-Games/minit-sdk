@@ -23,9 +23,11 @@ The per-creator userData record is shared across all of a creator's games and st
 
 ### Reading
 
-`getUserData(key: string): string | undefined` — looks up `key` in `window.minit.userData`.
+`getUserData(key: string): string | undefined` — looks up `key` in `window.minit.userData`. Falls back to the `?userData.<key>=<value>` URL param when `window.minit.userData` is `undefined` or `null` (local-dev convenience — host-injected `{}` still wins over URL params).
 
-Returns `undefined` when: no record exists for this player; `window.minit.userData` is absent; or `key` is absent from the record. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`).
+Returns `undefined` when: no record exists for this player; `window.minit.userData` is absent and no matching URL param exists; or `key` is absent from both. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`).
+
+`userData.*` is a reserved URL-param namespace — these keys are stripped from `getConfig()`/`getConfigValue()` so they never bleed into the config API.
 
 ### Writing
 
