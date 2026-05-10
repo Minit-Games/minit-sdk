@@ -1,72 +1,54 @@
 /**
- * Returns the value stored under `key` in the per-creator userData record.
+ * Returns the single-slot userData value for this player.
  *
- * The host injects `window.minit.userData` as a pre-parsed `Record<string, string>`.
+ * The host injects `window.minit.userData` as a primitive `string | undefined`.
  * This function reads it directly — no JSON parsing is performed in the SDK.
  *
  * **Local-dev fallback:** when `window.minit.userData` is `undefined` or `null` (i.e. no
- * host has injected it), the SDK falls back to URL params of the form
- * `?userData.<key>=<value>`. This lets creators test userData locally during `npm run dev`
- * without a host app. An injected empty record `{}` still wins over URL params — it means
- * "host says this player has no stored data".
+ * host has injected it), the SDK falls back to the `?userData=<value>` URL param.
+ * This lets creators test userData locally during `npm run dev` without a host app.
+ * A host-injected string value (including `""`) wins over the URL param.
  *
  * Returns `undefined` when:
  * - Running outside a browser (SSR / test environment without `window`).
- * - `window.minit` or `window.minit.userData` is absent or `null` AND the key is not
- *   present in the URL params.
- * - `window.minit.userData` is not a non-null, non-array object (host bug — e.g. a
- *   legacy JSON string or an array injected by a misconfigured host).
- * - The key is not present in the record (or URL params when falling back).
- * - The value at `key` is not a string (host bug — non-string values are silently dropped).
+ * - `window.minit` or `window.minit.userData` is absent or `null` AND the `?userData`
+ *   URL param is also absent.
  *
- * Returns `""` if the stored value at `key` is the empty string (distinct from
- * `undefined`).
+ * Returns `""` if the stored value is the empty string (distinct from `undefined`).
  */
-export function getUserData(key: string): string | undefined {
+export function getUserData(): string | undefined {
     if (typeof window === "undefined") return undefined;
 
-    const record = window.minit?.userData;
+    const value = window.minit?.userData;
 
     // Only fall back to URL params when the host has NOT injected userData at all.
-    // null and undefined both mean "no injection"; any other value (even {}) means
-    // the host owns the record, so we go through the standard path below.
-    if (record == null) {
-        return getUserDataFromUrlParams(key);
+    // null and undefined both mean "no injection"; any string (even "") means
+    // the host owns the slot, so we return it directly.
+    if (value == null) {
+        return getUserDataFromUrlParam();
     }
 
-    if (typeof record !== "object" || Array.isArray(record)) return undefined;
-
-    if (!Object.prototype.hasOwnProperty.call(record, key)) return undefined;
-
-    const v = record[key];
-    return typeof v === "string" ? v : undefined;
+    return typeof value === "string" ? value : undefined;
 }
 
 /**
- * Reserved URL-param namespace for the userData local-dev fallback.
- * Keys that start with this prefix are read by {@link getUserDataFromUrlParams} and
- * filtered out of `getConfig()` / `getConfigValue()` so the two namespaces stay distinct.
+ * Reserved URL-param key for the userData local-dev fallback.
+ * This exact key is read by {@link getUserDataFromUrlParam} and filtered out of
+ * `getConfig()` / `getConfigValue()` so the two namespaces stay distinct.
  *
  * Exported so `config.ts` can import it — not re-exported from the package entry point.
  */
-export const USER_DATA_PARAM_PREFIX = "userData.";
+export const USER_DATA_PARAM_KEY = "userData";
 
 /**
- * Reads a single `?userData.<key>=<value>` entry from the current URL search string and
- * returns its value, or `undefined` if not present.
- *
- * Same-key-twice semantics: first occurrence wins, via `URLSearchParams.get()`.
- * Empty key after the prefix (`userData.=value`) is ignored — guarded by the explicit
- * `key === ""` check below.
+ * Reads `?userData=<value>` from the current URL search string and returns its value,
+ * or `undefined` if not present.
  *
  * Only called from {@link getUserData}, which already guards against `window` being
  * undefined — this function can therefore assume a browser environment.
  */
-function getUserDataFromUrlParams(key: string): string | undefined {
-    // An empty key would match `?userData.=value`, which we intentionally ignore.
-    if (key === "") return undefined;
-
-    const value = new URLSearchParams(window.location.search).get(USER_DATA_PARAM_PREFIX + key);
+function getUserDataFromUrlParam(): string | undefined {
+    const value = new URLSearchParams(window.location.search).get(USER_DATA_PARAM_KEY);
     // URLSearchParams.get returns null when absent; normalise to undefined.
     return value !== null ? value : undefined;
 }

@@ -19,9 +19,14 @@ describe("config", () => {
             expect(getConfig()).toEqual({ a: "1", b: "two", c: "" });
         });
 
-        it("excludes userData.* params from the result", () => {
-            setQuery("difficulty=hard&userData.foo=bar");
+        it("excludes the reserved 'userData' param from the result", () => {
+            setQuery("difficulty=hard&userData=someValue");
             expect(getConfig()).toEqual({ difficulty: "hard" });
+        });
+
+        it("does not exclude params that merely start with 'userData' (e.g. userData2)", () => {
+            setQuery("userData2=value&other=x");
+            expect(getConfig()).toEqual({ userData2: "value", other: "x" });
         });
     });
 
@@ -57,19 +62,24 @@ describe("config", () => {
             expect(getConfigValue("k", "fallback")).toBe("");
         });
 
-        it("returns undefined for a userData.* key even when the URL param is present", () => {
-            setQuery("userData.foo=bar");
-            expect(getConfigValue("userData.foo")).toBeUndefined();
+        it("returns undefined for the 'userData' key even when the URL param is present", () => {
+            setQuery("userData=foo");
+            expect(getConfigValue("userData")).toBeUndefined();
         });
 
-        it("returns string default for a userData.* key", () => {
-            setQuery("userData.foo=bar");
-            expect(getConfigValue("userData.foo", "default")).toBe("default");
+        it("returns string default for the 'userData' key", () => {
+            setQuery("userData=foo");
+            expect(getConfigValue("userData", "default")).toBe("default");
         });
 
-        it("returns function default for a userData.* key", () => {
-            setQuery("userData.foo=bar");
-            expect(getConfigValue("userData.foo", () => "lazy")).toBe("lazy");
+        it("returns function default for the 'userData' key", () => {
+            setQuery("userData=foo");
+            expect(getConfigValue("userData", () => "lazy")).toBe("lazy");
+        });
+
+        it("does not block params that merely start with 'userData' (e.g. userData2)", () => {
+            setQuery("userData2=value");
+            expect(getConfigValue("userData2")).toBe("value");
         });
     });
 });

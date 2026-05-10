@@ -1,10 +1,10 @@
-import { USER_DATA_PARAM_PREFIX } from "./userData";
+import { USER_DATA_PARAM_KEY } from "./userData";
 
 export function getConfig(): Record<string, string> {
     const urlParams = new URLSearchParams(window.location.search);
     const config: Record<string, string> = {};
     urlParams.forEach((value, key) => {
-        if (key.startsWith(USER_DATA_PARAM_PREFIX)) return;
+        if (key === USER_DATA_PARAM_KEY) return;
         config[key] = value;
     });
     return config;
@@ -19,8 +19,8 @@ export function getConfigValue(
   key: string,
   defaultValue?: string | (() => string)
 ): string | undefined {
-  // userData.* keys are reserved — never expose them through getConfigValue.
-  if (key.startsWith(USER_DATA_PARAM_PREFIX)) {
+  // `userData` key is reserved — never expose it through getConfigValue.
+  if (key === USER_DATA_PARAM_KEY) {
     if (defaultValue === undefined) return undefined;
     return typeof defaultValue === 'function' ? defaultValue() : defaultValue;
   }

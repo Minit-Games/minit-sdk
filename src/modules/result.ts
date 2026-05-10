@@ -27,32 +27,20 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 /**
  * Converts public `ResultOptions` to the wire-format `HostResultOptions`.
  *
- * The `userData` field, when present, is validated to be a non-null object (not
- * an array) with a non-empty string `key` and a string `value`. Invalid shapes
- * are treated as a no-op and omitted from the host payload.
+ * The `userData` field, when present, is forwarded as-is (a string).
+ * When absent (`undefined`) or not provided, the host payload omits the field.
+ * An empty string `""` is a valid value and is forwarded to the host.
  */
 function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
     if (!options) return undefined;
 
     const { userData, ...rest } = options;
 
-    if (userData === undefined || userData === null) {
+    if (userData === undefined) {
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
-    // Validate single-key shape: must be a plain object with key/value strings.
-    if (
-        typeof userData !== "object" ||
-        Array.isArray(userData) ||
-        typeof userData.key !== "string" ||
-        userData.key.length === 0 ||
-        typeof userData.value !== "string"
-    ) {
-        // Invalid shape — treat as no-op (do not forward userData to the host).
-        return Object.keys(rest).length > 0 ? rest : undefined;
-    }
-
-    return { ...rest, userData: { key: userData.key, value: userData.value } };
+    return { ...rest, userData };
 }
 
 // Backward-compat alias
