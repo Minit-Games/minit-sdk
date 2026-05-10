@@ -10,10 +10,11 @@ export type ResultOptions = {
 // Backward-compat alias
 export type DropResultOptions = ResultOptions;
 
-// Wire format sent to the host: userData is forwarded as a string.
+// Wire format sent to the host: userData is wrapped into { value: string }
+// matching UserDataPatchSchema in @minit/shared/zod.
 // Derived from ResultOptions so new fields automatically propagate here too.
 export type HostResultOptions = Omit<ResultOptions, 'userData'> & {
-    userData?: string;
+    userData?: { value: string };
 };
 
 export type MinitApi = {

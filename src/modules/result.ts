@@ -27,9 +27,10 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 /**
  * Converts public `ResultOptions` to the wire-format `HostResultOptions`.
  *
- * The `userData` field, when present, is forwarded as-is (a string).
+ * The `userData` field, when present as a bare string, is wrapped into
+ * `{ value: string }` to match `UserDataPatchSchema` in `@minit/shared/zod`.
  * When absent (`undefined`) or not provided, the host payload omits the field.
- * An empty string `""` is a valid value and is forwarded to the host.
+ * An empty string `""` is a valid value and is forwarded to the host as `{ value: "" }`.
  */
 function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
     if (!options) return undefined;
@@ -40,7 +41,7 @@ function buildHostOptions(options?: ResultOptions): HostResultOptions | undefine
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
-    return { ...rest, userData };
+    return { ...rest, userData: { value: userData } };
 }
 
 // Backward-compat alias

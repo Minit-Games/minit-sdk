@@ -43,6 +43,21 @@ describe("getUserData", () => {
         expect(getUserData()).toBeUndefined();
     });
 
+    it("returns undefined when a buggy host injects a number instead of a string", () => {
+        window.minit = { userData: 42 } as never;
+        expect(getUserData()).toBeUndefined();
+    });
+
+    it("returns undefined when a buggy host injects an object instead of a string", () => {
+        window.minit = { userData: { foo: "bar" } } as never;
+        expect(getUserData()).toBeUndefined();
+    });
+
+    it("returns undefined when a buggy host injects an array instead of a string", () => {
+        window.minit = { userData: ["a", "b"] } as never;
+        expect(getUserData()).toBeUndefined();
+    });
+
     // -------------------------------------------------------------------------
     // URL-param fallback — no host injection (window.minit absent / null / undefined)
     // -------------------------------------------------------------------------

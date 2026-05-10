@@ -33,6 +33,8 @@ Returns `undefined` when: no value is stored for this player; `window.minit.user
 
 `reportResult(result, { userData?: string })` — pass a plain string to store. An empty string `""` is a valid write. Omitting `userData` (or not passing `options`) leaves the stored value unchanged — the host payload will not include a `userData` field.
 
+**Wire shape (internal detail):** the SDK's public API accepts a bare string, but before forwarding to the host the string is wrapped into `{ value: string }` — i.e. the postMessage carries `userData: { value: "<the string>" }`. This matches `UserDataPatchSchema` in `@minit/shared/zod` (extensible for future fields). Games always see and pass the bare string; the wrapping is an SDK-internal concern and must not appear in the public README.
+
 ## Branch flow
 
 - `develop` — default branch. Feature branches fork from `develop` and PRs target `develop` (squash merge).

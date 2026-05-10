@@ -44,28 +44,28 @@ describe("reportResult", () => {
         expect(calls[0].options).toBeUndefined();
     });
 
-    it("forwards a string userData to the host", () => {
+    it("wraps string userData into { value } for the host", () => {
         setupMinit();
         reportResult(100, { userData: "savedState" });
-        expect(calls[0].options).toEqual({ userData: "savedState" });
+        expect(calls[0].options).toEqual({ userData: { value: "savedState" } });
     });
 
-    it("forwards userData alongside other options", () => {
+    it("wraps userData alongside other options", () => {
         setupMinit();
         reportResult(42, { flavorText: "Wow", userData: "data" });
-        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: "data" });
+        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: { value: "data" } });
     });
 
-    it("forwards empty string userData to the host (distinct from omission)", () => {
+    it("wraps empty string userData into { value: '' } (distinct from omission)", () => {
         setupMinit();
         reportResult(100, { userData: "" });
-        expect(calls[0].options).toEqual({ userData: "" });
+        expect(calls[0].options).toEqual({ userData: { value: "" } });
     });
 
-    it("preserves flavorText alongside userData", () => {
+    it("preserves flavorText alongside wrapped userData", () => {
         setupMinit();
         reportResult(10, { userData: "v", flavorText: "hi" });
-        expect(calls[0].options).toEqual({ userData: "v", flavorText: "hi" });
+        expect(calls[0].options).toEqual({ userData: { value: "v" }, flavorText: "hi" });
     });
 });
 
@@ -79,12 +79,12 @@ describe("reportDropResult (backward-compat alias)", () => {
         expect(reportDropResult).toBe(reportResult);
     });
 
-    it("forwards a string userData to the host via the alias", () => {
+    it("wraps string userData into { value } via the alias", () => {
         setupMinit();
         reportDropResult(99, { userData: "level5" });
         expect(calls).toHaveLength(1);
         expect(calls[0].result).toBe(99);
-        expect(calls[0].options).toEqual({ userData: "level5" });
+        expect(calls[0].options).toEqual({ userData: { value: "level5" } });
     });
 
     it("omits userData from the alias host payload when options are omitted", () => {
@@ -100,7 +100,7 @@ describe("reportResult — web environment dispatch", () => {
         calls = [];
     });
 
-    it("calls window.minit.reportResult with string userData when environment is 'web'", () => {
+    it("wraps string userData into { value } when environment is 'web'", () => {
         calls = [];
         window.minit = {
             environment: "web",
@@ -116,7 +116,7 @@ describe("reportResult — web environment dispatch", () => {
 
         expect(calls).toHaveLength(1);
         expect(calls[0].result).toBe(77);
-        expect(calls[0].options).toEqual({ userData: "bestScore=42" });
+        expect(calls[0].options).toEqual({ userData: { value: "bestScore=42" } });
     });
 
     it("omits userData from host payload in the web environment when not provided", () => {
@@ -136,7 +136,7 @@ describe("reportResult — web environment dispatch", () => {
         expect(calls[0].options).toBeUndefined();
     });
 
-    it("forwards empty string userData in the web environment", () => {
+    it("wraps empty string userData into { value: '' } in the web environment", () => {
         calls = [];
         window.minit = {
             environment: "web",
@@ -150,6 +150,6 @@ describe("reportResult — web environment dispatch", () => {
 
         reportResult(10, { userData: "" });
 
-        expect(calls[0].options).toEqual({ userData: "" });
+        expect(calls[0].options).toEqual({ userData: { value: "" } });
     });
 });
