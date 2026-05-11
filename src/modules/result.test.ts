@@ -67,6 +67,24 @@ describe("reportResult", () => {
         reportResult(10, { userData: "v", flavorText: "hi" });
         expect(calls[0].options).toEqual({ userData: { value: "v" }, flavorText: "hi" });
     });
+
+    it("omits userData from host payload when null is passed (JS misuse guard)", () => {
+        setupMinit();
+        reportResult(100, { userData: null as any });
+        expect(calls[0].options).toBeUndefined();
+    });
+
+    it("omits userData from host payload when a number is passed (JS misuse guard)", () => {
+        setupMinit();
+        reportResult(100, { userData: 42 as any });
+        expect(calls[0].options).toBeUndefined();
+    });
+
+    it("omits userData from host payload when a v1.2-style object is passed (JS misuse guard)", () => {
+        setupMinit();
+        reportResult(100, { userData: { value: "x" } as any });
+        expect(calls[0].options).toBeUndefined();
+    });
 });
 
 describe("reportDropResult (backward-compat alias)", () => {

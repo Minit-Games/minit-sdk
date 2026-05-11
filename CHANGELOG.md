@@ -42,7 +42,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
   reportResult(score, { userData: 'someEncodedState' });
   ```
 
-  An empty string `""` is forwarded to the host as-is (distinct from omission). Omitting `userData` or not passing `options` leaves the stored value unchanged.
+  An empty string `""` is forwarded to the host (distinct from omission). Omitting `userData` or not passing `options` leaves the stored value unchanged.
 
 - **`userData` is now a reserved URL-param key** (exact match). Previously the reserved namespace was the `userData.` prefix (all keys starting with `userData.`). Now only the exact key `userData` is reserved and stripped from `getConfig()` / `getConfigValue()`. Keys like `userData2` are no longer treated as reserved.
 

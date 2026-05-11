@@ -82,7 +82,7 @@ For backward compatibility with games written against earlier versions, the old 
 
 ## Persistent user data
 
-Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a plain `string | undefined` and forwards it as-is — no JSON parsing or serialisation is performed in the SDK. Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
+Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a plain `string | undefined` and the string value is forwarded unchanged (no JSON parse, no normalization). Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
 
 ### Reading
 

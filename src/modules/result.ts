@@ -31,13 +31,19 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
  * `{ value: string }` to match `UserDataPatchSchema` in `@minit/shared/zod`.
  * When absent (`undefined`) or not provided, the host payload omits the field.
  * An empty string `""` is a valid value and is forwarded to the host as `{ value: "" }`.
+ *
+ * Runtime guard: only values that satisfy `typeof userData === "string"` are
+ * wrapped and forwarded. Any other value — `null`, number, object, array, or
+ * `undefined` — is treated as "omit userData", regardless of TypeScript type
+ * assertions. This prevents JS consumers (or `as any` casts) from producing
+ * an invalid host wire shape such as `{ value: null }`.
  */
 function buildHostOptions(options?: ResultOptions): HostResultOptions | undefined {
     if (!options) return undefined;
 
     const { userData, ...rest } = options;
 
-    if (userData === undefined) {
+    if (typeof userData !== "string") {
         return Object.keys(rest).length > 0 ? rest : undefined;
     }
 
