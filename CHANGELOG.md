@@ -6,6 +6,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [1.3.0] — 2026-05-11
+
+### Breaking Changes
+
+- **`getUserData()` is now parameterless.** The old `getUserData(key: string)` signature is removed. Call `getUserData()` with no arguments to read the player's single-slot userData value. TypeScript will reject any call that passes a key argument.
+
+  ```ts
+  // Before (1.2.x) — keyed API, NO LONGER VALID
+  const level = getUserData('level');
+
+  // After (1.3.0) — single slot
+  const savedState = getUserData();
+  ```
+
+- **`window.minit.userData` is now `string | undefined`** (was `Record<string, string>`). The host injects a single opaque string; the SDK reads it directly with no JSON parsing and no key lookup.
+
+- **URL-param fallback changed.** The old `?userData.<key>=<value>` per-key params are replaced by a single `?userData=<value>` param for local-dev testing.
+
+  ```
+  # Before (1.2.x)
+  ?userData.level=3
+
+  # After (1.3.0)
+  ?userData=someEncodedValue
+  ```
+
+- **`reportResult` `userData` option is now a `string`.** The old `{ key: string; value: string }` object shape is removed. Pass a plain string, or omit the option to leave the stored value unchanged.
+
+  ```ts
+  // Before (1.2.x) — single-key object, NO LONGER VALID
+  reportResult(score, { userData: { key: 'level', value: '3' } });
+
+  // After (1.3.0) — plain string
+  reportResult(score, { userData: 'someEncodedState' });
+  ```
+
+  An empty string `""` is forwarded to the host (distinct from omission). Omitting `userData` or not passing `options` leaves the stored value unchanged.
+
+- **`userData` is now a reserved URL-param key** (exact match). Previously the reserved namespace was the `userData.` prefix (all keys starting with `userData.`). Now only the exact key `userData` is reserved and stripped from `getConfig()` / `getConfigValue()`. Keys like `userData2` are no longer treated as reserved.
+
+---
+
 ## [1.2.1] — 2026-05-06
 
 ### Added

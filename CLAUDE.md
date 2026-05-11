@@ -17,21 +17,23 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 | `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
-## Persistent user data (keyed API, updated in v1.2.0)
+## Persistent user data (single-slot API, updated in v1.3.0)
 
-The per-creator userData record is shared across all of a creator's games and stored on the backend per key. The host (app) owns deserialization — `window.minit.userData` is injected as a pre-parsed `Record<string, string>` object; the SDK never calls `JSON.parse` on it.
+The per-creator userData slot is shared across all of a creator's games. The host (app) owns serialization and transport — `window.minit.userData` is injected as a primitive `string | undefined`; the SDK never calls `JSON.parse` on it.
 
 ### Reading
 
-`getUserData(key: string): string | undefined` — looks up `key` in `window.minit.userData`. Falls back to the `?userData.<key>=<value>` URL param when `window.minit.userData` is `undefined` or `null` (local-dev convenience — host-injected `{}` still wins over URL params).
+`getUserData(): string | undefined` — reads `window.minit.userData` directly. No key argument. Falls back to the `?userData=<value>` URL param when `window.minit.userData` is `undefined` or `null` (local-dev convenience — any host-injected string, including `""`, wins over the URL param).
 
-Returns `undefined` when: no record exists for this player; `window.minit.userData` is absent and no matching URL param exists; or `key` is absent from both. Returns `""` if the stored value at `key` is the empty string (distinct from `undefined`).
+Returns `undefined` when: no value is stored for this player; `window.minit.userData` is absent and the `?userData` URL param is also absent. Returns `""` if the stored value is the empty string (distinct from `undefined`).
 
-`userData.*` is a reserved URL-param namespace — these keys are stripped from `getConfig()`/`getConfigValue()` so they never bleed into the config API.
+`userData` is a reserved URL-param key — it is stripped from `getConfig()`/`getConfigValue()` so it never bleeds into the config API. Only the exact key `userData` is reserved (keys like `userData2` are unaffected).
 
 ### Writing
 
-`reportResult(result, { userData?: { key: string; value: string } })` — pass a single key/value pair to store. Omitting `userData` leaves the stored value unchanged — the host payload will not include a `userData` field.
+`reportResult(result, { userData?: string })` — pass a plain string to store. An empty string `""` is a valid write. Omitting `userData` (or not passing `options`) leaves the stored value unchanged — the host payload will not include a `userData` field.
+
+**Wire shape (internal detail):** the SDK's public API accepts a bare string, but before forwarding to the host the string is wrapped into `{ value: string }` — i.e. the postMessage carries `userData: { value: "<the string>" }`. This matches `UserDataPatchSchema` in `@minit/shared/zod` (extensible for future fields). Games always see and pass the bare string; the wrapping is an SDK-internal concern and must not appear in the public README.
 
 ## Branch flow
 

@@ -68,7 +68,7 @@ score.flyToPanel({
 | `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
 | `reportResult(result, options?)` | Submit the final game result |
-| `getUserData(key)` | Read a value from the per-creator persistent data map (see [Persistent user data](#persistent-user-data)) |
+| `getUserData()` | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data)) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
 | `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
@@ -82,62 +82,53 @@ For backward compatibility with games written against earlier versions, the old 
 
 ## Persistent user data
 
-Each player has a key-value map stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a pre-parsed `Record<string, string>` and forwards `{ key, value }` objects as-is to the host — no JSON parsing or serialisation is performed in the SDK. Use it to persist save data, settings, high scores, or any other per-player state.
+Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a plain `string | undefined` and the string value is forwarded unchanged (no JSON parse, no normalization). Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
 
 ### Reading
 
 ```ts
 import { getUserData } from '@minit-games/sdk';
 
-const level = getUserData('level');  // string | undefined
+const savedState = getUserData();  // string | undefined
 ```
 
-- Returns `undefined` when no record exists for this player, or when the key is absent.
-- Returns `""` when the stored value for the key is the empty string — distinct from `undefined`.
+- Returns `undefined` when no value is stored for this player or when running outside the host app.
+- Returns `""` when the stored value is the empty string — distinct from `undefined`.
 
 ### Local userData testing
 
-During `npm run dev`, you can seed `getUserData` via URL params — no app host required:
+During `npm run dev`, you can seed `getUserData` via a URL param — no app host required:
 
 ```
-?userData.my_game=tutorialPlayed%3Dtrue
+?userData=tutorialPlayed%3Dtrue
 ```
 
-`getUserData('my_game')` will return `'tutorialPlayed=true'`.
+`getUserData()` will return `'tutorialPlayed=true'`.
 
-URL-param values apply only when the host has not injected `window.minit.userData` (i.e. the property is `undefined` or `null`). A host-injected empty record (`{}`) still wins — URL params are a local-dev convenience only.
+URL-param values apply only when the host has not injected `window.minit.userData` (i.e. the property is `undefined` or `null`). Any host-injected string (including `""`) wins over the URL param — URL params are a local-dev convenience only.
 
-> `userData.*` is a reserved URL-param namespace. These keys are stripped from `getConfig()` and `getConfigValue()`, so `getConfigValue('userData.my_game')` always returns `undefined` (or its default). Read userData exclusively via `getUserData`.
+> `userData` is a reserved URL-param key. It is stripped from `getConfig()` and `getConfigValue()`, so `getConfigValue('userData')` always returns `undefined` (or its default). Read userData exclusively via `getUserData()`.
 
 ### Writing
 
-Pass a single `{ key, value }` pair as `userData` in `reportResult`. Each write replaces only that key in the player's record, leaving all other keys untouched:
+Pass a string as `userData` in `reportResult`:
 
 ```ts
 import { reportResult } from '@minit-games/sdk';
 
-// Write a single key/value pair
-reportResult(score, { userData: { key: 'tutorial', value: 'done' } });
-```
+// Persist a plain string
+reportResult(score, { userData: 'tutorialDone' });
 
-Omitting `userData` (or not passing `options`) leaves the stored value unchanged.
-
-### Multiple keys
-
-Each `reportResult` call writes exactly **one key** — this is intentional. If you need to persist two pieces of state across separate plays, use a single encoded value or choose which key matters most per play:
-
-```ts
 // Encode multiple values into one string
-const value = JSON.stringify({ level: 3, darkMode: false });
-reportResult(score, { userData: { key: 'playerState', value } });
+const state = JSON.stringify({ level: 3, highScore: 1500 });
+reportResult(score, { userData: state });
 ```
 
-Because all your games share the same record, use distinct key names to avoid collisions (e.g. `gameA:level`, `gameA:highScore`).
+Omitting `userData` (or not passing `options`) leaves the stored value unchanged. An empty string `""` is a valid value and will overwrite any previously stored data.
 
 ### Limits
 
-- **1 KB (1024 UTF-8 bytes)** per stored value. Writes that exceed this limit are rejected and the existing value is left unchanged.
-- **64 characters** maximum key length.
+- **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are rejected and the existing value is left unchanged.
 
 ---
 

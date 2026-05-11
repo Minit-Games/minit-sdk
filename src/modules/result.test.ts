@@ -4,11 +4,11 @@ import type { HostResultOptions } from "../minitApi";
 // Capture calls to window.minit.reportResult so we can assert on payloads.
 let calls: Array<{ result: number | string; options: HostResultOptions | undefined }> = [];
 
-function setupMinit(userData?: Record<string, string>): void {
+function setupMinit(userData?: string): void {
     calls = [];
     window.minit = {
         environment: "app",
-        sdkVersion: "1.2.0",
+        sdkVersion: "1.3.0",
         dropConfig: {},
         userData,
         reportResult: (result: number | string, options?: HostResultOptions) => {
@@ -38,59 +38,52 @@ describe("reportResult", () => {
         expect((calls[0].options as Record<string, unknown>)["userData"]).toBeUndefined();
     });
 
-    it("forwards a valid single-key userData to the host", () => {
+    it("sends no userData field when options object is empty", () => {
         setupMinit();
-        reportResult(100, { userData: { key: "foo", value: "bar" } });
-        expect(calls[0].options).toEqual({ userData: { key: "foo", value: "bar" } });
+        reportResult(100, {});
+        expect(calls[0].options).toBeUndefined();
     });
 
-    it("forwards userData alongside other options", () => {
+    it("wraps string userData into { value } for the host", () => {
         setupMinit();
-        reportResult(42, { flavorText: "Wow", userData: { key: "x", value: "1" } });
-        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: { key: "x", value: "1" } });
+        reportResult(100, { userData: "savedState" });
+        expect(calls[0].options).toEqual({ userData: { value: "savedState" } });
     });
 
-    it("allows an empty-string value", () => {
+    it("wraps userData alongside other options", () => {
         setupMinit();
-        reportResult(100, { userData: { key: "k", value: "" } });
-        expect(calls[0].options).toEqual({ userData: { key: "k", value: "" } });
+        reportResult(42, { flavorText: "Wow", userData: "data" });
+        expect(calls[0].options).toEqual({ flavorText: "Wow", userData: { value: "data" } });
     });
 
-    it("omits userData from host payload when null is passed", () => {
+    it("wraps empty string userData into { value: '' } (distinct from omission)", () => {
         setupMinit();
-        reportResult(10, { userData: null as any });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(100, { userData: "" });
+        expect(calls[0].options).toEqual({ userData: { value: "" } });
     });
 
-    it("omits userData when an empty-string key is passed", () => {
+    it("preserves flavorText alongside wrapped userData", () => {
         setupMinit();
-        reportResult(10, { userData: { key: "", value: "v" } });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(10, { userData: "v", flavorText: "hi" });
+        expect(calls[0].options).toEqual({ userData: { value: "v" }, flavorText: "hi" });
     });
 
-    it("omits userData when a string is passed (non-object guard)", () => {
+    it("omits userData from host payload when null is passed (JS misuse guard)", () => {
         setupMinit();
-        reportResult(10, { userData: "string-not-object" as any });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(100, { userData: null as any });
+        expect(calls[0].options).toBeUndefined();
     });
 
-    it("omits userData when an array is passed", () => {
+    it("omits userData from host payload when a number is passed (JS misuse guard)", () => {
         setupMinit();
-        reportResult(10, { userData: ["not", "object"] as any });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(100, { userData: 42 as any });
+        expect(calls[0].options).toBeUndefined();
     });
 
-    it("preserves flavorText but omits userData when null is passed with other options", () => {
+    it("omits userData from host payload when a v1.2-style object is passed (JS misuse guard)", () => {
         setupMinit();
-        reportResult(10, { userData: null as any, flavorText: "hi" });
-        expect(calls[0].options).toEqual({ flavorText: "hi" });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
-    });
-
-    it("omits userData when value is a number (not a string)", () => {
-        setupMinit();
-        reportResult(10, { userData: { key: "score", value: 42 as any } });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportResult(100, { userData: { value: "x" } as any });
+        expect(calls[0].options).toBeUndefined();
     });
 });
 
@@ -104,18 +97,18 @@ describe("reportDropResult (backward-compat alias)", () => {
         expect(reportDropResult).toBe(reportResult);
     });
 
-    it("forwards a valid single-key userData to the host via the alias", () => {
+    it("wraps string userData into { value } via the alias", () => {
         setupMinit();
-        reportDropResult(99, { userData: { key: "level", value: "5" } });
+        reportDropResult(99, { userData: "level5" });
         expect(calls).toHaveLength(1);
         expect(calls[0].result).toBe(99);
-        expect(calls[0].options).toEqual({ userData: { key: "level", value: "5" } });
+        expect(calls[0].options).toEqual({ userData: { value: "level5" } });
     });
 
-    it("omits userData from the alias host payload when null is passed", () => {
+    it("omits userData from the alias host payload when options are omitted", () => {
         setupMinit();
-        reportDropResult(1, { userData: null as any });
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        reportDropResult(1);
+        expect(calls[0].options).toBeUndefined();
     });
 });
 
@@ -125,11 +118,11 @@ describe("reportResult — web environment dispatch", () => {
         calls = [];
     });
 
-    it("calls window.minit.reportResult with { key, value } shape when environment is 'web'", () => {
+    it("wraps string userData into { value } when environment is 'web'", () => {
         calls = [];
         window.minit = {
             environment: "web",
-            sdkVersion: "1.2.0",
+            sdkVersion: "1.3.0",
             dropConfig: {},
             reportResult: (result: number | string, options?: HostResultOptions) => {
                 calls.push({ result, options });
@@ -137,18 +130,18 @@ describe("reportResult — web environment dispatch", () => {
             loadingDone: () => {},
         } as never;
 
-        reportResult(77, { userData: { key: "bestScore", value: "42" } });
+        reportResult(77, { userData: "bestScore=42" });
 
         expect(calls).toHaveLength(1);
         expect(calls[0].result).toBe(77);
-        expect(calls[0].options).toEqual({ userData: { key: "bestScore", value: "42" } });
+        expect(calls[0].options).toEqual({ userData: { value: "bestScore=42" } });
     });
 
-    it("omits userData from host payload in the web environment when shape is invalid", () => {
+    it("omits userData from host payload in the web environment when not provided", () => {
         calls = [];
         window.minit = {
             environment: "web",
-            sdkVersion: "1.2.0",
+            sdkVersion: "1.3.0",
             dropConfig: {},
             reportResult: (result: number | string, options?: HostResultOptions) => {
                 calls.push({ result, options });
@@ -156,8 +149,25 @@ describe("reportResult — web environment dispatch", () => {
             loadingDone: () => {},
         } as never;
 
-        reportResult(10, { userData: null as any });
+        reportResult(10);
 
-        expect((calls[0].options as Record<string, unknown> | undefined)?.["userData"]).toBeUndefined();
+        expect(calls[0].options).toBeUndefined();
+    });
+
+    it("wraps empty string userData into { value: '' } in the web environment", () => {
+        calls = [];
+        window.minit = {
+            environment: "web",
+            sdkVersion: "1.3.0",
+            dropConfig: {},
+            reportResult: (result: number | string, options?: HostResultOptions) => {
+                calls.push({ result, options });
+            },
+            loadingDone: () => {},
+        } as never;
+
+        reportResult(10, { userData: "" });
+
+        expect(calls[0].options).toEqual({ userData: { value: "" } });
     });
 });
