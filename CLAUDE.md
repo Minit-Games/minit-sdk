@@ -42,6 +42,10 @@ Returns `undefined` when: no value is stored for this player; `window.minit.user
 
 ## Release Process
 
+Releases follow the canonical release-train workflow documented at [minit-root/docs/release-workflow.md](https://github.com/Minit-Games/minit-root/blob/develop/docs/release-workflow.md). That runbook is authoritative for *when* and *why* to release (versioning policy, release-train coordination, and the `-s ours` exception for the sdk's independent publish cadence). The subsection below covers *how the npm publish works for this specific repo* — mechanics that the cross-repo runbook does not replicate.
+
+### npm publish specifics
+
 Releases are cut from `develop`. The version bump lands on `develop` first, then is fast-forwarded to `master`.
 
 1. From `develop`, bump the version and create a git tag:
