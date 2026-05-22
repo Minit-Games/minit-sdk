@@ -84,7 +84,9 @@ For backward compatibility with games written against earlier versions, the old 
 
 Chat-based AI assistants (Claude, ChatGPT, Gemini, and others) can scaffold a complete Minit game project, but the output is typically source code — it needs a build step before it can be uploaded. Once your game is working in the AI's preview, give it this prompt:
 
-> "The game is ready. Please run `npm run build` and give me a ZIP of the `dist/` folder."
+```
+The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
+```
 
 That ZIP is what you upload to the [Creator Console](https://console.minit.games). For a full walkthrough — including a Google AI Studio callout and what to do if the upload is rejected — see [docs/ai-assistants.md](./docs/ai-assistants.md).
 

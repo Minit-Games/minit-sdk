@@ -19,7 +19,7 @@ If the Creator Console rejects your upload — for example, because it detects a
 Once your game is working in the AI's preview or chat environment, send it this message:
 
 ```
-The game is ready. Please run `npm run build` and give me a ZIP of the `dist/` folder.
+The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
 ```
 
 The AI will run the build step and hand you a ZIP that contains the compiled output. That ZIP is what you upload to the [Creator Console](https://console.minit.games).
