@@ -35,6 +35,10 @@ Returns `undefined` when: no value is stored for this player; `window.minit.user
 
 **Wire shape (internal detail):** the SDK's public API accepts a bare string, but before forwarding to the host the string is wrapped into `{ value: string }` — i.e. the postMessage carries `userData: { value: "<the string>" }`. This matches `UserDataPatchSchema` in `@minit/shared/zod` (extensible for future fields). Games always see and pass the bare string; the wrapping is an SDK-internal concern and must not appear in the public README.
 
+## Docs
+
+`docs/ai-assistants.md` — creator-facing guide for building and uploading AI-generated game projects. Covers the required build step, what a valid ZIP looks like, and a Google AI Studio callout.
+
 ## Branch flow
 
 - `develop` — default branch. Feature branches fork from `develop` and PRs target `develop` (squash merge).

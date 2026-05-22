@@ -80,6 +80,14 @@ score.flyToPanel({
 
 For backward compatibility with games written against earlier versions, the old `Drop`-prefixed names are exported as aliases: `reportDropResult`, `getDropConfigValue`, `getDropConfig`, `initializeDropSDK`, `addDropBackground`, `applyDropMetaTags`, `getDropEnvironment`, and the types `DropBackground`/`DropResultOptions`/`DropEnvironment`.
 
+## Using with AI assistants
+
+Chat-based AI assistants (Claude, ChatGPT, Gemini, and others) can scaffold a complete Minit game project, but the output is typically source code — it needs a build step before it can be uploaded. Once your game is working in the AI's preview, give it this prompt:
+
+> "The game is ready. Please run `npm run build` and give me a ZIP of the `dist/` folder."
+
+That ZIP is what you upload to the [Creator Console](https://console.minit.games). For a full walkthrough — including a Google AI Studio callout and what to do if the upload is rejected — see [docs/ai-assistants.md](./docs/ai-assistants.md).
+
 ## Persistent user data
 
 Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a plain `string | undefined` and the string value is forwarded unchanged (no JSON parse, no normalization). Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
