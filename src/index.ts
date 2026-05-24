@@ -1,32 +1,32 @@
-import { addBackground } from "./modules/background";
-import type { Background } from "./modules/background";
-import { getConfig } from "./modules/config";
-import { applyMetaTags } from "./modules/meta";
-import { getEnvironment, isTestEnvironment } from "./utils";
+import { addBackground } from "./modules/background.js";
+import type { Background } from "./modules/background.js";
+import { getConfig } from "./modules/config.js";
+import { applyMetaTags } from "./modules/meta.js";
+import { getEnvironment, isTestEnvironment } from "./utils.js";
 
 // New clean names
-export { getConfig, getConfigValue } from "./modules/config";
-export { reportResult } from "./modules/result";
-export { getUserData } from "./modules/userData";
-export { loadingDone } from "./modules/loadingDone";
-export { seededRandom, patchSeed } from "./modules/random";
-export type { RandomModule } from "./modules/random";
-export { addBackground } from "./modules/background";
-export type { Background, ShadowOptions, ShapeOptions, ImageOptions } from "./modules/background";
-export { applyMetaTags } from "./modules/meta";
-export { getEnvironment, isApp, isTestEnvironment, callApiFunction } from "./utils";
-export type { Environment } from "./utils";
-export type { ResultOptions, MinitApi } from "./minitApi";
+export { getConfig, getConfigValue } from "./modules/config.js";
+export { reportResult } from "./modules/result.js";
+export { getUserData } from "./modules/userData.js";
+export { loadingDone } from "./modules/loadingDone.js";
+export { seededRandom, patchSeed } from "./modules/random.js";
+export type { RandomModule } from "./modules/random.js";
+export { addBackground } from "./modules/background.js";
+export type { Background, ShadowOptions, ShapeOptions, ImageOptions } from "./modules/background.js";
+export { applyMetaTags } from "./modules/meta.js";
+export { getEnvironment, isApp, isTestEnvironment, callApiFunction } from "./utils.js";
+export type { Environment } from "./utils.js";
+export type { ResultOptions, MinitApi } from "./minitApi.js";
 
 // Backward-compat aliases
-export { getDropConfig, getDropConfigValue } from "./modules/config";
-export { reportDropResult } from "./modules/result";
-export { addDropBackground } from "./modules/background";
-export type { DropBackground } from "./modules/background";
-export { applyDropMetaTags } from "./modules/meta";
-export { getDropEnvironment } from "./utils";
-export type { DropEnvironment } from "./utils";
-export type { DropResultOptions } from "./minitApi";
+export { getDropConfig, getDropConfigValue } from "./modules/config.js";
+export { reportDropResult } from "./modules/result.js";
+export { addDropBackground } from "./modules/background.js";
+export type { DropBackground } from "./modules/background.js";
+export { applyDropMetaTags } from "./modules/meta.js";
+export { getDropEnvironment } from "./utils.js";
+export type { DropEnvironment } from "./utils.js";
+export type { DropResultOptions } from "./minitApi.js";
 
 export interface SDKConfig {
     metaTags?: boolean;

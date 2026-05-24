@@ -2,8 +2,8 @@ export {
     showTutorial,
     hideTutorial,
     isTutorialVisible
-} from "../modules/tutorial";
-export type { TutorialPosition, TutorialOptions } from "../modules/tutorial";
+} from "../modules/tutorial.js";
+export type { TutorialPosition, TutorialOptions } from "../modules/tutorial.js";
 
 export {
     showFeedback,
@@ -11,19 +11,19 @@ export {
     showNeutralFeedback,
     showNegativeFeedback,
     preloadFeedbackFont
-} from "../modules/feedback";
-export type { FeedbackVariant } from "../modules/feedback";
+} from "../modules/feedback.js";
+export type { FeedbackVariant } from "../modules/feedback.js";
 
 export {
     spawnReward,
     spawnRewards
-} from "../modules/reward";
-export type { RewardVisual, RewardOptions } from "../modules/reward";
+} from "../modules/reward.js";
+export type { RewardVisual, RewardOptions } from "../modules/reward.js";
 
 export {
     createHeaderBar,
     getHeaderBar
-} from "../modules/headerPanel";
+} from "../modules/headerPanel.js";
 export type {
     HeaderBar,
     HeaderBarConfig,
@@ -33,4 +33,4 @@ export type {
     PanelStyle,
     FlyToPanelOptions,
     HeaderLayout
-} from "../modules/headerPanel";
+} from "../modules/headerPanel.js";

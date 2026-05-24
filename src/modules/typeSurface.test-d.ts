@@ -1,7 +1,7 @@
 // Type-level surface tests for v1.3.0 breaking changes.
 // These are checked by tsc (npm run check) — not executed at runtime.
-import { getUserData } from "./userData";
-import type { ResultOptions } from "../minitApi";
+import { getUserData } from "./userData.js";
+import type { ResultOptions } from "../minitApi.js";
 
 // --- getUserData ---
 

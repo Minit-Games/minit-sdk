@@ -1,4 +1,4 @@
-import { callApiFunction, isTestEnvironment } from "../utils";
+import { callApiFunction, isTestEnvironment } from "../utils.js";
 
 let _loadingDonePosted = false;
 

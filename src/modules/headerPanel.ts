@@ -1,4 +1,4 @@
-import { spawnReward } from './reward';
+import { spawnReward } from './reward.js';
 
 const HEADER_CONTAINER_ID = "drop-header-bar";
 const HEADER_PANEL_CLASS = "drop-header-panel";

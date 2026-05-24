@@ -1,5 +1,5 @@
-import type { ResultOptions, HostResultOptions } from "../minitApi";
-import { callApiFunction, isTestEnvironment } from "../utils";
+import type { ResultOptions, HostResultOptions } from "../minitApi.js";
+import { callApiFunction, isTestEnvironment } from "../utils.js";
 
 export function reportResult(result: number|string, options?: ResultOptions): void {
 

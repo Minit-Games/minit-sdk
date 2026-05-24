@@ -10,6 +10,12 @@ npm run check      # TypeScript type check (tsc --noEmit)
 npm run build      # Compile to dist/ (ESM + .d.ts)
 ```
 
+## Build conventions
+
+The SDK uses `"module": "NodeNext"` + `"moduleResolution": "NodeNext"` in `tsconfig.json`. All relative imports in `src/**` **must** use explicit `.js` extensions (e.g. `from "./utils.js"`, `from "../minitApi.js"`). This is the NodeNext convention — the `.js` refers to the emitted file even though the source is `.ts`. Extensionless relative imports will fail in Node strict ESM.
+
+Jest uses a separate `tsconfig.test.json` that overrides to `module: commonjs` / `moduleResolution: node`, and `jest.config.cjs` maps `*.js` imports back to their source files via `moduleNameMapper` so ts-jest can resolve `.ts` files at test time.
+
 ## Entry Points
 
 | Import path | Description |

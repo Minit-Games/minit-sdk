@@ -1,5 +1,5 @@
 import seedrandom from 'seedrandom';
-import { getConfigValue } from './config';
+import { getConfigValue } from './config.js';
 
 export type RandomModule = { seedParam?: string; fallbackSeed?: string;  patchGlobal?: boolean };
 

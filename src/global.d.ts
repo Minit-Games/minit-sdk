@@ -1,4 +1,4 @@
-import { MinitApi } from "./minitApi";
+import { MinitApi } from "./minitApi.js";
 
 declare global {
     interface Window {
