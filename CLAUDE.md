@@ -12,9 +12,9 @@ npm run build      # Compile to dist/ (ESM + .d.ts)
 
 ## Build conventions
 
-The SDK uses `"module": "NodeNext"` + `"moduleResolution": "NodeNext"` in `tsconfig.json`. All relative imports in `src/**` **must** use explicit `.js` extensions (e.g. `from "./utils.js"`, `from "../minitApi.js"`). This is the NodeNext convention — the `.js` refers to the emitted file even though the source is `.ts`. Extensionless relative imports will fail in Node strict ESM.
+The SDK builds with `"module": "NodeNext"` + `"moduleResolution": "NodeNext"` in `tsconfig.json`. Production source files in `src/**` (everything except `*.test.ts`) **must** use explicit `.js` extensions on relative imports (e.g. `from "./utils.js"`, `from "../minitApi.js"`). The `.js` refers to the emitted file — TypeScript leaves these specifiers untouched, and Node strict ESM rejects extensionless relative imports.
 
-Jest uses a separate `tsconfig.test.json` that overrides to `module: commonjs` / `moduleResolution: node`, and `jest.config.cjs` maps `*.js` imports back to their source files via `moduleNameMapper` so ts-jest can resolve `.ts` files at test time.
+Test files (`*.test.ts`) deliberately use extensionless relative imports — they run under `tsconfig.test.json` which overrides to `module: commonjs` / `moduleResolution: node`, and `jest.config.cjs` includes a `moduleNameMapper` that strips a trailing `.js` suffix from relative specifiers so ts-jest still resolves `.ts` source files when a production file imports them.
 
 ## Entry Points
 
