@@ -23,15 +23,32 @@ initializeSDK({
     }
 });
 
-// Read URL-param config (passed by the app)
+// Read URL-param config (passed by the app). Always returns a string —
+// coerce with Number(...) / parseInt(...) for numeric mods.
 const difficulty = getConfigValue('difficulty', 'normal');
 
-// Signal that assets are loaded and the game is ready
+// Signal that assets are loaded and the game is ready to be shown.
+// Until this is called, the Minit app keeps a loading state on top
+// of the WebView — call it as soon as the first interactive frame
+// is ready.
 loadingDone();
 
-// At game end, report the result
+// At game end, report the result. The Minit app immediately overlays
+// its own result screen on top of the WebView, so the game loses
+// focus — do NOT render an in-game "result submitted" confirmation,
+// and stop driving updates after this call.
 reportResult(1500, { flavorText: 'Great run!' });
 ```
+
+### Game lifecycle
+
+The host (Minit app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
+
+- **`initializeSDK(config?)`** — call once at startup. Sets up the background, meta tags, and backward-compat shims. Cheap and synchronous.
+- **`loadingDone()`** — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
+- **`reportResult(result, options?)`** — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
+
+The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results. Use it for context (`'Beat the expert!'`, `'3 turns to spare'`) — not for confirmation copy.
 
 ### UI entry point
 
