@@ -1,4 +1,4 @@
-import { USER_DATA_PARAM_KEY } from "./userData";
+import { USER_DATA_PARAM_KEY } from "./userData.js";
 
 export function getConfig(): Record<string, string> {
     const urlParams = new URLSearchParams(window.location.search);
