@@ -34,7 +34,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these p
 
 - **No in-game "result submitted" UI.** When the game calls `reportResult(...)`, the Minit app immediately overlays its own result screen on top of the WebView and the game loses focus. Any check-mark badge, toast, or "submitted via SDK" banner the AI added will never be seen — ask the AI to remove it.
 - **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView. AIs sometimes wire it to a "Start" button or omit it entirely, leaving the player stuck on a loader.
-- **Coerce config values — they're always strings.** `getConfigValue('maxRounds')` returns a string even when the value is conceptually numeric. AIs sometimes write `getConfigValue('maxRounds') * 2`, which yields `NaN`. Wrap with `Number(...)` or `parseInt(...)` for numeric mods.
+- **Coerce config values — they're returned as strings (or `undefined` for missing keys).** `getConfigValue('startScore') + 5` yields the string `'05'` instead of `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` (and supply a default) for numeric mods.
 - **`flavorText` is rendered by the host, not in-game.** It appears beneath the score on the app's result screen and in the activity feed. Use it for context (`'Beat the expert!'`) — not for confirmation copy.
 
 ## Google AI Studio (Build Mode)
