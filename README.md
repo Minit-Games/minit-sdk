@@ -15,23 +15,37 @@ npm install @minit-games/sdk
 ```ts
 import { initializeSDK, getConfigValue, reportResult, loadingDone } from '@minit-games/sdk';
 
-// Initialize with optional background
-initializeSDK({
-    background: {
-        backgroundColor: '#1a1a2e',
-        shapes: { enabled: true }
-    }
-});
+// Bootstrap the SDK at startup. Accepts an optional config for
+// background and meta-tag injection (see API overview below).
+initializeSDK();
 
-// Read URL-param config (passed by the app)
+// Read URL-param config (passed by the app). Returns a string (or
+// undefined if the key is missing and no default is supplied) —
+// coerce with Number(...) / parseInt(...) for numeric mods.
 const difficulty = getConfigValue('difficulty', 'normal');
 
-// Signal that assets are loaded and the game is ready
+// Signal that assets are loaded and the game is ready to be shown.
+// Until this is called, the Minit app keeps a loading state on top
+// of the WebView — call it as soon as the first interactive frame
+// is ready.
 loadingDone();
 
-// At game end, report the result
+// At game end, report the result. The Minit app immediately overlays
+// its own result screen on top of the WebView, so the game loses
+// focus — do NOT render an in-game "result submitted" confirmation,
+// and stop driving updates after this call.
 reportResult(1500, { flavorText: 'Great run!' });
 ```
+
+### Game lifecycle
+
+The host (Minit app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
+
+- **`initializeSDK(config?)`** — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`).
+- **`loadingDone()`** — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
+- **`reportResult(result, options?)`** — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
+
+The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results. Use it for context (`'Beat the expert!'`, `'3 turns to spare'`) — not for confirmation copy.
 
 ### UI entry point
 
