@@ -8,12 +8,12 @@ let random: seedrandom.PRNG | undefined;
 function ensureInitialized(): void {
     if (random !== undefined) return;
     const seed = getConfigValue("seed") ?? Date.now().toString();
-    console.log("[DropSDK] Random seed =", seed);
+    console.log("[MinitSDK] Random seed =", seed);
     random = seedrandom(seed, { global: false });
 }
 
 export function patchSeed(seed: string): void {
-    console.log("[DropSDK] Patching global random with seed =", seed);
+    console.log("[MinitSDK] Patching global random with seed =", seed);
     random = seedrandom(seed, { global: false });
 }
 

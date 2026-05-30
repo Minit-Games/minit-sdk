@@ -6,7 +6,7 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
     if(isTestEnvironment()) {
 
         if(options?.delay) {
-            console.log(`[DropSDK] Delaying drop result display by ${options.delay}ms`);
+            console.log(`[MinitSDK] Delaying drop result display by ${options.delay}ms`);
             setTimeout(() => {
                 showResultScreen(result, options);
             }, options.delay);
