@@ -14,7 +14,7 @@ export function isTestEnvironment() {
 export function callApiFunction(callback: () => void, testMessage: string | (() => string)) {
     if(isTestEnvironment()) {
         const message = typeof testMessage === "string" ? testMessage : testMessage();
-        console.log(`[DropSDK]`, message);
+        console.log(`[MinitSDK]`, message);
     }
     else {
         callback();

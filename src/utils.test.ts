@@ -50,7 +50,7 @@ describe("utils", () => {
             const callback = jest.fn();
             callApiFunction(callback, "hello");
             expect(callback).not.toHaveBeenCalled();
-            expect(logSpy).toHaveBeenCalledWith("[DropSDK]", "hello");
+            expect(logSpy).toHaveBeenCalledWith("[MinitSDK]", "hello");
         });
 
         it("evaluates a thunk message lazily in the test environment", () => {
