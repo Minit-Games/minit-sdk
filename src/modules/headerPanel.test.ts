@@ -85,6 +85,17 @@ describe("headerPanel — single injection guard", () => {
         const lato400Matches = css.match(/@font-face[\s\S]*?font-family:\s*['"]?Lato['"]?[\s\S]*?font-weight:\s*400/g);
         expect(lato400Matches?.length ?? 0).toBe(1);
     });
+
+    it("the injected CSS contains only one @font-face block for Lato 700 regardless of call count", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar();
+        createHeaderBar();
+        const styleEl = document.head.querySelector("style#drop-header-bar-styles");
+        const css = styleEl?.textContent ?? "";
+        // Count occurrences of @font-face + Lato + 700
+        const lato700Matches = css.match(/@font-face[\s\S]*?font-family:\s*['"]?Lato['"]?[\s\S]*?font-weight:\s*700/g);
+        expect(lato700Matches?.length ?? 0).toBe(1);
+    });
 });
 
 describe("headerPanel — injected CSS content", () => {

@@ -212,7 +212,7 @@ The font data is tree-shaken per module — games pay only for what they import:
 | `showFeedback` / `preloadFeedbackFont` (Bowlby One SC 400) | ~26 KB base64 (~19.4 KB woff2) |
 | Neither | 0 KB |
 
-Games that use neither `createHeaderBar` nor any feedback function pay no overhead.
+Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
 
 ## License
 

@@ -28,13 +28,17 @@ export async function preloadFeedbackFont(): Promise<void> {
         await document.fonts.load("1em 'Bowlby One SC'");
     } catch (e) {
         // Font loading API not supported or failed, font is still injected via @font-face
-        console.warn('[Feedback] Font preload check failed, font is still bundled');
+        console.warn('[MinitSDK] Font preload check failed, font is still bundled');
     }
 }
 
 function injectStyles(): void {
     if (stylesInjected) return;
     stylesInjected = true;
+    // Mark the font as preloaded: the @font-face rule embeds the font data as a
+    // data URI, so the moment the CSS is injected the font bytes are already
+    // in-page. Any subsequent call to preloadFeedbackFont() therefore has nothing
+    // to wait for and returns early via the `if (fontPreloaded) return;` guard.
     fontPreloaded = true;
 
     const style = document.createElement('style');
