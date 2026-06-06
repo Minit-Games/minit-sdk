@@ -25,7 +25,7 @@ Test files (`*.test.ts`) deliberately use extensionless relative imports — the
 
 ## Bundled Fonts
 
-The SDK vendors all fonts as base64-encoded woff2 data URIs — no runtime network requests to `fonts.googleapis.com` or `fonts.gstatic.com` are made. Fonts are injected via `@font-face` CSS rules at module initialisation.
+The SDK vendors all fonts as base64-encoded woff2 data URIs — no runtime network requests to `fonts.googleapis.com` or `fonts.gstatic.com` are made. Fonts are injected via `@font-face` CSS rules lazily on the first call of the consuming UI function (`createHeaderBar` injects Lato; `showFeedback` / `preloadFeedbackFont` injects Bowlby One SC), guarded by a one-shot `stylesInjected` flag — not at module import time.
 
 | Module | Font | Used by |
 |---|---|---|
