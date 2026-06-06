@@ -7,12 +7,20 @@ Any chat-based AI assistant — Claude, ChatGPT, Gemini, and others — can scaf
 The [Creator Console](https://console.minit.games) expects a self-contained, pre-built game:
 
 - `index.html` at the root of the ZIP (the built entry point)
-- All JS, CSS, and assets bundled alongside it
+- All JS, CSS, and assets bundled alongside it — **including fonts** (see below)
 - **No** `src/` folder
 - **No** `vite.config.*` or similar build config files
 - **No** `package.json` at the root
 
 If the Creator Console rejects your upload — for example, because it detects a `src/` folder or a `vite.config.*` file — the project has not been built yet. Follow the steps below to build it first.
+
+### Fonts must be bundled in the ZIP
+
+Minit games run sandboxed with no external network access at runtime. Links to `fonts.googleapis.com` or any other external URL will fail silently when the game plays inside the app. All fonts must ship inside the ZIP.
+
+The recommended approach is to bundle font files (woff2) in your project and reference them with relative-path `@font-face` rules rather than `<link>` tags to Google Fonts. If your build does include a Google Fonts link, the Minit publish pipeline will attempt to inline the font data automatically — but this is a best-effort safety net, not a guarantee.
+
+The SDK's own UI components (header bar, feedback text) already bundle their fonts (Lato and Bowlby One SC) as inline data — no action needed on your part for those.
 
 ## The build prompt
 
@@ -36,6 +44,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these p
 - **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView. AIs sometimes wire it to a "Start" button or omit it entirely, leaving the player stuck on a loader.
 - **Coerce config values — they're returned as strings (or `undefined` for missing keys).** `getConfigValue('startScore') + 5` yields the string `'05'` instead of `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` (and supply a default) for numeric mods.
 - **`flavorText` is rendered by the host, not in-game.** It appears beneath the score on the app's result screen and in the activity feed. Use it for context (`'Beat the expert!'`) — not for confirmation copy.
+- **Remove `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Replace them with woff2 font files bundled in the project and referenced via `@font-face` rules. (The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action from you.)
 
 ## Google AI Studio (Build Mode)
 

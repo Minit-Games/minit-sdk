@@ -23,6 +23,25 @@ Test files (`*.test.ts`) deliberately use extensionless relative imports — the
 | `@minit-games/sdk` | Core SDK — `initializeSDK`, `reportResult`, `getUserData`, `getConfigValue`, `loadingDone`, etc. |
 | `@minit-games/sdk/ui` | UI helpers |
 
+## Bundled Fonts
+
+The SDK vendors all fonts as base64-encoded woff2 data URIs — no runtime network requests to `fonts.googleapis.com` or `fonts.gstatic.com` are made. Fonts are injected via `@font-face` CSS rules lazily on the first call of the consuming UI function (`createHeaderBar` injects Lato; `showFeedback` / `preloadFeedbackFont` injects Bowlby One SC), guarded by a one-shot `stylesInjected` flag — not at module import time.
+
+| Module | Font | Used by |
+|---|---|---|
+| `src/modules/fonts/lato.ts` | Lato 400 + 700, latin subset | `headerPanel` (`injectStyles`) |
+| `src/modules/fonts/bowlbyOneSC.ts` | Bowlby One SC 400, latin subset | `feedback` (`injectStyles` / `preloadFeedbackFont`) |
+
+The font modules export a single `get*FontFaceCSS()` function and are tree-shaken away if the consuming module is unused. Each module is intentionally split so games using only `feedback` don't bundle Lato, and games using only `headerPanel` don't bundle Bowlby One SC.
+
+SIL OFL license texts for both families are shipped in the `licenses/` directory and are included in the npm package via the `files` field in `package.json`. Do not remove them — they are legally required when distributing the font data.
+
+To update a font (e.g. new version from Google Fonts):
+1. Download the new woff2 from fonts.gstatic.com (fetch the Google Fonts CSS with a modern Chrome UA to get the woff2 URL)
+2. Base64-encode: `base64 -i <file>.woff2 | tr -d '\n'`
+3. Replace the constant in the corresponding `src/modules/fonts/*.ts` file
+4. Update the license file if the copyright year or holder changed
+
 ## Persistent user data (single-slot API, updated in v1.3.0)
 
 The per-creator userData slot is shared across all of a creator's games. The host (app) owns serialization and transport — `window.minit.userData` is injected as a primitive `string | undefined`; the SDK never calls `JSON.parse` on it.

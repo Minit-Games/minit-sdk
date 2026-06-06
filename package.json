@@ -16,8 +16,10 @@
       "types": "./dist/ui/index.d.ts"
     }
   },
+  "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "licenses"
   ],
   "scripts": {
     "build": "tsc --project tsconfig.json",

@@ -173,6 +173,47 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 | `createHeaderBar(config?)` | Create a header bar for displaying game stats |
 | `getHeaderBar()` | Get the current header bar instance |
 
+## Fonts and assets
+
+### Game assets must be self-contained
+
+Minit games run sandboxed — the game WebView has no external network access at runtime. All assets (images, audio, fonts, etc.) must ship inside the game ZIP. Any `<link>` to `fonts.googleapis.com` or any other external URL will fail silently when the game plays inside the app.
+
+If your build does reference Google Fonts links, the Minit publish pipeline will attempt to inline the font data automatically at publish time. This is a best-effort safety net — do not rely on it. The correct approach is to bundle font files (woff2) inside your project and reference them with relative-path `@font-face` rules:
+
+```css
+@font-face {
+    font-family: 'MyFont';
+    src: url('./fonts/myfont.woff2') format('woff2');
+    font-weight: 400;
+}
+```
+
+After building, confirm that the font file appears in `dist/` alongside `index.html`.
+
+### SDK UI fonts are built in
+
+The SDK's own UI components (header panel, feedback text) bundle their fonts as base64-inlined woff2 — no network requests are made and they work fully offline. The bundled families are:
+
+| Module | Font | Weight |
+|--------|------|--------|
+| `@minit-games/sdk/ui` — `createHeaderBar` | Lato | 400, 700 |
+| `@minit-games/sdk/ui` — `showFeedback` / `preloadFeedbackFont` | Bowlby One SC | 400 |
+
+Both families are latin subset. Their SIL OFL license texts ship in the [`licenses/`](./licenses/) directory (included in the npm package).
+
+#### Bundle-size impact
+
+The font data is tree-shaken per module — games pay only for what they import:
+
+| Component | Adds to bundle |
+|-----------|---------------|
+| `createHeaderBar` (Lato 400 + 700) | ~37 KB base64 (~27.5 KB woff2) |
+| `showFeedback` / `preloadFeedbackFont` (Bowlby One SC 400) | ~26 KB base64 (~19.4 KB woff2) |
+| Neither | 0 KB |
+
+Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
