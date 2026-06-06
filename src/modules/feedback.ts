@@ -1,3 +1,5 @@
+import { getBowlbyOneSCFontFaceCSS } from './fonts/bowlbyOneSC.js';
+
 const FEEDBACK_CONTAINER_CLASS = "drop-feedback-text";
 
 export type FeedbackVariant = "positive" | "neutral" | "negative";
@@ -5,12 +7,12 @@ export type FeedbackVariant = "positive" | "neutral" | "negative";
 let stylesInjected = false;
 let fontPreloaded = false;
 
-const FEEDBACK_FONT_URL = 'https://fonts.googleapis.com/css2?family=Bowlby+One+SC&display=swap';
-
 /**
  * Preload the feedback font to avoid fallback font flash on first use.
  * Call this early in your game initialization (e.g., alongside initializeDropSDK).
  * This is optional - the font will still load on first showFeedback() call if not preloaded.
+ *
+ * The font is bundled as a base64-encoded woff2 data URI — no network request is made.
  *
  * @returns Promise that resolves when the font is loaded
  */
@@ -18,37 +20,26 @@ export async function preloadFeedbackFont(): Promise<void> {
     if (fontPreloaded) return;
     fontPreloaded = true;
 
-    // Add the font stylesheet link
-    const fontLink = document.createElement('link');
-    fontLink.href = FEEDBACK_FONT_URL;
-    fontLink.rel = 'stylesheet';
-    document.head.appendChild(fontLink);
+    // Inject the @font-face CSS (bundled — no network request)
+    injectStyles();
 
     // Wait for the font to actually load using the CSS Font Loading API
     try {
         await document.fonts.load("1em 'Bowlby One SC'");
     } catch (e) {
-        // Font loading API not supported or failed, font will load via stylesheet
-        console.warn('[Feedback] Font preload failed, will load on first use');
+        // Font loading API not supported or failed, font is still injected via @font-face
+        console.warn('[Feedback] Font preload check failed, font is still bundled');
     }
 }
 
 function injectStyles(): void {
     if (stylesInjected) return;
     stylesInjected = true;
-
-    // Load font if not already preloaded
-    if (!fontPreloaded) {
-        fontPreloaded = true;
-        const fontLink = document.createElement('link');
-        fontLink.href = FEEDBACK_FONT_URL;
-        fontLink.rel = 'stylesheet';
-        document.head.appendChild(fontLink);
-    }
+    fontPreloaded = true;
 
     const style = document.createElement('style');
     style.id = 'drop-feedback-text-styles';
-    style.textContent = `
+    style.textContent = getBowlbyOneSCFontFaceCSS() + `
         .${FEEDBACK_CONTAINER_CLASS} {
             position: fixed;
             left: 50%;

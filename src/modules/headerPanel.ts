@@ -1,4 +1,5 @@
 import { spawnReward } from './reward.js';
+import { getLatoFontFaceCSS } from './fonts/lato.js';
 
 const HEADER_CONTAINER_ID = "drop-header-bar";
 const HEADER_PANEL_CLASS = "drop-header-panel";
@@ -114,15 +115,9 @@ function injectStyles(): void {
     if (stylesInjected) return;
     stylesInjected = true;
 
-    // Load Lato font
-    const fontLink = document.createElement('link');
-    fontLink.href = 'https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap';
-    fontLink.rel = 'stylesheet';
-    document.head.appendChild(fontLink);
-
     const style = document.createElement('style');
     style.id = 'drop-header-bar-styles';
-    style.textContent = `
+    style.textContent = getLatoFontFaceCSS() + `
         .${HEADER_CONTAINER_ID} {
             position: fixed;
             left: 0;
