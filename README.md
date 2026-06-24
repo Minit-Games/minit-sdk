@@ -61,7 +61,7 @@ Do not render flavor text in-game — pass it only via `reportResult`.
 ### UI entry point
 
 ```ts
-import { showPositiveFeedback, createHeaderBar, spawnReward } from '@minit-games/sdk/ui';
+import { showPositiveFeedback, createHeaderBar } from '@minit-games/sdk/ui';
 
 // Feedback pop-up
 showPositiveFeedback('Combo x3!');
