@@ -1,6 +1,6 @@
 # @minit-games/sdk
 
-Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (tutorial overlays, feedback text, flying rewards, header bars), and background utilities.
+Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (feedback text, flying rewards, header bars), and background utilities.
 
 ## Install
 
@@ -34,7 +34,7 @@ loadingDone();
 // its own result screen on top of the WebView, so the game loses
 // focus — do NOT render an in-game "result submitted" confirmation,
 // and stop driving updates after this call.
-reportResult(1500, { flavorText: 'Great run!' });
+reportResult(1500, { flavorText: '12x combo — then whiffed the finish' });
 ```
 
 ### Game lifecycle
@@ -45,33 +45,49 @@ The host (Minit app or web player) wraps the game in a controlled lifecycle. Thr
 - **`loadingDone()`** — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
 - **`reportResult(result, options?)`** — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
 
-The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results. Use it for context (`'Beat the expert!'`, `'3 turns to spare'`) — not for confirmation copy.
+The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results.
+
+Each flavor text should highlight **one interesting statistic or moment from the session** that is **not the score itself** — something that helps another reader picture how the run went: a best combo, a hilarious mistake, a close call, an odd habit, and the like. Track these stats during gameplay and pick the most memorable one at `reportResult` time.
+
+| Good | Avoid |
+|------|-------|
+| `'12x combo — then whiffed the finish'` | `'Great run!'` (generic confirmation) |
+| `'Fell off the edge 4 times'` | `'Score: 1500'` (repeats the result) |
+| `'Longest streak: 8 matches'` | `'You won!'` (the host already celebrates) |
+| `'Used undo 7 times'` | Restating rank, time, or points already shown |
+
+Do not render flavor text in-game — pass it only via `reportResult`.
 
 ### UI entry point
 
 ```ts
-import { showTutorial, hideTutorial, showPositiveFeedback, createHeaderBar, spawnReward } from '@minit-games/sdk/ui';
-
-// Tutorial hint
-showTutorial('Tap to jump!', 'center');
-// ... on first player action:
-hideTutorial();
+import { showPositiveFeedback, createHeaderBar } from '@minit-games/sdk/ui';
 
 // Feedback pop-up
 showPositiveFeedback('Combo x3!');
 
-// Header bar with score and turns panels
+// Header bar — positioning and alignment only (no custom styling by default)
 const header = createHeaderBar({ y: 60, padding: 40 });
-const score = header.addPanel({ label: 'Score', value: 0, align: 'right', style: { valueColor: '#f7931e' } });
-const turns = header.addPanel({ label: 'Turns', value: 10 });
+const turns = header.addPanel({ label: 'Turns', value: 10 });           // left (default)
+const score = header.addPanel({ label: 'Score', value: 0, align: 'right' });
 
-// Animate a reward flying to the score panel
+// When the player earns score at a world position, fly a reward to the panel — don't setValue instantly
 score.flyToPanel({
     start: { x: 200, y: 400 },
-    visual: '⭐',
     onArrive: () => score.setValue(Number(score.getValue()) + 100, { animate: true })
 });
 ```
+
+#### Header bar conventions
+
+The header bar is the standard HUD across Minit drops. Treat it as **layout only**:
+
+- **Position the bar** with `createHeaderBar({ y, padding })` — distance from the top and side inset.
+- **Place panels** with `align: 'left'` (default) or `align: 'right'`. Put **Score on the right**; secondary stats (turns, moves, lives) on the left unless the creator says otherwise.
+- Use **`layout: 'even'`** when panels should be spread evenly across the bar instead of grouped left/right.
+- **Do not customize size or colors** — omit `style`, `defaultStyle`, `labelSize`, `valueSize`, and color fields unless the creator explicitly asks for a different look. The SDK ships fixed Lato styling.
+- **Do not use emojis** in panels — use plain-text `label`s (e.g. `'Score'`, `'Turns'`), not the `icon` field. The same applies to flying rewards: omit `visual` for the default orange circle unless the creator requests something else.
+- **Fly rewards into header panels when scoring or collecting resources.** Whenever the player earns score, currency, lives, or similar from a visible spot on screen, call `panel.flyToPanel({ start: { x, y }, onArrive: () => panel.setValue(...) })` on the matching header panel instead of bumping the value instantly. Use `spawnRewards(count, ...)` for large payouts to the same panel. Skip the fly animation only when there is no meaningful source position (e.g. passive time bonus) or when instant feedback is clearly better.
 
 ## API overview
 
@@ -81,7 +97,7 @@ score.flyToPanel({
 |--------|-------------|
 | `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
 | `loadingDone()` | Signal to the app that the game is ready to be shown |
-| `reportResult(result, options?)` | Submit the final game result |
+| `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()` | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data)) |
 | `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
 | `getConfig()` | Get all URL-param config values as a plain object |
@@ -160,17 +176,14 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 
 | Export | Description |
 |--------|-------------|
-| `showTutorial(text, options?)` | Display a non-blocking tutorial hint overlay |
-| `hideTutorial()` | Hide the current tutorial hint |
-| `isTutorialVisible()` | Check if a tutorial hint is showing |
 | `showFeedback(text, variant?, duration?)` | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`) |
 | `showPositiveFeedback(text, duration?)` | Convenience wrapper — green variant |
 | `showNeutralFeedback(text, duration?)` | Convenience wrapper — orange variant |
 | `showNegativeFeedback(text, duration?)` | Convenience wrapper — red variant |
 | `preloadFeedbackFont()` | Preload the feedback font to avoid flash |
-| `spawnReward(options)` | Animate a single reward icon from start → target |
-| `spawnRewards(count, options, staggerMs?)` | Animate multiple reward icons with staggered timing |
-| `createHeaderBar(config?)` | Create a header bar for displaying game stats |
+| `spawnReward(options)` | Lower-level fly animation — prefer `panel.flyToPanel()` when a header panel exists |
+| `spawnRewards(count, options, staggerMs?)` | Staggered fly animations for large gains to one panel |
+| `createHeaderBar(config?)` | Standard HUD bar — position with `y`/`padding`, place panels with `align`; pair with `flyToPanel` for score/resources; see [Header bar conventions](#header-bar-conventions) |
 | `getHeaderBar()` | Get the current header bar instance |
 
 ## Fonts and assets

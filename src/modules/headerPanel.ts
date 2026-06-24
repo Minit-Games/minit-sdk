@@ -7,28 +7,37 @@ const HEADER_PANEL_CLASS = "drop-header-panel";
 export type PanelAlign = "left" | "right";
 
 export interface PanelStyle {
-    /** Color for the label text (CSS color, default: '#ffffff') */
+    /** Color for the label text (CSS color, default: '#ffffff'). Avoid unless explicitly requested. */
     labelColor?: string;
-    /** Color for the value text (CSS color, default: '#ffffff') */
+    /** Color for the value text (CSS color, default: '#ffffff'). Avoid unless explicitly requested. */
     valueColor?: string;
-    /** Font size for the label (default: 36) */
+    /** Font size for the label (default: 36). Avoid unless explicitly requested. */
     labelSize?: number;
-    /** Font size for the value (default: 48) */
+    /** Font size for the value (default: 48). Avoid unless explicitly requested. */
     valueSize?: number;
-    /** Font family (default: 'Lato, system-ui, sans-serif') */
+    /** Font family (default: 'Lato, system-ui, sans-serif'). Avoid unless explicitly requested. */
     fontFamily?: string;
 }
 
 export interface PanelConfig {
-    /** Label text displayed above the value (e.g., "Score", "Turns") */
+    /** Label text displayed above the value (e.g., "Score", "Turns"). Prefer this over `icon`. */
     label?: string;
-    /** Icon emoji/character displayed above the value (alternative to label) */
+    /**
+     * Character displayed above the value instead of a label.
+     * Do not use emojis — use `label` with plain text unless the creator explicitly asks for icons.
+     */
     icon?: string;
     /** Initial value to display */
     value: number | string;
-    /** Alignment: 'left' or 'right' (default: 'left') */
+    /**
+     * Horizontal placement in the header bar: `'left'` or `'right'`.
+     * Default: `'left'`. Put **Score** on `'right'` unless the creator specifies otherwise.
+     */
     align?: PanelAlign;
-    /** Optional styling overrides */
+    /**
+     * Optional styling overrides (colors, font sizes).
+     * Omit by default — panels ship with fixed SDK styling; only pass `style` when explicitly requested.
+     */
     style?: PanelStyle;
     /** Optional click handler for the panel */
     onClick?: () => void;
@@ -37,20 +46,23 @@ export interface PanelConfig {
 export type HeaderLayout = "split" | "even";
 
 export interface HeaderBarConfig {
-    /** Distance from top in pixels (default: 60) */
+    /** Distance from top in pixels (default: 60). Primary positioning knob — adjust this, not font sizes. */
     y?: number;
-    /** Side padding in pixels (default: 5% of container/viewport width) */
+    /** Side padding in pixels (default: 75). Primary positioning knob. */
     padding?: number;
     /** Constrain width in pixels (panels align within this width, centered) */
     width?: number;
-    /** Default styling for all panels */
+    /**
+     * Default styling for all panels. Omit unless explicitly requested —
+     * panels use fixed SDK styling out of the box.
+     */
     defaultStyle?: PanelStyle;
     /** Z-index of the header bar (default: 9000) */
     zIndex?: number;
     /**
-     * Layout mode:
-     * - "split": Left-aligned and right-aligned groups (default)
-     * - "even": All panels distributed evenly across the width
+     * Layout mode (default: `"split"`):
+     * - `"split"`: left group and right group — set each panel's `align` to `'left'` or `'right'`
+     * - `"even"`: panels distributed evenly across the width (use when stats should span the bar)
      */
     layout?: HeaderLayout;
     /**
@@ -70,8 +82,11 @@ export interface Panel {
     /** Get the panel's position in viewport coordinates (for flying icons) */
     getPosition(): { x: number; y: number };
     /**
-     * Spawn a flying icon that animates to this panel.
-     * Uses the spawnReward system internally.
+     * Spawn the shared Minit fly-to-HUD animation for this panel.
+     * **Prefer this whenever score or other header resources change** due to an
+     * in-world event — pass the event's `{ x, y }` as `start`, then bump the panel
+     * in `onArrive` (optionally with `setValue(..., { animate: true })`).
+     * Uses `spawnReward` internally.
      */
     flyToPanel(options: FlyToPanelOptions): void;
     /** Update the label/icon text */
@@ -85,7 +100,11 @@ export interface Panel {
 export interface FlyToPanelOptions {
     /** Starting position { x, y } in pixels (viewport or container coords) */
     start: { x: number; y: number };
-    /** Visual: emoji string, { type: 'image', src: string }, or { type: 'color', color: string }. Defaults to orange color if not provided. */
+    /**
+     * Flying reward appearance. Omit for the default orange circle.
+     * Do not use emoji strings unless the creator explicitly asks — prefer the default
+     * or `{ type: 'color', color: '...' }` / `{ type: 'image', src: '...' }`.
+     */
     visual?: string | { type: 'image'; src: string } | { type: 'color'; color: string };
     /** Size of the flying icon (default: 40) */
     size?: number;
@@ -493,10 +512,22 @@ class HeaderBarImpl implements HeaderBar {
 }
 
 /**
- * Create a header bar for displaying game stats (score, turns, lives, etc.)
+ * Create a header bar for displaying game stats (score, turns, lives, etc.).
  *
- * The header bar supports left-aligned and right-aligned panels that auto-position.
- * Each panel can display a label + value or icon + value.
+ * **Default usage is positioning only** — pass `y` and optionally `padding` on the bar,
+ * and `align` on each panel. Do not pass `style`, `defaultStyle`, or size/color overrides
+ * unless the creator explicitly requests custom styling.
+ *
+ * **Placement convention:** Score on the right (`align: 'right'`); other stats (turns,
+ * moves, lives) on the left (default). Use text `label`s — not emojis or the `icon` field.
+ *
+ * **Layout:** `"split"` (default) groups panels left vs right. Use `layout: "even"` when
+ * panels should be distributed evenly across the bar width.
+ *
+ * **Score and resources:** when points, currency, lives, or similar change because of
+ * something the player did on screen, call `panel.flyToPanel()` on the target panel
+ * (with `start` at the event position and `onArrive` updating the value) rather than
+ * calling `setValue` alone. Use `spawnRewards` for large batch gains.
  */
 export function createHeaderBar(config?: HeaderBarConfig): HeaderBar {
     // Only allow one header bar at a time

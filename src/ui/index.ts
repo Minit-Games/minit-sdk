@@ -1,11 +1,4 @@
 export {
-    showTutorial,
-    hideTutorial,
-    isTutorialVisible
-} from "../modules/tutorial.js";
-export type { TutorialPosition, TutorialOptions } from "../modules/tutorial.js";
-
-export {
     showFeedback,
     showPositiveFeedback,
     showNeutralFeedback,

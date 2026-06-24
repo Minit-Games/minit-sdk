@@ -1,5 +1,11 @@
 
 export type ResultOptions = {
+    /**
+     * Short session caption for the host result screen and activity feed.
+     * Highlight one interesting stat or moment from the run (best combo, funny mistake,
+     * close call) — not the score itself or generic confirmation copy. Track session
+     * stats during gameplay and pick the most memorable at game end.
+     */
     flavorText?: string,
     delay?: number,
     // Single-slot write: store a string value in the player's userData slot.
