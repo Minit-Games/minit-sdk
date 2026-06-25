@@ -62,7 +62,7 @@ Returns `undefined` when: no value is stored for this player; `window.minit.user
 
 ## Docs
 
-`docs/ai-assistants.md` — creator-facing guide for building and uploading AI-generated game projects. Covers the required build step, what a valid ZIP looks like, and a Google AI Studio callout.
+Creator-facing build/upload guidance — the required build step, what a Minit-ready ZIP looks like, the "common mistakes AI assistants make" checklist, and the Google AI Studio Build Mode callout — lives in the [README](./README.md). It was folded in from the former `docs/ai-assistants.md` (removed in PR #26) so it ships to npm (only the README is published; `docs/` is not — verify with `npm pack --dry-run`). The README is the single canonical source.
 
 ## Branch flow
 
