@@ -2,6 +2,8 @@
 
 Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (feedback text, flying rewards, header bars), and background utilities.
 
+> **Building with an AI assistant?** Claude, ChatGPT, Gemini, Google AI Studio, Lovable, and similar tools can scaffold a complete Minit game — but they reliably miss two things: the game must be **built into a self-contained ZIP** before upload, and a handful of lifecycle calls must be wired correctly. See [Building & uploading your game](#building--uploading-your-game) and [Common mistakes AI assistants make](#common-mistakes-ai-assistants-make).
+
 ## Install
 
 ```bash
@@ -89,6 +91,47 @@ The header bar is the standard HUD across Minit drops. Treat it as **layout only
 - **Do not use emojis** in panels — use plain-text `label`s (e.g. `'Score'`, `'Turns'`), not the `icon` field. The same applies to flying rewards: omit `visual` for the default orange circle unless the creator requests something else.
 - **Fly rewards into header panels when scoring or collecting resources.** Whenever the player earns score, currency, lives, or similar from a visible spot on screen, call `panel.flyToPanel({ start: { x, y }, onArrive: () => panel.setValue(...) })` on the matching header panel instead of bumping the value instantly. Use `spawnRewards(count, ...)` for large payouts to the same panel. Skip the fly animation only when there is no meaningful source position (e.g. passive time bonus) or when instant feedback is clearly better.
 
+## Building & uploading your game
+
+Minit games are uploaded to the [Creator Console](https://console.minit.games) as a **self-contained, pre-built ZIP**. Chat-based AI assistants (Claude, ChatGPT, Gemini, Google AI Studio, and others) can scaffold a complete game, but their output is almost always raw source — it needs a build step before it can be uploaded.
+
+### What a Minit-ready ZIP looks like
+
+- `index.html` at the **root** of the ZIP (the built entry point) — not inside a `dist/` subfolder
+- All JS, CSS, and assets bundled alongside it — **including fonts** (see [Fonts and assets](#fonts-and-assets))
+- **No** `src/` folder
+- **No** `vite.config.*` or similar build config files
+- **No** `package.json` at the root
+
+If the Creator Console rejects your upload — for example because it detects a `src/` folder or a `vite.config.*` file — the project has not been built yet. Build it first, then zip the **contents** of the output folder.
+
+### The build prompt
+
+Once your game works in the AI's preview or chat environment, send it this message:
+
+```
+The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
+```
+
+The AI will run the build and hand you a ZIP of the compiled output. That ZIP is what you upload at [console.minit.games](https://console.minit.games). If the upload is rejected with a message about unexpected files or folder structure, double-check the ZIP was made from `dist/` and not the project root.
+
+### Google AI Studio (Build Mode)
+
+Google AI Studio's **Build Mode** is a popular way to prototype Minit games. By default it exports the project's **source files** rather than a built bundle — so the default export button produces a ZIP the Creator Console will reject. Two ways around it:
+
+- **Ask the AI to build for you** — send the build prompt above in the Build Mode chat; AI Studio runs `npm run build` and gives you a ZIP of `dist/`.
+- **Build locally** — download the source export, then in the project folder run `npm install` followed by `npm run build`, and zip the **contents** of the `dist/` folder.
+
+## Common mistakes AI assistants make
+
+When an AI assistant integrates `@minit-games/sdk` for you, double-check these — they're the things assistants most often get wrong, and they all tie back to the [game lifecycle](#game-lifecycle):
+
+- **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
+- **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView and the player is stuck on the loader. AIs sometimes wire it to a "Start" button or omit it entirely.
+- **Coerce config values — they come back as strings (or `undefined`).** `getConfigValue('startScore') + 5` yields the string `'05'`, not `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` and supply a default for numeric mods.
+- **`flavorText` is rendered by the host, not in-game.** It appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
+- **No `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Bundle woff2 files and reference them with relative-path `@font-face` rules instead (see [Fonts and assets](#fonts-and-assets)). The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action.
+
 ## API overview
 
 ### `@minit-games/sdk` (core)
@@ -109,16 +152,6 @@ The header bar is the standard HUD across Minit drops. Treat it as **layout only
 #### Legacy aliases
 
 For backward compatibility with games written against earlier versions, the old `Drop`-prefixed names are exported as aliases: `reportDropResult`, `getDropConfigValue`, `getDropConfig`, `initializeDropSDK`, `addDropBackground`, `applyDropMetaTags`, `getDropEnvironment`, and the types `DropBackground`/`DropResultOptions`/`DropEnvironment`.
-
-## Using with AI assistants
-
-Chat-based AI assistants (Claude, ChatGPT, Gemini, and others) can scaffold a complete Minit game project, but the output is typically source code — it needs a build step before it can be uploaded. Once your game is working in the AI's preview, give it this prompt:
-
-```
-The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
-```
-
-That ZIP is what you upload to the [Creator Console](https://console.minit.games). For a full walkthrough — including a Google AI Studio callout and what to do if the upload is rejected — see [docs/ai-assistants.md](./docs/ai-assistants.md).
 
 ## Persistent user data
 
