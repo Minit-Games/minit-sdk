@@ -1,4 +1,9 @@
 export {
+    shouldShowTutorial,
+    createTutorialOverlay
+} from "../modules/tutorial/index.js";
+
+export {
     showFeedback,
     showPositiveFeedback,
     showNeutralFeedback,

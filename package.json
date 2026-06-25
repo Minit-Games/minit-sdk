@@ -16,15 +16,18 @@
       "types": "./dist/ui/index.d.ts"
     }
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "**/modules/tutorial/**"
+  ],
   "files": [
     "dist",
     "licenses"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.json",
+    "build": "tsc --project tsconfig.json && node scripts/copy-tutorial-assets.mjs",
     "check": "tsc --project tsconfig.json --noEmit",
     "test": "jest",
+    "preview:tutorial": "npm run build && node scripts/preview-tutorial.mjs",
     "prepublishOnly": "npm run build"
   },
   "engines": {

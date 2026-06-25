@@ -1,6 +1,6 @@
 # @minit-games/sdk
 
-Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (feedback text, flying rewards, header bars), and background utilities.
+Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (interactive tutorials, feedback text, flying rewards, header bars), and background utilities.
 
 ## Install
 
@@ -89,6 +89,29 @@ The header bar is the standard HUD across Minit drops. Treat it as **layout only
 - **Do not use emojis** in panels — use plain-text `label`s (e.g. `'Score'`, `'Turns'`), not the `icon` field. The same applies to flying rewards: omit `visual` for the default orange circle unless the creator requests something else.
 - **Fly rewards into header panels when scoring or collecting resources.** Whenever the player earns score, currency, lives, or similar from a visible spot on screen, call `panel.flyToPanel({ start: { x, y }, onArrive: () => panel.setValue(...) })` on the matching header panel instead of bumping the value instantly. Use `spawnRewards(count, ...)` for large payouts to the same panel. Skip the fly animation only when there is no meaningful source position (e.g. passive time bonus) or when instant feedback is clearly better.
 
+#### Interactive tutorials
+
+DOM-based overlay — no extra rendering library. See [docs/tutorials.md](./docs/tutorials.md).
+
+```ts
+import { shouldShowTutorial, createTutorialOverlay } from '@minit-games/sdk/ui';
+
+const tutorialMode = shouldShowTutorial(); // MUST call first — skips if userData exists
+
+if (tutorialMode) {
+  const tutorial = createTutorialOverlay({ container: document.getElementById('game')!, width: 960, height: 560 });
+  tutorial.highlight({ x: 200, y: 400 });
+  tutorial.showFinger({ x: 200, y: 400, gesture: 'tap' });
+}
+
+// Every reportResult — persist so returning players skip the tutorial:
+reportResult(score, { userData: 'true', flavorText: '...' });
+```
+
+**Gating rule:** if `getUserData()` returns a non-empty string, the player has persisted data from a prior session — **do not show the tutorial**. Always call `shouldShowTutorial()` before creating any tutorial overlay.
+
+**Design rule:** prefer **gestures over text**. Use `highlight` to mark important elements and `showFinger` / `showSwipe` to demonstrate actions. Reserve `showPill` for rules that gestures alone cannot convey. **Do not customize tutorial styling** (colors, fonts, sizes, theme) unless the creator explicitly asks — pass position and interaction args only. See [docs/tutorials.md](./docs/tutorials.md).
+
 ## API overview
 
 ### `@minit-games/sdk` (core)
@@ -118,7 +141,7 @@ Chat-based AI assistants (Claude, ChatGPT, Gemini, and others) can scaffold a co
 The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
 ```
 
-That ZIP is what you upload to the [Creator Console](https://console.minit.games). For a full walkthrough — including a Google AI Studio callout and what to do if the upload is rejected — see [docs/ai-assistants.md](./docs/ai-assistants.md).
+That ZIP is what you upload to the [Creator Console](https://console.minit.games). For a full walkthrough — including a Google AI Studio callout and what to do if the upload is rejected — see [docs/ai-assistants.md](./docs/ai-assistants.md). For interactive tutorials, see [docs/tutorials.md](./docs/tutorials.md).
 
 ## Persistent user data
 
@@ -185,6 +208,8 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 | `spawnRewards(count, options, staggerMs?)` | Staggered fly animations for large gains to one panel |
 | `createHeaderBar(config?)` | Standard HUD bar — position with `y`/`padding`, place panels with `align`; pair with `flyToPanel` for score/resources; see [Header bar conventions](#header-bar-conventions) |
 | `getHeaderBar()` | Get the current header bar instance |
+| `shouldShowTutorial()` | Returns whether to run first-play tutorial — **call before any tutorial UI**; returns `false` when `getUserData()` is a non-empty string |
+| `createTutorialOverlay({ container?, width?, height? })` | DOM overlay scoped to the game canvas — see [docs/tutorials.md](./docs/tutorials.md) |
 
 ## Fonts and assets
 

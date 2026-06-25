@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tutorial preview — @minit-games/sdk</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    .hud {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      max-width: 960px;
+      font-size: 0.85rem;
+    }
+    .hud a, .hud button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #2a2a4a;
+      color: #cce;
+      text-decoration: none;
+      cursor: pointer;
+      font: inherit;
+    }
+    .hud a:hover, .hud button:hover { background: #3a3a6a; }
+    .hud .status { color: #9cf; min-width: 12rem; text-align: center; }
+    #game {
+      position: relative;
+      width: 960px;
+      height: 560px;
+      max-width: 100%;
+      aspect-ratio: 960 / 560;
+      background: linear-gradient(160deg, #16213e 0%, #0f3460 100%);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      touch-action: none;
+    }
+    .tile {
+      position: absolute;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 16px;
+      font-weight: 700;
+      font-size: 1rem;
+      user-select: none;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .tile:active { transform: scale(0.96); }
+    .tile.done {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    #tap-target {
+      left: 80px; top: 200px;
+      width: 160px; height: 160px;
+      background: #e94560;
+      box-shadow: 0 4px 0 #a83248;
+    }
+    #hold-target {
+      right: 80px; top: 200px;
+      width: 160px; height: 160px;
+      background: #533483;
+      box-shadow: 0 4px 0 #3a2560;
+    }
+    #swipe-lane {
+      left: 120px; bottom: 80px;
+      width: 720px; height: 100px;
+      background: rgba(255,255,255,0.08);
+      border: 2px dashed rgba(255,255,255,0.25);
+      border-radius: 12px;
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.5);
+    }
+    #swipe-dot {
+      position: absolute;
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: #16c79a;
+      box-shadow: 0 0 16px rgba(22,199,154,0.6);
+      left: 140px; bottom: 106px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    #swipe-dot.visible { opacity: 1; }
+    #score {
+      position: absolute;
+      top: 24px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .hint {
+      max-width: 960px;
+      font-size: 0.8rem;
+      color: #888;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tutorial preview</h1>
+  <div class="hud">
+    <span class="status" id="status">Loading…</span>
+    <a href="?tutorial=1">Force tutorial</a>
+    <a href="?tutorial=0">Skip tutorial</a>
+    <a href="?userData=true">Simulate returning player</a>
+    <a href="?">Fresh player</a>
+    <button type="button" id="restart">Restart tutorial</button>
+  </div>
+  <div id="game">
+    <div id="score">Score: 0</div>
+    <div class="tile" id="tap-target">TAP</div>
+    <div class="tile" id="hold-target">HOLD</div>
+    <div class="tile" id="swipe-lane">Swipe across →</div>
+    <div id="swipe-dot"></div>
+  </div>
+  <p class="hint">
+    Walkthrough: intro pill → tap (highlight + finger) → long-press → swipe demo → done.
+    Gestures are pointer-transparent — you can interact through the overlay.
+  </p>
+  <script type="module" src="/examples/tutorial-preview/main.js"></script>
+</body>
+</html>
