@@ -62,7 +62,7 @@ Returns `undefined` when: no value is stored for this player; `window.minit.user
 
 ## Docs
 
-Creator-facing build/upload guidance — the required build step, what a Minit-ready ZIP looks like, the "common mistakes AI assistants make" checklist, and the Google AI Studio Build Mode callout — lives in the [README](./README.md). It was folded in from the former `docs/ai-assistants.md` so it ships to npm (only the README is published; `docs/` is not — verify with `npm pack --dry-run`). `docs/ai-assistants.md` is now a thin redirect stub, kept so existing inbound links (e.g. the minit-web KB article `tool-google-ai-studio.md`) don't 404. The README is the single canonical source.
+Creator-facing build/upload guidance — the required build step, what a Minit-ready ZIP looks like, the "common mistakes AI assistants make" checklist, and the Google AI Studio Build Mode callout — lives in the [README](./README.md). It was folded in from the former `docs/ai-assistants.md` (removed in PR #26) so it ships to npm (only the README is published; `docs/` is not — verify with `npm pack --dry-run`). The README is the single canonical source.
 
 ## Branch flow
 
