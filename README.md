@@ -192,7 +192,7 @@ All four fields are optional. Missing or empty fields are simply skipped during 
 
 ### ZIP placement
 
-`meta.json` must be at the **ZIP root**, alongside `index.html` — not inside a `src/` or `dist/` subfolder. The console reads it directly from the ZIP root when processing the upload.
+`meta.json` must sit at the **top level of the ZIP**, not nested inside any folder within the archive — it must be next to `index.html`. The console reads it directly from the ZIP's top level when processing the upload.
 
 ### Example
 
