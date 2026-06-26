@@ -51,7 +51,7 @@ if (tutorialMode) {
   tutorial.showFinger({ x: tileX, y: tileY, gesture: 'tap' });
 
   // Only add a pill when the player genuinely cannot infer the rule from gestures alone.
-  // ... step machine in game code; tutorial.destroy() when done
+  // Wire each step to game events — show one step at a time, advance when the player acts.
 }
 
 // EVERY reportResult call site — persist so the next launch skips the tutorial:
@@ -107,30 +107,96 @@ All `(x, y)` coordinates are in **game viewport space** — the logical width/he
 
 The per-step state machine ("after first tap, show finger at next target") stays **in game code** — it depends on game-specific state.
 
-## Design principles — gestures first, text last
+## Design principles — step-by-step, state-reactive, gestures first
+
+**The tutorial is a live guide, not a briefing.** It runs alongside the game and reacts to what the player actually does — each step appears only when the game reaches the state where that action is relevant, and disappears the moment the player completes it.
+
+### Step-by-step, not upfront
+
+Never dump instructions at the start. Instead:
+
+1. The game begins immediately — no paused "tutorial mode" with walls of text.
+2. When the game reaches a state that calls for guidance (a new element appears, an action becomes available), **show one step**: a highlight and/or finger on the relevant target.
+3. Wait for the player to perform the action before advancing.
+4. Reveal the next step only after the previous one succeeds.
+
+A player should never be reading — they should be doing. Each step teaches exactly one thing in the moment it matters.
+
+### State-reactive — follow the game, not a timer
+
+Tutorial primitives must be wired to **game events and state**, not to fixed timeouts or a linear script that runs independently of play. Examples:
+
+- Show a finger on the first enemy **when that enemy spawns**, not 2 seconds after load.
+- Remove the swipe hint the moment the player **completes a swipe** — not on a timeout.
+- Advance to "now avoid the hazard" step only when the hazard **actually appears**.
+- If the player acts correctly before the hint appears, **skip that step entirely**.
+
+The state machine lives in your game code, not in the tutorial library. The SDK primitives are stateless tools you call and remove; the logic for *when* to call them is yours.
+
+```ts
+// Example: step machine wired to game state
+let tutorialStep = 0;
+
+function onEnemySpawned(enemy) {
+  if (tutorialStep !== 0) return;          // already past this step
+  const ring = tutorial.highlight({ x: enemy.x, y: enemy.y });
+  const finger = tutorial.showFinger({ x: enemy.x, y: enemy.y, gesture: 'tap' });
+
+  function onEnemyTapped() {
+    ring.remove();
+    finger.remove();
+    tutorialStep = 1;
+    // next step fires only when the next relevant game event occurs
+  }
+  enemy.once('tapped', onEnemyTapped);
+}
+
+function onBonusTileAppeared(tile) {
+  if (tutorialStep !== 1) return;          // not there yet — skip
+  const ring = tutorial.highlight({ x: tile.x, y: tile.y });
+  tile.once('collected', () => { ring.remove(); tutorialStep = 2; });
+}
+```
+
+### Gestures first, text last — never both at once
 
 **Show, don't tell.** A looping finger or swipe demo is self-explanatory — the player should understand what to do from motion alone. Modal pills (`showPill`) block the game and force reading; use them sparingly.
 
+**Pills and gestures must alternate, never overlap.** Each step is either a *show* step (highlight + finger/swipe — the player can interact freely) or a *tell* step (pill only — gesture hints are removed first). Showing a finger while a pill is open creates visual noise and confuses the player about whether to read or act.
+
+| Step type | What is visible | Player can interact? |
+|-----------|-----------------|----------------------|
+| Show | `highlight` + `showFinger` / `showSwipe` | Yes — input is open |
+| Tell | `showPill` only — **remove any active gesture hints first** | No — input is blocked |
+
 ### Priority order
 
-1. **`highlight`** — draw the eye to the important element (button, tile, target, hazard) without covering it. Use on every step where something on screen needs attention.
+1. **`highlight`** — draw the eye to the important element (button, tile, target, hazard) without covering it. Use on every *show* step where something on screen needs attention.
 2. **`showFinger` / `showSwipe`** — demonstrate the exact gesture the player should perform. Pair with a highlight on the same target whenever possible.
-3. **`showPill`** — only when a rule is genuinely not guessable from gestures (non-obvious mechanic, stakes, or puzzle framing). Keep to one short sentence. Never open with a pill if a gesture would suffice.
+3. **`showPill`** — only when a rule is genuinely not guessable from gestures (non-obvious mechanic, stakes, or puzzle framing). Keep to one short sentence. **Remove all active gesture hints before opening a pill.** Never open with a pill if a gesture would suffice.
 
 ### Typical step recipe
 
 ```ts
-// 1. Highlight the target so the player knows WHERE to look
+// ── SHOW step: gesture + highlight, input open ──────────────────────────────
 const ring = tutorial.highlight({ x: targetX, y: targetY });
-
-// 2. Show HOW to interact — finger for tap/hold, swipe for drag
 const finger = tutorial.showFinger({ x: targetX, y: targetY, gesture: 'tap' });
 
-// 3. When the player completes the action, remove primitives and advance
 function onTargetTapped() {
   ring.remove();
   finger.remove();
-  // next step — highlight + gesture on the next element, not another pill
+  // advance to next step (another show step, or a tell step if a rule must be stated)
+}
+
+// ── TELL step (only if needed): remove gestures first, then show pill ────────
+function showRuleStep() {
+  ring.remove();   // clear any active gesture hints before opening a pill
+  finger.remove();
+  tutorial.showPill('One wrong tap ends the run.', {
+    onClose: () => {
+      // after the player dismisses, start the next show step
+    },
+  });
 }
 ```
 
@@ -142,12 +208,13 @@ All tutorial visuals (pill colors, finger emoji, ring size, fonts, timings) come
 
 | OK by default | Do not unless the creator requests it |
 |---------------|--------------------------------------|
-| `{ x, y }` position | Editing `theme.js` |
+| `{ x, y }` position on gestures (`showFinger`, `showSwipe`, `highlight`) | Editing `theme.js` |
 | `direction`, `gesture`, `from` / `to` / `path` | `fontSize`, `glyph`, `color`, `radius`, `pulseScale` |
 | `onClose`, `delay` on pills | Custom HTML/CSS overlays or DOM styling on tutorial elements |
 | `createTutorialOverlay({ container?, width?, height?, zIndex? })` | Per-call color/size overrides on any primitive |
+| | **`showPill` position** — the pill is always centered by the SDK |
 
-`showPill` intentionally exposes **no** font/color/style overrides — every pill looks identical across drops. Finger, highlight, and swipe primitives accept some sizing overrides for edge cases, but **omit them by default**; the theme defaults cover the common case.
+`showPill` intentionally exposes **no** font/color/style overrides and **no position argument** — every pill appears centered in the canvas and looks identical across drops. Do not attempt to reposition or restyle it (e.g. via wrapper `div`, CSS, or DOM mutation) unless the creator explicitly asks. Finger, highlight, and swipe primitives accept some sizing overrides for edge cases, but **omit them by default**; the theme defaults cover the common case.
 
 ### When text is OK
 
@@ -168,11 +235,17 @@ Use `highlight` without a finger when the element should be **noticed but not ta
 
 ## Do not use
 
+- A start menu or replay menu — the drop starts straight into gameplay and ends with `reportResult(...)` (see [README game lifecycle](./README.md#game-lifecycle)).
 - Custom HTML/CSS tutorial overlays — use the SDK primitives for a consistent look and correct input blocking.
-- Opening with a modal pill when a gesture would work — leads with `highlight` + `showFinger` / `showSwipe` instead.
+- **A block of text or multiple pills upfront** — show one step at a time, in the moment it is needed, not all instructions before play begins.
+- **A fixed-timer script** — wire every hint to game state/events, not to `setTimeout`. If the player acts before the hint would appear, skip that step entirely.
+- **Advancing steps on a timer** — advance only when the player completes the action, never automatically after N ms.
+- Opening with a modal pill when a gesture would work — lead with `highlight` + `showFinger` / `showSwipe` instead.
 - Text that only narrates the obvious ("Tap the button!") while a finger is already pointing at it.
+- **Showing a gesture hint and a pill at the same time** — remove all active `highlight` / `showFinger` / `showSwipe` elements before calling `showPill`, and do not start gesture hints while a pill is open.
 - Styling overrides (`fontSize`, `glyph`, `color`, `pulseScale`, etc.) or edits to `theme.js` — the SDK ships a fixed look; only customize when the creator explicitly asks.
+- Repositioning the pill — `showPill` is always centered in the canvas by the SDK. Do not move it via CSS, wrapper elements, or DOM mutation unless the creator explicitly asks.
 
 ## Assets
 
-Pill OK-button artwork and SFX ship inside the npm package under `dist/modules/tutorial/assets/`. Your bundler (Vite, etc.) traces the static imports automatically when you import from `@minit-games/sdk/ui`.
+Pill OK-button artwork and SFX are embedded as data URIs inside the SDK (same pattern as UI fonts) — no separate asset files to copy and no runtime fetches. Source files under `src/modules/tutorial/assets/` are rebuilt into `bundled.js` on `npm run build`.

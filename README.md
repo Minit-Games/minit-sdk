@@ -43,53 +43,95 @@ reportResult(1500, { flavorText: '12x combo — then whiffed the finish' });
 
 The host (Minit app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
 
-- **`initializeSDK(config?)`** — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`).
-- **`loadingDone()`** — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
-- **`reportResult(result, options?)`** — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
+- `**initializeSDK(config?)**` — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`).
+- `**loadingDone()**` — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
+- `**reportResult(result, options?)**` — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
+
+**No start menu, no replay menu.** A Minit drop is one session: load → play → result. Do **not** add a title screen, "Play" / "Start" button, or tap-to-begin gate — after assets are ready, call `loadingDone()` and drop the player straight into the first interactive frame. When the run ends, call `reportResult(...)` immediately; do **not** show an in-game "Play again" / replay / game-over menu. The host owns what happens next.
 
 The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results.
 
 Each flavor text should highlight **one interesting statistic or moment from the session** that is **not the score itself** — something that helps another reader picture how the run went: a best combo, a hilarious mistake, a close call, an odd habit, and the like. Track these stats during gameplay and pick the most memorable one at `reportResult` time.
 
-| Good | Avoid |
-|------|-------|
-| `'12x combo — then whiffed the finish'` | `'Great run!'` (generic confirmation) |
-| `'Fell off the edge 4 times'` | `'Score: 1500'` (repeats the result) |
-| `'Longest streak: 8 matches'` | `'You won!'` (the host already celebrates) |
-| `'Used undo 7 times'` | Restating rank, time, or points already shown |
+
+| Good                                    | Avoid                                         |
+| --------------------------------------- | --------------------------------------------- |
+| `'12x combo — then whiffed the finish'` | `'Great run!'` (generic confirmation)         |
+| `'Fell off the edge 4 times'`           | `'Score: 1500'` (repeats the result)          |
+| `'Longest streak: 8 matches'`           | `'You won!'` (the host already celebrates)    |
+| `'Used undo 7 times'`                   | Restating rank, time, or points already shown |
+
 
 Do not render flavor text in-game — pass it only via `reportResult`.
 
 ### UI entry point
 
 ```ts
-import { showPositiveFeedback, createHeaderBar } from '@minit-games/sdk/ui';
+import { showPositiveFeedback, createHeaderBar, spawnRewards } from '@minit-games/sdk/ui';
 
-// Feedback pop-up
-showPositiveFeedback('Combo x3!');
+// Feedback pop-up — fire on every moment with clear emotional weight
+showPositiveFeedback('Combo x3!');  // scoring, combos, bonuses, level ups
+showNegativeFeedback('Life Lost');  // mistakes, penalties, lives lost, time up
+showNeutralFeedback('x2 Speed');    // modifiers, streak resets, neutral milestones
 
 // Header bar — positioning and alignment only (no custom styling by default)
 const header = createHeaderBar({ y: 60, padding: 40 });
 const turns = header.addPanel({ label: 'Turns', value: 10 });           // left (default)
 const score = header.addPanel({ label: 'Score', value: 0, align: 'right' });
 
-// When the player earns score at a world position, fly a reward to the panel — don't setValue instantly
+// When the player earns points at a world position, fly rewards to the panel —
+// one icon per point, not one icon per scoring event.
+// +1: a single flyToPanel call. +N (N > 1): spawnRewards clusters large payouts.
 score.flyToPanel({
     start: { x: 200, y: 400 },
-    onArrive: () => score.setValue(Number(score.getValue()) + 100, { animate: true })
+    onArrive: () => score.setValue(Number(score.getValue()) + 1, { animate: true })
+});
+
+spawnRewards(12, {
+    start: { x: 200, y: 400 },
+    target: score.getPosition(),
+    onAllArrive: () => score.setValue(Number(score.getValue()) + 12, { animate: true })
 });
 ```
 
-#### Header bar conventions
+#### Feedback conventions
+
+Feedback pops should fire on **every moment with clear emotional weight** — by default, unless the creator asks otherwise. The flash is non-blocking (floats over gameplay, auto-dismisses in ~1 s), so it never interrupts input.
+
+
+| Moment                                             | Variant              | Example text                                 |
+| -------------------------------------------------- | -------------------- | -------------------------------------------- |
+| Score / combo / collect bonus / clear level / win  | **positive** (green) | `"Combo x3!"`, `"+50"`, `"Level Up!"`        |
+| Modifier active / streak reset / non-fatal warning | **neutral** (orange) | `"x2 Speed"`, `"Streak Lost"`, `"10s Left!"` |
+| Life lost / mistake / penalty / time-up / fail     | **negative** (red)   | `"Life Lost"`, `"Wrong!"`, `"Time Up!"`      |
+
+
+**Rules:**
+
+- Fire feedback at the moment the event happens — not delayed, not bundled.
+- Never silently subtract health, lives, or score. Always pair the change with a negative flash.
+- Do **not** fire on every micro-action (each tile flip, each frame of movement) — only on moments the player will feel.
+- Keep text short and punchy: one to three words. No punctuation needed except `!` for emphasis.
+
+#### Input conventions
+
+Minit games run on **mobile phones**. Touch is the only input that matters.
+
+- **All interaction must work with `pointerdown` / `pointerup` / `pointermove`** (or the equivalent touch events). Pointer events fire for both touch and mouse, so they work in desktop browsers during development too.
+- **Never rely on mouse-only events:** `mouseover`, `mouseenter`, `mouseleave`, `contextmenu`, scroll wheel (`wheel`). These do not fire on touch screens.
+- **No hover states.** CSS `:hover` styles are ignored on touch — do not use them for anything functional (revealing buttons, showing tooltips, triggering state changes). Visual-only polish that degrades gracefully is acceptable, but gameplay must never depend on hover.
+- **No keyboard controls.** Arrow keys, spacebar, and keyboard shortcuts do not exist on mobile. Do not wire game actions to `keydown` / `keyup` unless the creator explicitly asks for desktop support.
+- **Tap targets must be large enough to hit with a finger** — aim for at least 44×44 CSS px. Tiny interactive areas that are easy to click with a cursor become unreachable on touch.
+- **Drag / swipe must use pointer capture.** Call `element.setPointerCapture(e.pointerId)` on `pointerdown` so the gesture keeps tracking even when the finger slides off the element.
 
 The header bar is the standard HUD across Minit drops. Treat it as **layout only**:
 
 - **Position the bar** with `createHeaderBar({ y, padding })` — distance from the top and side inset.
 - **Place panels** with `align: 'left'` (default) or `align: 'right'`. Put **Score on the right**; secondary stats (turns, moves, lives) on the left unless the creator says otherwise.
-- Use **`layout: 'even'`** when panels should be spread evenly across the bar instead of grouped left/right.
+- Use `**layout: 'even'`** when panels should be spread evenly across the bar instead of grouped left/right.
 - **Do not customize size or colors** — omit `style`, `defaultStyle`, `labelSize`, `valueSize`, and color fields unless the creator explicitly asks for a different look. The SDK ships fixed Lato styling.
 - **Do not use emojis** in panels — use plain-text `label`s (e.g. `'Score'`, `'Turns'`), not the `icon` field. The same applies to flying rewards: omit `visual` for the default orange circle unless the creator requests something else.
-- **Fly rewards into header panels when scoring or collecting resources.** Whenever the player earns score, currency, lives, or similar from a visible spot on screen, call `panel.flyToPanel({ start: { x, y }, onArrive: () => panel.setValue(...) })` on the matching header panel instead of bumping the value instantly. Use `spawnRewards(count, ...)` for large payouts to the same panel. Skip the fly animation only when there is no meaningful source position (e.g. passive time bonus) or when instant feedback is clearly better.
+- **Fly one reward per point earned.** When an in-world event awards points, currency, lives, or similar, spawn **one flying icon per unit** — not a single icon per event regardless of payout size. For a **+1** gain, call `flyToPanel` once. For **+N** with N > 1, call `spawnRewards(N, { start, target: panel.getPosition(), onAllArrive: ... })` and bump the panel value in `onAllArrive`. When N is large, `spawnRewards` clusters into fewer, larger icons (e.g. bundles representing 5, 25, 125 points) so the HUD still reads clearly without hundreds of circles. Skip the fly animation only when there is no meaningful source position (e.g. passive time bonus) or when instant feedback is clearly better.
 
 ## Building & uploading your game
 
@@ -100,10 +142,10 @@ Minit games are uploaded to the [Creator Console](https://console.minit.games) a
 - `index.html` at the **root** of the ZIP (the built entry point) — not inside a `dist/` subfolder
 - All JS, CSS, and assets bundled alongside it — **including fonts** (see [Fonts and assets](#fonts-and-assets))
 - **No** `src/` folder
-- **No** `vite.config.*` or similar build config files
+- **No** `vite.config.`* or similar build config files
 - **No** `package.json` at the root
 
-If the Creator Console rejects your upload — for example because it detects a `src/` folder or a `vite.config.*` file — the project has not been built yet. Build it first, then zip the **contents** of the output folder.
+If the Creator Console rejects your upload — for example because it detects a `src/` folder or a `vite.config.`* file — the project has not been built yet. Build it first, then zip the **contents** of the output folder.
 
 ### The build prompt
 
@@ -122,32 +164,101 @@ Google AI Studio's **Build Mode** is a popular way to prototype Minit games. By 
 - **Ask the AI to build for you** — send the build prompt above in the Build Mode chat; AI Studio runs `npm run build` and gives you a ZIP of `dist/`.
 - **Build locally** — download the source export, then in the project folder run `npm install` followed by `npm run build`, and zip the **contents** of the `dist/` folder.
 
+## Game metadata (`meta.txt`)
+
+Every Minit game should ship with a `meta.txt` file at the project root. It carries the public-facing title and description that appear on the Minit platform. AI assistants should create this file when a new game is started and keep it updated whenever the game concept changes.
+
+### Required fields
+
+Only two fields are required — paste them exactly as shown, including the outer double-quotes:
+
+```
+"title": "<Title> <emoji1><emoji2>",
+"description": "<description text>"
+```
+
+### Title format
+
+`<Game name> <two thematically matching emojis>` — e.g. `"Fruit Drop 🍉🗡️"`.
+
+### Description format
+
+**Limit: 1 000 characters.** Structure the text like this (the section tags are read by tooling — keep them):
+
+```
+[controls]
+- **<Input>** to <action>
+- **<Avoid/Collect>** <thing> — <consequence>
+[/controls]
+[logic]
+- <Core loop sentence>
+- **<Mechanic>** explanation
+- <End condition>
+[/logic]## What's This? 🎮
+
+<One or two sentence hook — what the game feels like.>
+
+## Scoring ⭐
+
+- **+N** per <thing> <emoji>
+- <Bonus mechanic> <emoji>
+
+## Tips 💡
+
+- <Tip 1> <emoji>
+- <Tip 2> <emoji>
+- <Tip 3> <emoji>
+
+## Creator Corner 🎨
+
+- <A like/cheer CTA written in the creator's own tone and voice> <emoji>
+- Game Version: 1
+```
+
+The `[controls]` / `[logic]` section should be concise (2–4 bullets each). The free-text sections below them fill the remainder of the character budget. The **Creator Corner CTA must match the creator's tone** — casual, hype, chill, competitive, etc. — rather than using a fixed phrase. Increment `Game Version` each time a meaningful update is published.
+
+### Example
+
+```
+"title": "Fruit Drop 🍉🗡️",
+"description": "[controls]\n- **Swipe** across the screen to slice fruit\n- **Avoid** the bombs — they end the run\n[/controls]\n[logic]\n- Slice fruit as they fly up from the bottom\n- **Combo** multiple fruit in one swipe for bonus points\n- A single **bomb** hit ends the round — keep your swipes clean\n[/logic]## What's This? 🎮\n\nA juicy swipe-and-slice arcade game — chop fruit out of the air, dodge bombs, and rack up combos! 🍉🗡️\n\n## Scoring ⭐\n\n- **+1** per fruit sliced 🍓\n- **Combo multiplier** for multi-fruit swipes 🔥\n- Bombs end the run instantly 💣\n\n## Tips 💡\n\n- Long, sweeping swipes catch more fruit in one go ✂️\n- Watch the corners — bombs love to sneak in 👀\n- Coconuts are heavy — they need a stronger swipe 🥥\n\n## Creator Corner 🎨\n\n- Enjoy the game? Leave a cheer so we make more like this! 🎉\n- Game Version: 1"
+```
+
+---
+
 ## Common mistakes AI assistants make
 
 When an AI assistant integrates `@minit-games/sdk` for you, double-check these — they're the things assistants most often get wrong, and they all tie back to the [game lifecycle](#game-lifecycle):
 
+- **Create and maintain `meta.txt`.** When starting a new game, create a `meta.txt` at the project root with a `"title"` and `"description"` field following the [Game metadata](#game-metadata-metatxt) format. Update it whenever the game concept changes (new mechanic, scoring change, controls update). Increment `Game Version` on each meaningful update.
+- **Touch-only input — no mouse-specific events.** Games run on mobile phones; touch is the only input that matters. Use `pointerdown` / `pointerup` / `pointermove` for all interaction. Remove any `mouseover`, `mouseenter`, `wheel` (scroll), or `:hover`-dependent logic the AI added — these do not fire on touch screens. Tap targets must be at least 44×44 px. Drag / swipe gestures must call `element.setPointerCapture(e.pointerId)` on `pointerdown`. Do not add keyboard controls unless the creator asks for desktop support.
 - **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
-- **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView and the player is stuck on the loader. AIs sometimes wire it to a "Start" button or omit it entirely.
+- **No start menu or replay menu.** The game should begin straight into gameplay (no title screen, "Play" button, or tap-to-begin), and end with `reportResult(...)` — not an in-game "Play again" or game-over menu. The host handles restart and the result screen.
+- **Fire feedback on every emotionally significant moment.** Score gain, combo, life lost, penalty, time-up, level clear — each needs a matching `showPositiveFeedback` / `showNegativeFeedback` / `showNeutralFeedback` call. The flash is non-blocking and auto-dismisses; omitting it makes the game feel unresponsive. Never silently subtract health or lives.
+- **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView and the player is stuck on the loader. Do not wire it to a "Start" button — call it when gameplay is ready to begin.
 - **Coerce config values — they come back as strings (or `undefined`).** `getConfigValue('startScore') + 5` yields the string `'05'`, not `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` and supply a default for numeric mods.
-- **`flavorText` is rendered by the host, not in-game.** It appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
+- `**flavorText` is rendered by the host, not in-game.** It appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
+- **One flying reward per point, not per event.** When a scoring action awards multiple points, spawn one icon per point via `spawnRewards(pointsEarned, ...)` — do not fly a single icon and jump the score by 10. Cluster large payouts into denominations like 5 / 25 / 125 automatically through `spawnRewards`.
 - **No `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Bundle woff2 files and reference them with relative-path `@font-face` rules instead (see [Fonts and assets](#fonts-and-assets)). The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action.
 
 ## API overview
 
 ### `@minit-games/sdk` (core)
 
-| Export | Description |
-|--------|-------------|
-| `initializeSDK(config?)` | Initialize the SDK; sets up background and backward-compat shims |
-| `loadingDone()` | Signal to the app that the game is ready to be shown |
+
+| Export                           | Description                                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
+| `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
-| `getUserData()` | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data)) |
-| `getConfigValue(key, default?)` | Read a URL-param config value injected by the app |
-| `getConfig()` | Get all URL-param config values as a plain object |
-| `seededRandom()` | Deterministic random number (seeded from `?seed=` param) |
-| `patchSeed(seed)` | Override the random seed at runtime |
-| `addBackground(options?)` | Apply a styled background to the game container |
-| `applyMetaTags()` | Inject charset + viewport meta tags |
+| `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
+| `getConfigValue(key, default?)`  | Read a URL-param config value injected by the app                                                                                               |
+| `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
+| `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
+| `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
+| `addBackground(options?)`        | Apply a styled background to the game container                                                                                                 |
+| `applyMetaTags()`                | Inject charset + viewport meta tags                                                                                                             |
+
 
 #### Legacy aliases
 
@@ -207,17 +318,19 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 
 ### `@minit-games/sdk/ui`
 
-| Export | Description |
-|--------|-------------|
-| `showFeedback(text, variant?, duration?)` | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`) |
-| `showPositiveFeedback(text, duration?)` | Convenience wrapper — green variant |
-| `showNeutralFeedback(text, duration?)` | Convenience wrapper — orange variant |
-| `showNegativeFeedback(text, duration?)` | Convenience wrapper — red variant |
-| `preloadFeedbackFont()` | Preload the feedback font to avoid flash |
-| `spawnReward(options)` | Lower-level fly animation — prefer `panel.flyToPanel()` when a header panel exists |
-| `spawnRewards(count, options, staggerMs?)` | Staggered fly animations for large gains to one panel |
-| `createHeaderBar(config?)` | Standard HUD bar — position with `y`/`padding`, place panels with `align`; pair with `flyToPanel` for score/resources; see [Header bar conventions](#header-bar-conventions) |
-| `getHeaderBar()` | Get the current header bar instance |
+
+| Export                                     | Description                                                                                                                                                                  |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showFeedback(text, variant?, duration?)`  | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`)                                                                                                   |
+| `showPositiveFeedback(text, duration?)`    | Convenience wrapper — green variant                                                                                                                                          |
+| `showNeutralFeedback(text, duration?)`     | Convenience wrapper — orange variant                                                                                                                                         |
+| `showNegativeFeedback(text, duration?)`    | Convenience wrapper — red variant                                                                                                                                            |
+| `preloadFeedbackFont()`                    | Preload the feedback font to avoid flash                                                                                                                                     |
+| `spawnReward(options)`                     | Lower-level single-icon fly animation — prefer `panel.flyToPanel()` for +1 gains                                                                                             |
+| `spawnRewards(count, options, staggerMs?)` | Multi-point payout: spawns one icon per point, clustering into larger denominations (5 / 25 / 125 …) when `count` > 5                                                        |
+| `createHeaderBar(config?)`                 | Standard HUD bar — position with `y`/`padding`, place panels with `align`; pair with `flyToPanel` for score/resources; see [Header bar conventions](#header-bar-conventions) |
+| `getHeaderBar()`                           | Get the current header bar instance                                                                                                                                          |
+
 
 ## Fonts and assets
 
@@ -241,22 +354,26 @@ After building, confirm that the font file appears in `dist/` alongside `index.h
 
 The SDK's own UI components (header panel, feedback text) bundle their fonts as base64-inlined woff2 — no network requests are made and they work fully offline. The bundled families are:
 
-| Module | Font | Weight |
-|--------|------|--------|
-| `@minit-games/sdk/ui` — `createHeaderBar` | Lato | 400, 700 |
-| `@minit-games/sdk/ui` — `showFeedback` / `preloadFeedbackFont` | Bowlby One SC | 400 |
 
-Both families are latin subset. Their SIL OFL license texts ship in the [`licenses/`](./licenses/) directory (included in the npm package).
+| Module                                                         | Font          | Weight   |
+| -------------------------------------------------------------- | ------------- | -------- |
+| `@minit-games/sdk/ui` — `createHeaderBar`                      | Lato          | 400, 700 |
+| `@minit-games/sdk/ui` — `showFeedback` / `preloadFeedbackFont` | Bowlby One SC | 400      |
+
+
+Both families are latin subset. Their SIL OFL license texts ship in the `[licenses/](./licenses/)` directory (included in the npm package).
 
 #### Bundle-size impact
 
 The font data is tree-shaken per module — games pay only for what they import:
 
-| Component | Adds to bundle |
-|-----------|---------------|
-| `createHeaderBar` (Lato 400 + 700) | ~37 KB base64 (~27.5 KB woff2) |
-| `showFeedback` / `preloadFeedbackFont` (Bowlby One SC 400) | ~26 KB base64 (~19.4 KB woff2) |
-| Neither | 0 KB |
+
+| Component                                                  | Adds to bundle                   |
+| ---------------------------------------------------------- | -------------------------------- |
+| `createHeaderBar` (Lato 400 + 700)                         | ~~37 KB base64 (~~27.5 KB woff2) |
+| `showFeedback` / `preloadFeedbackFont` (Bowlby One SC 400) | ~~26 KB base64 (~~19.4 KB woff2) |
+| Neither                                                    | 0 KB                             |
+
 
 Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
 

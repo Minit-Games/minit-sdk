@@ -24,9 +24,9 @@
     "licenses"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.json && node scripts/copy-tutorial-assets.mjs",
-    "check": "tsc --project tsconfig.json --noEmit",
-    "test": "jest",
+    "build": "node scripts/bundle-tutorial-assets.mjs && tsc --project tsconfig.json && node scripts/copy-tutorial-assets.mjs",
+    "check": "node scripts/bundle-tutorial-assets.mjs && tsc --project tsconfig.json --noEmit",
+    "test": "node scripts/bundle-tutorial-assets.mjs && jest",
     "preview:tutorial": "npm run build && node scripts/preview-tutorial.mjs",
     "prepublishOnly": "npm run build"
   },

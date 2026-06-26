@@ -1,5 +1,6 @@
 // Modal instruction pill — DOM rendering, DOM input blocking.
 
+import { okButtonImgUrl, okSoundUrl, popInSoundUrl } from '../assets/bundled.js';
 import { TUTORIAL_THEME } from '../theme.js';
 import {
 	easeInQuad,
@@ -8,11 +9,6 @@ import {
 	lerp,
 	removeElement,
 } from './dom.js';
-
-const pillAssets = new URL('../assets/', import.meta.url);
-const popInSoundUrl = new URL('sfx/coffee-tin-lid-open-kawaii-ui.mp3', pillAssets).href;
-const okSoundUrl = new URL('sfx/button-plastic-tiny.mp3', pillAssets).href;
-const okButtonImgUrl = new URL('button_ok_tutorial.svg', pillAssets).href;
 
 const audioCache = new Map();
 function playOneShot(url, volume) {
