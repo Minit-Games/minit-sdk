@@ -164,64 +164,45 @@ Google AI Studio's **Build Mode** is a popular way to prototype Minit games. By 
 - **Ask the AI to build for you** — send the build prompt above in the Build Mode chat; AI Studio runs `npm run build` and gives you a ZIP of `dist/`.
 - **Build locally** — download the source export, then in the project folder run `npm install` followed by `npm run build`, and zip the **contents** of the `dist/` folder.
 
-## Game metadata (`meta.txt`)
+## Game metadata (`meta.json`)
 
-Every Minit game should ship with a `meta.txt` file at the project root. It carries the public-facing title and description that appear on the Minit platform. AI assistants should create this file when a new game is started and keep it updated whenever the game concept changes.
+Every Minit game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Minit draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
 
-### Required fields
+### Format
 
-Only two fields are required — paste them exactly as shown, including the outer double-quotes:
-
-```
-"title": "<Title> <emoji1><emoji2>",
-"description": "<description text>"
-```
-
-### Title format
-
-`<Game name> <two thematically matching emojis>` — e.g. `"Fruit Drop 🍉🗡️"`.
-
-### Description format
-
-**Limit: 1 000 characters.** Structure the text like this (the section tags are read by tooling — keep them):
-
-```
-[controls]
-- **<Input>** to <action>
-- **<Avoid/Collect>** <thing> — <consequence>
-[/controls]
-[logic]
-- <Core loop sentence>
-- **<Mechanic>** explanation
-- <End condition>
-[/logic]## What's This? 🎮
-
-<One or two sentence hook — what the game feels like.>
-
-## Scoring ⭐
-
-- **+N** per <thing> <emoji>
-- <Bonus mechanic> <emoji>
-
-## Tips 💡
-
-- <Tip 1> <emoji>
-- <Tip 2> <emoji>
-- <Tip 3> <emoji>
-
-## Creator Corner 🎨
-
-- <A like/cheer CTA written in the creator's own tone and voice> <emoji>
-- Game Version: 1
+```json
+{
+  "title": "Fruit Drop 🍉🗡️",
+  "controls": "- **Swipe** to slice fruit\n- **Avoid** bombs — they end the run",
+  "logic": "- Slice fruit flying up from the bottom\n- **Combo** multiple fruit for bonus points",
+  "description": "## What's This? 🎮\n\nA juicy swipe-and-slice arcade game..."
+}
 ```
 
-The `[controls]` / `[logic]` section should be concise (2–4 bullets each). The free-text sections below them fill the remainder of the character budget. The **Creator Corner CTA must match the creator's tone** — casual, hype, chill, competitive, etc. — rather than using a fixed phrase. Increment `Game Version` each time a meaningful update is published.
+### Fields
+
+All four fields are optional. Missing or empty fields are simply skipped during pre-fill. If `title` is absent, the console falls back to the ZIP filename.
+
+| Field | Description |
+| --- | --- |
+| `title` | The game's display title. Format: `<Game name> <two thematically matching emojis>` — e.g. `"Fruit Drop 🍉🗡️"`. |
+| `controls` | How the player controls the game. Markdown. 2–4 bullets covering inputs and their effects. |
+| `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. |
+| `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. |
+
+### ZIP placement
+
+`meta.json` must sit at the **top level of the ZIP**, not nested inside any folder within the archive — it must be next to `index.html`. The console reads it directly from the ZIP's top level when processing the upload.
 
 ### Example
 
-```
-"title": "Fruit Drop 🍉🗡️",
-"description": "[controls]\n- **Swipe** across the screen to slice fruit\n- **Avoid** the bombs — they end the run\n[/controls]\n[logic]\n- Slice fruit as they fly up from the bottom\n- **Combo** multiple fruit in one swipe for bonus points\n- A single **bomb** hit ends the round — keep your swipes clean\n[/logic]## What's This? 🎮\n\nA juicy swipe-and-slice arcade game — chop fruit out of the air, dodge bombs, and rack up combos! 🍉🗡️\n\n## Scoring ⭐\n\n- **+1** per fruit sliced 🍓\n- **Combo multiplier** for multi-fruit swipes 🔥\n- Bombs end the run instantly 💣\n\n## Tips 💡\n\n- Long, sweeping swipes catch more fruit in one go ✂️\n- Watch the corners — bombs love to sneak in 👀\n- Coconuts are heavy — they need a stronger swipe 🥥\n\n## Creator Corner 🎨\n\n- Enjoy the game? Leave a cheer so we make more like this! 🎉\n- Game Version: 1"
+```json
+{
+  "title": "Fruit Drop 🍉🗡️",
+  "controls": "- **Swipe** across the screen to slice fruit\n- **Avoid** the bombs — they end the run",
+  "logic": "- Slice fruit as they fly up from the bottom\n- **Combo** multiple fruit in one swipe for bonus points\n- A single **bomb** hit ends the round — keep your swipes clean",
+  "description": "## What's This? 🎮\n\nA juicy swipe-and-slice arcade game — chop fruit out of the air, dodge bombs, and rack up combos! 🍉🗡️\n\n## Scoring ⭐\n\n- **+1** per fruit sliced 🍓\n- **Combo multiplier** for multi-fruit swipes 🔥\n- Bombs end the run instantly 💣\n\n## Tips 💡\n\n- Long, sweeping swipes catch more fruit in one go ✂️\n- Watch the corners — bombs love to sneak in 👀\n- Coconuts are heavy — they need a stronger swipe 🥥\n\n## Creator Corner 🎨\n\n- Enjoy the game? Leave a cheer so we make more like this! 🎉\n- Game Version: 1"
+}
 ```
 
 ---
@@ -230,7 +211,7 @@ The `[controls]` / `[logic]` section should be concise (2–4 bullets each). The
 
 When an AI assistant integrates `@minit-games/sdk` for you, double-check these — they're the things assistants most often get wrong, and they all tie back to the [game lifecycle](#game-lifecycle):
 
-- **Create and maintain `meta.txt`.** When starting a new game, create a `meta.txt` at the project root with a `"title"` and `"description"` field following the [Game metadata](#game-metadata-metatxt) format. Update it whenever the game concept changes (new mechanic, scoring change, controls update). Increment `Game Version` on each meaningful update.
+- **Create and maintain `meta.json` at the ZIP root.** When starting a new game, create a `meta.json` with `title`, `controls`, `logic`, and `description` fields following the [Game metadata](#game-metadata-metajson) format. Place it at the root of the uploaded ZIP alongside `index.html` — the Creator Console reads it from the ZIP root to pre-fill the draft. Update it whenever the game concept changes (new mechanic, scoring change, controls update).
 - **Touch-only input — no mouse-specific events.** Games run on mobile phones; touch is the only input that matters. Use `pointerdown` / `pointerup` / `pointermove` for all interaction. Remove any `mouseover`, `mouseenter`, `wheel` (scroll), or `:hover`-dependent logic the AI added — these do not fire on touch screens. Tap targets must be at least 44×44 px. Drag / swipe gestures must call `element.setPointerCapture(e.pointerId)` on `pointerdown`. Do not add keyboard controls unless the creator asks for desktop support.
 - **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
 - **No start menu or replay menu.** The game should begin straight into gameplay (no title screen, "Play" button, or tap-to-begin), and end with `reportResult(...)` — not an in-game "Play again" or game-over menu. The host handles restart and the result screen.
