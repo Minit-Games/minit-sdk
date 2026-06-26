@@ -83,9 +83,11 @@ export interface Panel {
     getPosition(): { x: number; y: number };
     /**
      * Spawn the shared Minit fly-to-HUD animation for this panel.
-     * **Prefer this whenever score or other header resources change** due to an
+     * **Prefer this for +1 gains** when score or other header resources change due to an
      * in-world event — pass the event's `{ x, y }` as `start`, then bump the panel
      * in `onArrive` (optionally with `setValue(..., { animate: true })`).
+     * For payouts of 2 or more, use {@link spawnRewards} instead (one icon per point,
+     * clustered into denominations like 5 / 25 / 125 when the payout is large).
      * Uses `spawnReward` internally.
      */
     flyToPanel(options: FlyToPanelOptions): void;
@@ -525,9 +527,10 @@ class HeaderBarImpl implements HeaderBar {
  * panels should be distributed evenly across the bar width.
  *
  * **Score and resources:** when points, currency, lives, or similar change because of
- * something the player did on screen, call `panel.flyToPanel()` on the target panel
- * (with `start` at the event position and `onArrive` updating the value) rather than
- * calling `setValue` alone. Use `spawnRewards` for large batch gains.
+ * something the player did on screen, fly **one reward icon per point** from the event
+ * position to the target panel — not one icon per scoring event. Use `flyToPanel` for
+ * +1 gains; use `spawnRewards(count, ...)` for larger payouts (clusters into 5 / 25 / 125
+ * denominations when `count` > 5). Update the panel value in `onArrive` / `onAllArrive`.
  */
 export function createHeaderBar(config?: HeaderBarConfig): HeaderBar {
     // Only allow one header bar at a time

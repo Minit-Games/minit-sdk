@@ -1,6 +1,6 @@
 {
   "name": "@minit-games/sdk",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Official SDK for building Minit Games HTML5 mini-games",
   "type": "module",
   "main": "dist/index.js",
@@ -16,15 +16,18 @@
       "types": "./dist/ui/index.d.ts"
     }
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "**/modules/tutorial/**"
+  ],
   "files": [
     "dist",
     "licenses"
   ],
   "scripts": {
-    "build": "tsc --project tsconfig.json",
-    "check": "tsc --project tsconfig.json --noEmit",
-    "test": "jest",
+    "build": "node scripts/bundle-tutorial-assets.mjs && tsc --project tsconfig.json && node scripts/copy-tutorial-assets.mjs",
+    "check": "node scripts/bundle-tutorial-assets.mjs && tsc --project tsconfig.json --noEmit",
+    "test": "node scripts/bundle-tutorial-assets.mjs && jest",
+    "preview:tutorial": "npm run build && node scripts/preview-tutorial.mjs",
     "prepublishOnly": "npm run build"
   },
   "engines": {

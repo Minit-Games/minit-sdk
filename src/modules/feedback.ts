@@ -129,9 +129,27 @@ function injectStyles(): void {
  * Show a temporary feedback text on the center of the screen.
  * The text is non-interactive and auto-dismisses after ~1 second.
  *
- * @param text - The feedback text to display (e.g., "Great!", "Combo x2", "Life Lost")
- * @param variant - The color variant: "positive" (green), "neutral" (orange), or "negative" (red)
- * @param duration - How long the text stays visible in milliseconds (default: 1000ms)
+ * **Use feedback for strong, non-gameplay-disturbing moments — by default.**
+ * Any moment the player will clearly feel (a score milestone, a mistake, a life lost,
+ * a bonus) should be surfaced with the matching variant. The pop floats over gameplay and
+ * auto-dismisses, so it never blocks input. Omitting feedback on these moments makes the
+ * game feel unresponsive.
+ *
+ * Variant guide — prefer the specific wrappers over calling this directly:
+ *
+ * | Moment | Variant | Wrapper |
+ * |--------|---------|---------|
+ * | Score / combo / collect bonus / level up / win | positive (green) | `showPositiveFeedback` |
+ * | Modifier applied / streak reset / neutral milestone | neutral (orange) | `showNeutralFeedback` |
+ * | Life lost / mistake / penalty / time-up / fail | negative (red) | `showNegativeFeedback` |
+ *
+ * Do **not** fire on every small action (each tile tap, each step) — only on moments with
+ * clear emotional weight. When in doubt, use it; a missing flash is more noticeable than a
+ * brief one.
+ *
+ * @param text - Short, punchy label (e.g. "Combo x3!", "Life Lost", "Level Up!")
+ * @param variant - "positive" (green), "neutral" (orange), or "negative" (red)
+ * @param duration - Visible duration in ms (default: 1000ms)
  */
 export function showFeedback(text: string, variant: FeedbackVariant = "neutral", duration: number = 1000): void {
     injectStyles();
@@ -170,7 +188,11 @@ export function showFeedback(text: string, variant: FeedbackVariant = "neutral",
 
 /**
  * Show positive (green) feedback text.
- * Convenience wrapper for showFeedback with "positive" variant.
+ *
+ * Use for: scoring, combos, collecting bonuses, clearing a level, winning, any moment
+ * the player did something right. Default choice whenever the player succeeds.
+ *
+ * Examples: `"Combo x3!"`, `"+50"`, `"Level Up!"`, `"Nice!"`, `"Perfect!"`
  */
 export function showPositiveFeedback(text: string, duration?: number): void {
     showFeedback(text, "positive", duration);
@@ -178,7 +200,11 @@ export function showPositiveFeedback(text: string, duration?: number): void {
 
 /**
  * Show neutral (orange) feedback text.
- * Convenience wrapper for showFeedback with "neutral" variant.
+ *
+ * Use for: modifiers that activate, streak resets, items that are notable but neither
+ * clearly good nor bad, warnings that aren't yet fatal (e.g. low time).
+ *
+ * Examples: `"x2 Speed"`, `"Streak Lost"`, `"Bonus Round"`, `"10s Left!"`
  */
 export function showNeutralFeedback(text: string, duration?: number): void {
     showFeedback(text, "neutral", duration);
@@ -186,7 +212,12 @@ export function showNeutralFeedback(text: string, duration?: number): void {
 
 /**
  * Show negative (red) feedback text.
- * Convenience wrapper for showFeedback with "negative" variant.
+ *
+ * Use for: losing a life, making a mistake, receiving a penalty, failing a level,
+ * time running out, any moment the player took a hit. Always use this — never silently
+ * subtract health or lives without feedback.
+ *
+ * Examples: `"Life Lost"`, `"Wrong!"`, `"Miss!"`, `"-10"`, `"Time Up!"`
  */
 export function showNegativeFeedback(text: string, duration?: number): void {
     showFeedback(text, "negative", duration);

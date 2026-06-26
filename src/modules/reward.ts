@@ -264,14 +264,14 @@ export function spawnReward(options: RewardOptions): void {
 }
 
 /**
- * Cluster a count into denominations to reduce the number of icons.
- * Uses denominations of 50, 12, 3, and 1 to keep icon count <= 5.
+ * Cluster a count into denominations to reduce the number of icons while still
+ * representing one icon per point. Uses 125, 25, 5, and 1 to keep icon count <= 5.
  */
 function clusterIntoDenominations(count: number): { value: number; scale: number }[] {
     const denominations = [
-        { value: 50, scale: 2.0 },
-        { value: 12, scale: 1.5 },
-        { value: 3, scale: 1.2 },
+        { value: 125, scale: 2.2 },
+        { value: 25, scale: 1.6 },
+        { value: 5, scale: 1.2 },
         { value: 1, scale: 1.0 }
     ];
 
@@ -301,11 +301,12 @@ function clusterIntoDenominations(count: number): { value: number; scale: number
 }
 
 /**
- * Spawn multiple reward icons with staggered timing.
- * When count > 5, clusters icons into larger denominations (50, 12, 3, 1)
- * with appropriately scaled sizes.
+ * Spawn multiple reward icons with staggered timing — **one icon per point** in the
+ * payout. When `count` is 1–5, spawns that many individual icons. When `count` > 5,
+ * clusters into larger denominations (125, 25, 5, 1) with scaled icon sizes so large
+ * payouts stay readable without hundreds of circles.
  *
- * @param count - Number of icons to spawn (or total value to represent)
+ * @param count - Points (or units) earned — one flying icon per point, clustered when large
  * @param options - Base options (each icon gets slight variations)
  * @param staggerMs - Delay between each icon spawn (default: 50ms)
  */
