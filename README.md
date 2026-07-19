@@ -181,7 +181,7 @@ Every Minit game should ship with a `meta.json` file **at the root of the upload
 
 ### Fields
 
-All four fields are optional. Missing or empty fields are simply skipped during pre-fill. If `title` is absent, the console falls back to the ZIP filename.
+All fields below — including `config` (see next section) — are optional. Missing or empty fields are simply skipped during pre-fill. If `title` is absent, the console falls back to the ZIP filename.
 
 | Field | Description |
 | --- | --- |
