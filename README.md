@@ -190,6 +190,30 @@ All four fields are optional. Missing or empty fields are simply skipped during 
 | `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. |
 | `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. |
 
+### `config`
+
+An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Project's** config definitions (not per-post values).
+
+Max **25** entries. Each entry:
+
+| Key | Description |
+| --- | --- |
+| `key` | Non-empty string. Must be unique across entries. |
+| `valueType` | One of `string`, `number`, `boolean`, `color`. |
+| `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`) or the whole `config` is skipped. |
+| `description` | Optional string, max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
+| `range` | Optional array of allowed string values. `value` must be one of them. |
+
+```json
+"config": [
+  { "key": "startScore", "valueType": "number", "value": "10" },
+  { "key": "playerName", "valueType": "string", "value": "Tester" },
+  { "key": "hardMode", "valueType": "boolean", "value": "false" },
+  { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
+  { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
+]
+```
+
 ### ZIP placement
 
 `meta.json` must sit at the **top level of the ZIP**, not nested inside any folder within the archive — it must be next to `index.html`. The console reads it directly from the ZIP's top level when processing the upload.
