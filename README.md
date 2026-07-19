@@ -192,7 +192,7 @@ All fields below — including `config` (see next section) — are optional. Mis
 
 ### `config`
 
-An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Project's** config definitions (not per-post values).
+An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still pre-fills. On upload, it pre-fills the **Project's** config definitions (not per-post values).
 
 Max **25** entries. Each entry:
 
