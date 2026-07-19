@@ -200,18 +200,20 @@ Max **25** entries. Each entry:
 | --- | --- |
 | `key` | Non-empty string. Must be unique across entries. |
 | `valueType` | One of `string`, `number`, `boolean`, `color`. |
-| `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`) or the whole `config` is skipped. |
+| `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive) or the whole `config` is skipped. |
 | `description` | Optional string, max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
 | `range` | Optional array of allowed string values. `value` must be one of them. |
 
 ```json
-"config": [
-  { "key": "startScore", "valueType": "number", "value": "10" },
-  { "key": "playerName", "valueType": "string", "value": "Tester" },
-  { "key": "hardMode", "valueType": "boolean", "value": "false" },
-  { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
-  { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
-]
+{
+  "config": [
+    { "key": "startScore", "valueType": "number", "value": "10" },
+    { "key": "playerName", "valueType": "string", "value": "Tester" },
+    { "key": "hardMode", "valueType": "boolean", "value": "false" },
+    { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
+    { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
+  ]
+}
 ```
 
 ### ZIP placement
