@@ -27,10 +27,15 @@ function handleVisibilityChange(): void {
                         // The tab may have already become visible again
                         // while suspend() was in flight; if so, resume now
                         // instead of leaving the context stuck suspended
-                        // with nothing left tracking it for a resume.
+                        // with nothing left tracking it for a resume. Only
+                        // clear tracking once resume() actually succeeds so
+                        // a rejection is retried on the next visibility
+                        // toggle instead of being silently dropped.
                         if (!document.hidden && suspendedByVisibility.has(context)) {
-                            suspendedByVisibility.delete(context);
-                            void context.resume().catch(() => {});
+                            void context.resume().then(
+                                () => suspendedByVisibility.delete(context),
+                                () => {}
+                            );
                         }
                     },
                     () => {
@@ -55,8 +60,14 @@ function handleVisibilityChange(): void {
         // still in flight resumes itself once it settles (see above), so
         // deleting it from the set here would drop it while visible.
         if (context.state === "suspended") {
+            // Keep tracking on rejection so the next visibility toggle
+            // retries the resume() instead of leaving it silently suspended.
+            void context.resume().then(
+                () => suspendedByVisibility.delete(context),
+                () => {}
+            );
+        } else {
             suspendedByVisibility.delete(context);
-            void context.resume().catch(() => {});
         }
     }
 
