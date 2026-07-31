@@ -2,6 +2,7 @@ import { addBackground } from "./modules/background.js";
 import type { Background } from "./modules/background.js";
 import { getConfig } from "./modules/config.js";
 import { applyMetaTags } from "./modules/meta.js";
+import { installAudioVisibilityListener } from "./modules/audioVisibility.js";
 import { getEnvironment, isTestEnvironment } from "./utils.js";
 
 // New clean names
@@ -34,6 +35,8 @@ export interface SDKConfig {
 }
 
 export function initializeSDK(config?: SDKConfig): void {
+
+    installAudioVisibilityListener();
 
     if(config?.metaTags === true)
     {

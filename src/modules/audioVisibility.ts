@@ -1,20 +1,63 @@
-/**
- * STUB (DROP-5254 red phase) — registry surface only.
- *
- * The real implementation (DROP-5253) wires these registrations into a
- * `document.visibilitychange` listener installed once by `initializeSDK()`
- * (see src/index.ts): on hide, every registered `AudioContext` that is
- * currently running is suspended and every registered `HTMLMediaElement`
- * that is currently playing is paused; on show, only the audio the listener
- * itself suspended/paused is resumed — never audio the game paused on its
- * own. That behavior does not exist yet; these functions intentionally no-op
- * so audioVisibility.test.ts fails on assertions, not on a missing export.
- */
+const audioContexts = new Set<AudioContext>();
+const mediaElements = new Set<HTMLMediaElement>();
 
-export function registerAudioContext(_context: AudioContext): void {
-    // no-op stub — see DROP-5253
+// These sets contain only items whose state was changed by the visibility
+// handler, so an item that was already paused or suspended is not resumed.
+const suspendedByVisibility = new Set<AudioContext>();
+const pausedByVisibility = new Set<HTMLMediaElement>();
+
+let listenerInstalled = false;
+
+// Audio sources not explicitly registered here are intentionally unaffected.
+export function registerAudioContext(context: AudioContext): void {
+    audioContexts.add(context);
 }
 
-export function registerAudioElement(_element: HTMLMediaElement): void {
-    // no-op stub — see DROP-5253
+export function registerAudioElement(element: HTMLMediaElement): void {
+    mediaElements.add(element);
+}
+
+function handleVisibilityChange(): void {
+    if (document.hidden) {
+        for (const context of audioContexts) {
+            if (context.state === "running" && !suspendedByVisibility.has(context)) {
+                suspendedByVisibility.add(context);
+                void context.suspend().catch(() => {
+                    suspendedByVisibility.delete(context);
+                });
+            }
+        }
+
+        for (const element of mediaElements) {
+            if (!element.paused && !pausedByVisibility.has(element)) {
+                pausedByVisibility.add(element);
+                element.pause();
+            }
+        }
+
+        return;
+    }
+
+    for (const context of suspendedByVisibility) {
+        suspendedByVisibility.delete(context);
+        if (context.state === "suspended") {
+            void context.resume();
+        }
+    }
+
+    for (const element of pausedByVisibility) {
+        pausedByVisibility.delete(element);
+        if (element.paused) {
+            void element.play();
+        }
+    }
+}
+
+export function installAudioVisibilityListener(): void {
+    if (listenerInstalled) {
+        return;
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    listenerInstalled = true;
 }
