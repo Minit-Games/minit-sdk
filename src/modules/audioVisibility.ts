@@ -22,9 +22,21 @@ function handleVisibilityChange(): void {
         for (const context of audioContexts) {
             if (context.state === "running" && !suspendedByVisibility.has(context)) {
                 suspendedByVisibility.add(context);
-                void context.suspend().catch(() => {
-                    suspendedByVisibility.delete(context);
-                });
+                void context.suspend().then(
+                    () => {
+                        // The tab may have already become visible again
+                        // while suspend() was in flight; if so, resume now
+                        // instead of leaving the context stuck suspended
+                        // with nothing left tracking it for a resume.
+                        if (!document.hidden && suspendedByVisibility.has(context)) {
+                            suspendedByVisibility.delete(context);
+                            void context.resume().catch(() => {});
+                        }
+                    },
+                    () => {
+                        suspendedByVisibility.delete(context);
+                    }
+                );
             }
         }
 
@@ -39,16 +51,25 @@ function handleVisibilityChange(): void {
     }
 
     for (const context of suspendedByVisibility) {
-        suspendedByVisibility.delete(context);
+        // Only act on contexts whose suspend() has already settled; one
+        // still in flight resumes itself once it settles (see above), so
+        // deleting it from the set here would drop it while visible.
         if (context.state === "suspended") {
+            suspendedByVisibility.delete(context);
             void context.resume().catch(() => {});
         }
     }
 
     for (const element of pausedByVisibility) {
-        pausedByVisibility.delete(element);
         if (element.paused) {
-            void element.play().catch(() => {});
+            // Keep tracking on rejection so the next visibility toggle
+            // retries the play() instead of leaving it silently paused.
+            void element.play().then(
+                () => pausedByVisibility.delete(element),
+                () => {}
+            );
+        } else {
+            pausedByVisibility.delete(element);
         }
     }
 }
