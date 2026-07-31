@@ -41,14 +41,14 @@ function handleVisibilityChange(): void {
     for (const context of suspendedByVisibility) {
         suspendedByVisibility.delete(context);
         if (context.state === "suspended") {
-            void context.resume();
+            void context.resume().catch(() => {});
         }
     }
 
     for (const element of pausedByVisibility) {
         pausedByVisibility.delete(element);
         if (element.paused) {
-            void element.play();
+            void element.play().catch(() => {});
         }
     }
 }

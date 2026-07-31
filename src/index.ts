@@ -8,6 +8,7 @@ import { getEnvironment, isTestEnvironment } from "./utils.js";
 // New clean names
 export { getConfig, getConfigValue } from "./modules/config.js";
 export { reportResult } from "./modules/result.js";
+export { registerAudioContext, registerAudioElement } from "./modules/audioVisibility.js";
 export { getUserData } from "./modules/userData.js";
 export { loadingDone } from "./modules/loadingDone.js";
 export { seededRandom, patchSeed } from "./modules/random.js";
