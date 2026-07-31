@@ -170,11 +170,17 @@ describe("visibility-driven audio pause/resume", () => {
     });
 
     describe("initializeSDK() listener registration", () => {
-        it("registers the visibilitychange listener exactly once even when called twice", () => {
+        it("registers the visibilitychange listener exactly once even when called twice", async () => {
+            // The module holds a `listenerInstalled` guard at module scope, so
+            // reset the registry and re-import to get a fresh, unregistered
+            // instance for this test — matching loadingDone.test.ts.
+            jest.resetModules();
+            const { initializeSDK: freshInitializeSDK } = await import("../index");
+
             const addSpy = jest.spyOn(document, "addEventListener");
 
-            initializeSDK();
-            initializeSDK();
+            freshInitializeSDK();
+            freshInitializeSDK();
 
             const visibilityChangeRegistrations = addSpy.mock.calls.filter(
                 ([eventName]) => eventName === "visibilitychange"
