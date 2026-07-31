@@ -169,6 +169,45 @@ describe("visibility-driven audio pause/resume", () => {
         });
     });
 
+    describe("in-flight suspend() race", () => {
+        it("resumes a context once its in-flight suspend() settles after the tab already became visible again", async () => {
+            initializeSDK();
+
+            let resolveSuspend!: () => void;
+            const ctx = {
+                state: "running" as string,
+                suspend: jest.fn(
+                    () =>
+                        new Promise<void>((resolve) => {
+                            resolveSuspend = resolve;
+                        })
+                ),
+                resume: jest.fn(() => {
+                    ctx.state = "running";
+                    return Promise.resolve();
+                }),
+            } as unknown as AudioContext & { state: string };
+            registerAudioContext(ctx);
+
+            setHidden(true);
+            expect(ctx.suspend).toHaveBeenCalledTimes(1);
+
+            // Tab becomes visible again before suspend() has settled.
+            setHidden(false);
+            expect(ctx.resume).not.toHaveBeenCalled();
+
+            // suspend() finally settles — mirroring the real AudioContext
+            // contract, state flips to "suspended" once it does — while the
+            // tab is still visible.
+            ctx.state = "suspended";
+            resolveSuspend();
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(ctx.resume).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe("initializeSDK() listener registration", () => {
         it("registers the visibilitychange listener exactly once even when called twice", async () => {
             // The module holds a `listenerInstalled` guard at module scope, so
