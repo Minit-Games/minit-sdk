@@ -202,13 +202,21 @@ Max **25** entries. Each entry:
 | `valueType` | One of `string`, `number`, `boolean`, `color`. |
 | `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive) or the whole `config` is skipped. |
 | `description` | Optional string, max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
-| `range` | Optional array of allowed string values. `value` must be one of them. |
+| `range` | Optional discrete allow-list of string values, displayed as a dropdown. `value` must be one of them. Cannot be combined with `min`, `max`, `minLength`, or `maxLength` on the same config key. |
+| `min` | Optional inclusive minimum for `number` values. Accepts integers or floats. |
+| `max` | Optional inclusive maximum for `number` values. Accepts integers or floats. |
+| `minLength` | Optional inclusive minimum length for `string` values. Must be a non-negative integer. |
+| `maxLength` | Optional inclusive maximum length for `string` values. Must be a non-negative integer. |
+
+Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound. A config key cannot declare both `range` and any bound; doing so is a validation error at upload.
+
+Bounds are enforced before a config value reaches the game. They do not change the runtime contract: `getConfigValue` still returns the already-resolved value as a string (or `undefined`).
 
 ```json
 {
   "config": [
-    { "key": "startScore", "valueType": "number", "value": "10" },
-    { "key": "playerName", "valueType": "string", "value": "Tester" },
+    { "key": "startScore", "valueType": "number", "value": "10", "min": 0.5, "max": 100.5 },
+    { "key": "playerName", "valueType": "string", "value": "Tester", "minLength": 2, "maxLength": 20 },
     { "key": "hardMode", "valueType": "boolean", "value": "false" },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
     { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
