@@ -208,7 +208,7 @@ Max **25** entries. Each entry:
 | `minLength` | Optional inclusive minimum length for `string` values. Must be a non-negative integer. |
 | `maxLength` | Optional inclusive maximum length for `string` values. Must be a non-negative integer. |
 
-Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound. A config key cannot declare both `range` and any bound; doing so is a validation error at upload.
+Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound. A config key cannot declare both `range` and any bound — like other malformed `config` entries, this makes `config` invalid at upload, so it's skipped while the rest of `meta.json` still prefills.
 
 Bounds are enforced before a config value reaches the game. They do not change the runtime contract: `getConfigValue` still returns the already-resolved value as a string (or `undefined`).
 
