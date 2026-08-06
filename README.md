@@ -21,8 +21,10 @@ import { initializeSDK, getConfigValue, reportResult, loadingDone } from '@minit
 // background and meta-tag injection (see API overview below).
 initializeSDK();
 
-// Read URL-param config (passed by the app). Returns a string (or
-// undefined if the key is missing and no default is supplied) —
+// Read a config value the host passed in as a URL param — the knobs
+// you declared in meta.json's `config` (see Game metadata below), which
+// is what lets other creators post mods of your game. Returns a string
+// (or undefined if the key is missing and no default is supplied) —
 // coerce with Number(...) / parseInt(...) for numeric mods.
 const difficulty = getConfigValue('difficulty', 'normal');
 
@@ -189,40 +191,108 @@ All fields below — including `config` (see next section) — are optional. Mis
 | `controls` | How the player controls the game. Markdown. 2–4 bullets covering inputs and their effects. |
 | `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. |
 | `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. |
+| `resultSorting` | How results are ranked — `"highestScore"` (default), `"lowestScore"`, `"fastestTime"`, or `"slowestTime"`. See below. |
+| `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
+| `config` | Array of tunable values the game exposes. See [`config`](#config). |
+
+Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
+
+### `resultSorting`
+
+Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Minit form:
+
+| Value | Meaning |
+| --- | --- |
+| `"highestScore"` | Highest score wins — the default when `resultSorting` is absent or invalid. |
+| `"lowestScore"` | Lowest score wins (golf-style). |
+| `"fastestTime"` | Fastest run wins — the reported number is treated as a time, not points. |
+| `"slowestTime"` | Slowest run wins — likewise a time. |
+
+This only sets the **initial** choice; the creator can still change it on the form before publishing. It does not change what your game passes to `reportResult(...)` — you always report a single number, and this is how the platform ranks and labels it. An unrecognised value is dropped silently and falls back to `"highestScore"`, leaving the rest of `meta.json` intact.
 
 ### `config`
 
 An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Project's** config definitions (not per-post values).
 
+#### What config values are, and what they're for
+
+A config value is a named, typed knob your game reads at runtime via [`getConfigValue()`](#core-entry-point) — a starting score, a difficulty preset, a theme color, an enemy speed. You declare the full set once here; the value each player actually gets is decided per post.
+
+Why expose them:
+
+- **Superposting / mods** — other creators post their own variation of your game (same build, different values) without touching your code. A game with no declared `config` has nothing to vary, so the console renders the "Allow Superposting" toggle disabled.
+- **Your own variants** — post the same build several times with different values (easy / hard, seasonal palette) instead of rebuilding and re-uploading.
+
+How a value gets from `meta.json` into the running game:
+
+1. You declare it in `meta.json` and upload the ZIP → the console stores it as a **Project** config definition.
+2. Each post of that project stores only the values it overrides; unset keys keep the declared default.
+3. At play time the host appends **every** resolved key to the game URL as a query param — on the app and on the web player alike.
+4. Your game reads it with `getConfigValue('key', 'fallback')`.
+
+Practical notes:
+
+- **Values always arrive as strings.** `"10"`, `"true"`, `"#f15a24"` — coerce with `Number(...)` / `=== 'true'` before use. See [Common mistakes](#common-mistakes-ai-assistants-make).
+- **Still pass a default.** Every declared key is injected at play time, but a default keeps local dev and direct-URL testing working.
+- **Test locally by appending the param yourself** — `index.html?difficulty=hard&startScore=50`.
+- **Pick knobs that change how the game feels**, and keep it to a handful. Bound them (`min`/`max`, `minLength`/`maxLength`, or `range`) so a mod can't produce an unplayable game, and set `"moddable": false` on anything other creators shouldn't touch.
+- `userData` is a reserved key and is never readable through `getConfigValue()` — see [Persistent user data](#persistent-user-data).
+
+```ts
+// meta.json declares: { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100 }
+const startScore = Number(getConfigValue('startScore', '10'));
+const hardMode = getConfigValue('hardMode', 'false') === 'true';
+```
+
+#### Entry format
+
 Max **25** entries. Each entry:
 
-| Key | Description |
-| --- | --- |
-| `key` | Non-empty string. Must be unique across entries. |
-| `valueType` | One of `string`, `number`, `boolean`, `color`. |
-| `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive) or the whole `config` is skipped. |
-| `description` | Optional string, max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
-| `range` | Optional discrete allow-list of string values, displayed as a dropdown. `value` must be one of them. Cannot be combined with `min`, `max`, `minLength`, or `maxLength` on the same config key. |
-| `min` | Optional inclusive minimum for `number` values. Accepts integers or floats. |
-| `max` | Optional inclusive maximum for `number` values. Accepts integers or floats. |
-| `minLength` | Optional inclusive minimum length for `string` values. Must be a non-negative integer. |
-| `maxLength` | Optional inclusive maximum length for `string` values. Must be a non-negative integer. |
+| Key | Required? | Description |
+| --- | --- | --- |
+| `key` | Yes | Non-empty string, compared after trimming surrounding whitespace. Must be unique across entries. |
+| `valueType` | Yes | One of `string`, `number`, `boolean`, `color`. |
+| `value` | At least one of `value` / `defaultValue` | The default value. Either the native JSON type or its string form works — `10` and `"10"`, `false` and `"false"` all normalize the same way. A boolean's string form must be exactly `"true"` or `"false"` (`"TRUE"` / `"1"` do not normalize), and a number's must parse to a finite number. A `string` value must actually be a string, and a `color` must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive). Sticking to strings everywhere is the safe habit, since that is what the game reads back at runtime. |
+| `defaultValue` | — | Alias for `value`. If both are present, `value` wins. |
+| `description` | No | Max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
+| `range` | No | Discrete allow-list of values, each matching `valueType`, displayed as a dropdown. `value` must be one of them. Mutually exclusive with the bound pairs below. |
+| `min` / `max` | No | Inclusive value bounds for `number` entries — integers or floats, written as JSON numbers (not strings, unlike `value`). `min` must be ≤ `max`. |
+| `minLength` / `maxLength` | No | Inclusive length bounds for `string` entries, written as non-negative JSON integers. `minLength` must be ≤ `maxLength`. |
+| `moddable` | No | `true` = other creators may change this value in their mods, `false` = locked to your declared value, omitted = unmarked (treated as open, for back-compat). Locks only apply to other creators — you always have full access to your own game's values. |
 
-Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound. A config key cannot declare both `range` and any bound — like other malformed `config` entries, this makes `config` invalid at upload, so it's skipped while the rest of `meta.json` still prefills.
+Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound.
+
+Anything the rules above reject — a duplicate key, a `range` alongside a bound, a `min` on a `string`, a `value` outside its own `range`, a 26th entry — invalidates the **whole** `config` block, not just the offending entry. Like any other malformed `config`, it is skipped at upload while the rest of `meta.json` still prefills.
 
 Bounds are enforced before a config value reaches the game. They do not change the runtime contract: `getConfigValue` still returns the already-resolved value as a string (or `undefined`).
 
 ```json
 {
   "config": [
-    { "key": "startScore", "valueType": "number", "value": "10", "min": 0.5, "max": 100.5 },
+    { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100, "moddable": true },
+    { "key": "gravity", "valueType": "number", "value": "9.81", "min": 0.5, "max": 20.5 },
     { "key": "playerName", "valueType": "string", "value": "Tester", "minLength": 2, "maxLength": 20 },
-    { "key": "hardMode", "valueType": "boolean", "value": "false" },
+    { "key": "hardMode", "valueType": "boolean", "value": "false", "moddable": false },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
     { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
   ]
 }
 ```
+
+### JSON Schema
+
+A machine-readable JSON Schema (draft 2020-12) for the whole file ships in this repo at [`schemas/meta.schema.json`](./schemas/meta.schema.json). Point your editor at it to get completion and inline validation while authoring `meta.json`:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Minit-Games/minit-sdk/master/schemas/meta.schema.json",
+  "title": "Fruit Drop 🍉🗡️"
+}
+```
+
+The `$schema` key is ignored by the Creator Console's parser, so it is safe to leave in the uploaded file.
+
+The schema encodes every rule described above — the per-type `value` shapes, the type restrictions on each bound pair, and the mutually-exclusive `range`/bounds rule — plus the top-level fields. Three rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, and `min ≤ max` / `minLength ≤ maxLength`.
 
 ### ZIP placement
 
@@ -267,7 +337,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
-| `getConfigValue(key, default?)`  | Read a URL-param config value injected by the app                                                                                               |
+| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config))                                              |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |

@@ -1,0 +1,172 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/Minit-Games/minit-sdk/master/schemas/meta.schema.json",
+    "title": "Minit game meta.json",
+    "description": "Schema for the meta.json shipped at the root of a Minit game ZIP, next to index.html. Mirrors the Creator Console's parser (MetaJsonSchema / DropConfigSchema in minit-root's @minit/shared).",
+    "type": "object",
+    "properties": {
+        "title": {
+            "description": "Display title. Convention: <Game name> <two thematically matching emojis>.",
+            "type": "string"
+        },
+        "controls": {
+            "description": "How the player controls the game. Markdown, 2-4 bullets.",
+            "type": "string"
+        },
+        "logic": {
+            "description": "Core rules and loop. Markdown, 2-4 bullets.",
+            "type": "string"
+        },
+        "description": {
+            "description": "Free-form Markdown body describing the game.",
+            "type": "string"
+        },
+        "schemaVersion": {
+            "description": "Forward-compat hook. Nothing branches on it today; unknown values stay valid.",
+            "type": ["string", "number"]
+        },
+        "resultSorting": {
+            "description": "How this game's result list is ordered.",
+            "enum": ["highestScore", "lowestScore", "fastestTime", "slowestTime"]
+        },
+        "config": {
+            "description": "Tunable values the game exposes to creators. At least one entry is required before Superposting can be enabled.",
+            "type": "array",
+            "maxItems": 25,
+            "items": { "$ref": "#/$defs/configEntry" }
+        }
+    },
+    "additionalProperties": true,
+    "$defs": {
+        "numberLike": {
+            "anyOf": [
+                { "type": "number" },
+                { "type": "string", "pattern": "^\\s*[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?\\s*$" }
+            ]
+        },
+        "booleanLike": {
+            "anyOf": [{ "type": "boolean" }, { "enum": ["true", "false"] }]
+        },
+        "stringValue": { "type": "string" },
+        "colorValue": {
+            "description": "Hex color, #RRGGBB or #RRGGBBAA, case-insensitive.",
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$"
+        },
+        "configEntry": {
+            "type": "object",
+            "required": ["key", "valueType"],
+            "properties": {
+                "key": {
+                    "description": "Unique within config, compared after trimming surrounding whitespace. Must contain at least one non-whitespace character, since an all-whitespace key trims to empty.",
+                    "type": "string",
+                    "pattern": "\\S"
+                },
+                "valueType": { "enum": ["string", "number", "boolean", "color"] },
+                "description": {
+                    "description": "Human-readable label, max 100 characters. A longer one is dropped silently; the entry is still accepted.",
+                    "type": "string",
+                    "maxLength": 100
+                },
+                "value": {
+                    "description": "The default value. The string form of a number or boolean is accepted and normalized (\"10\" -> 10, \"true\" -> true).",
+                    "type": ["string", "number", "boolean"]
+                },
+                "defaultValue": {
+                    "description": "Alias for value. If both are present, value wins.",
+                    "type": ["string", "number", "boolean"]
+                },
+                "range": {
+                    "description": "Fixed list of allowed values. Mutually exclusive with min/max and minLength/maxLength; value must be one of the members.",
+                    "type": "array",
+                    "items": { "type": ["string", "number", "boolean"] }
+                },
+                "min": {
+                    "description": "Lower bound. Only valid when valueType is number.",
+                    "type": "number"
+                },
+                "max": {
+                    "description": "Upper bound. Only valid when valueType is number.",
+                    "type": "number"
+                },
+                "minLength": {
+                    "description": "Minimum length. Only valid when valueType is string.",
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "maxLength": {
+                    "description": "Maximum length. Only valid when valueType is string.",
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "moddable": {
+                    "description": "true = other creators may change this value in their mods, false = locked, absent = unmarked (treated as open).",
+                    "type": "boolean"
+                }
+            },
+            "additionalProperties": false,
+            "anyOf": [{ "required": ["value"] }, { "required": ["defaultValue"] }],
+            "allOf": [
+                {
+                    "if": { "required": ["range"] },
+                    "then": {
+                        "properties": {
+                            "min": false,
+                            "max": false,
+                            "minLength": false,
+                            "maxLength": false
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "valueType": { "not": { "const": "number" } } } },
+                    "then": { "properties": { "min": false, "max": false } }
+                },
+                {
+                    "if": { "properties": { "valueType": { "not": { "const": "string" } } } },
+                    "then": { "properties": { "minLength": false, "maxLength": false } }
+                },
+                {
+                    "if": { "properties": { "valueType": { "const": "number" } }, "required": ["valueType"] },
+                    "then": {
+                        "properties": {
+                            "value": { "$ref": "#/$defs/numberLike" },
+                            "defaultValue": { "$ref": "#/$defs/numberLike" },
+                            "range": { "items": { "$ref": "#/$defs/numberLike" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "valueType": { "const": "boolean" } }, "required": ["valueType"] },
+                    "then": {
+                        "properties": {
+                            "value": { "$ref": "#/$defs/booleanLike" },
+                            "defaultValue": { "$ref": "#/$defs/booleanLike" },
+                            "range": { "items": { "$ref": "#/$defs/booleanLike" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "valueType": { "const": "string" } }, "required": ["valueType"] },
+                    "then": {
+                        "properties": {
+                            "value": { "$ref": "#/$defs/stringValue" },
+                            "defaultValue": { "$ref": "#/$defs/stringValue" },
+                            "range": { "items": { "$ref": "#/$defs/stringValue" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "valueType": { "const": "color" } }, "required": ["valueType"] },
+                    "then": {
+                        "properties": {
+                            "value": { "$ref": "#/$defs/colorValue" },
+                            "defaultValue": { "$ref": "#/$defs/colorValue" },
+                            "range": { "items": { "$ref": "#/$defs/colorValue" } }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
