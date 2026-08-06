@@ -216,6 +216,21 @@ Max **25** entries. Each entry:
 }
 ```
 
+### JSON Schema
+
+A machine-readable JSON Schema (draft 2020-12) for the whole file ships in this repo at [`schemas/meta.schema.json`](./schemas/meta.schema.json). Point your editor at it to get completion and inline validation while authoring `meta.json`:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/Minit-Games/minit-sdk/master/schemas/meta.schema.json",
+  "title": "Fruit Drop 🍉🗡️"
+}
+```
+
+The `$schema` key is ignored by the Creator Console's parser, so it is safe to leave in the uploaded file.
+
+The schema also covers the optional per-entry fields the table above omits — `defaultValue` (an alias for `value`; `value` wins if both are present), `min` / `max` (numbers only), `minLength` / `maxLength` (strings only), and `moddable` (`true` open / `false` locked / absent unmarked) — plus the top-level `schemaVersion` and `resultSorting` keys. Three rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, and `min ≤ max` / `minLength ≤ maxLength`.
+
 ### ZIP placement
 
 `meta.json` must sit at the **top level of the ZIP**, not nested inside any folder within the archive — it must be next to `index.html`. The console reads it directly from the ZIP's top level when processing the upload.
