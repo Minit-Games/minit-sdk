@@ -58,9 +58,9 @@
             "required": ["key", "valueType"],
             "properties": {
                 "key": {
-                    "description": "Unique within config, compared after trimming surrounding whitespace.",
+                    "description": "Unique within config, compared after trimming surrounding whitespace. Must contain at least one non-whitespace character, since an all-whitespace key trims to empty.",
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "\\S"
                 },
                 "valueType": { "enum": ["string", "number", "boolean", "color"] },
                 "description": {
