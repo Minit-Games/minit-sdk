@@ -21,8 +21,10 @@ import { initializeSDK, getConfigValue, reportResult, loadingDone } from '@minit
 // background and meta-tag injection (see API overview below).
 initializeSDK();
 
-// Read URL-param config (passed by the app). Returns a string (or
-// undefined if the key is missing and no default is supplied) —
+// Read a config value the host passed in as a URL param — the knobs
+// you declared in meta.json's `config` (see Game metadata below), which
+// is what lets other creators post mods of your game. Returns a string
+// (or undefined if the key is missing and no default is supplied) —
 // coerce with Number(...) / parseInt(...) for numeric mods.
 const difficulty = getConfigValue('difficulty', 'normal');
 
@@ -194,6 +196,38 @@ All fields below — including `config` (see next section) — are optional. Mis
 
 An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Project's** config definitions (not per-post values).
 
+#### What config values are, and what they're for
+
+A config value is a named, typed knob your game reads at runtime via [`getConfigValue()`](#core-entry-point) — a starting score, a difficulty preset, a theme color, an enemy speed. You declare the full set once here; the value each player actually gets is decided per post.
+
+Why expose them:
+
+- **Superposting / mods** — other creators post their own variation of your game (same build, different values) without touching your code. A game with no declared `config` has nothing to vary, so the console renders the "Allow Superposting" toggle disabled.
+- **Your own variants** — post the same build several times with different values (easy / hard, seasonal palette) instead of rebuilding and re-uploading.
+
+How a value gets from `meta.json` into the running game:
+
+1. You declare it in `meta.json` and upload the ZIP → the console stores it as a **Project** config definition.
+2. Each post of that project stores only the values it overrides; unset keys keep the declared default.
+3. At play time the host appends **every** resolved key to the game URL as a query param — on the app and on the web player alike.
+4. Your game reads it with `getConfigValue('key', 'fallback')`.
+
+Practical notes:
+
+- **Values always arrive as strings.** `"10"`, `"true"`, `"#f15a24"` — coerce with `Number(...)` / `=== 'true'` before use. See [Common mistakes](#common-mistakes-ai-assistants-make).
+- **Still pass a default.** Every declared key is injected at play time, but a default keeps local dev and direct-URL testing working.
+- **Test locally by appending the param yourself** — `index.html?difficulty=hard&startScore=50`.
+- **Pick knobs that change how the game feels**, and keep it to a handful. Bound them (`min`/`max`, `minLength`/`maxLength`, or `range`) so a mod can't produce an unplayable game, and set `"moddable": false` on anything other creators shouldn't touch.
+- `userData` is a reserved key and is never readable through `getConfigValue()` — see [Persistent user data](#persistent-user-data).
+
+```ts
+// meta.json declares: { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100 }
+const startScore = Number(getConfigValue('startScore', '10'));
+const hardMode = getConfigValue('hardMode', 'false') === 'true';
+```
+
+#### Entry format
+
 Max **25** entries. Each entry:
 
 | Key | Description |
@@ -274,7 +308,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
-| `getConfigValue(key, default?)`  | Read a URL-param config value injected by the app                                                                                               |
+| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config))                                              |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
