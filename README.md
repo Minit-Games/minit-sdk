@@ -191,6 +191,24 @@ All fields below — including `config` (see next section) — are optional. Mis
 | `controls` | How the player controls the game. Markdown. 2–4 bullets covering inputs and their effects. |
 | `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. |
 | `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. |
+| `resultSorting` | How results are ranked — `"highestScore"` (default), `"lowestScore"`, `"fastestTime"`, or `"slowestTime"`. See below. |
+| `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
+| `config` | Array of tunable values the game exposes. See [`config`](#config). |
+
+Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
+
+### `resultSorting`
+
+Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Minit form:
+
+| Value | Meaning |
+| --- | --- |
+| `"highestScore"` | Highest score wins — the default when `resultSorting` is absent or invalid. |
+| `"lowestScore"` | Lowest score wins (golf-style). |
+| `"fastestTime"` | Fastest run wins — the reported number is treated as a time, not points. |
+| `"slowestTime"` | Slowest run wins — likewise a time. |
+
+This only sets the **initial** choice; the creator can still change it on the form before publishing. It does not change what your game passes to `reportResult(...)` — you always report a single number, and this is how the platform ranks and labels it. An unrecognised value is dropped silently and falls back to `"highestScore"`, leaving the rest of `meta.json` intact.
 
 ### `config`
 
@@ -234,7 +252,7 @@ Max **25** entries. Each entry:
 | --- | --- | --- |
 | `key` | Yes | Non-empty string, compared after trimming surrounding whitespace. Must be unique across entries. |
 | `valueType` | Yes | One of `string`, `number`, `boolean`, `color`. |
-| `value` | At least one of `value` / `defaultValue` | The default value. Either the native JSON type or its string form works — `10` and `"10"`, `false` and `"false"` all normalize the same way. A `string` value must actually be a string, and a `color` must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive). Sticking to strings everywhere is the safe habit, since that is what the game reads back at runtime. |
+| `value` | At least one of `value` / `defaultValue` | The default value. Either the native JSON type or its string form works — `10` and `"10"`, `false` and `"false"` all normalize the same way. A boolean's string form must be exactly `"true"` or `"false"` (`"TRUE"` / `"1"` do not normalize), and a number's must parse to a finite number. A `string` value must actually be a string, and a `color` must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive). Sticking to strings everywhere is the safe habit, since that is what the game reads back at runtime. |
 | `defaultValue` | — | Alias for `value`. If both are present, `value` wins. |
 | `description` | No | Max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
 | `range` | No | Array of allowed values, each matching `valueType`. `value` must be one of them. Mutually exclusive with the bound pairs below. |
