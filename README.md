@@ -255,19 +255,23 @@ Max **25** entries. Each entry:
 | `value` | At least one of `value` / `defaultValue` | The default value. Either the native JSON type or its string form works — `10` and `"10"`, `false` and `"false"` all normalize the same way. A boolean's string form must be exactly `"true"` or `"false"` (`"TRUE"` / `"1"` do not normalize), and a number's must parse to a finite number. A `string` value must actually be a string, and a `color` must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive). Sticking to strings everywhere is the safe habit, since that is what the game reads back at runtime. |
 | `defaultValue` | — | Alias for `value`. If both are present, `value` wins. |
 | `description` | No | Max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
-| `range` | No | Array of allowed values, each matching `valueType`. `value` must be one of them. Mutually exclusive with the bound pairs below. |
-| `min` / `max` | No | Value bounds, written as JSON numbers (not strings, unlike `value`). `number` entries only, and `min` must be ≤ `max`. |
-| `minLength` / `maxLength` | No | Length bounds, written as non-negative JSON integers. `string` entries only, and `minLength` must be ≤ `maxLength`. |
+| `range` | No | Discrete allow-list of values, each matching `valueType`, displayed as a dropdown. `value` must be one of them. Mutually exclusive with the bound pairs below. |
+| `min` / `max` | No | Inclusive value bounds for `number` entries — integers or floats, written as JSON numbers (not strings, unlike `value`). `min` must be ≤ `max`. |
+| `minLength` / `maxLength` | No | Inclusive length bounds for `string` entries, written as non-negative JSON integers. `minLength` must be ≤ `maxLength`. |
 | `moddable` | No | `true` = other creators may change this value in their mods, `false` = locked to your declared value, omitted = unmarked (treated as open, for back-compat). Locks only apply to other creators — you always have full access to your own game's values. |
 
-Anything the rules above reject — a duplicate key, a `range` alongside `min`, a `min` on a `string`, a `value` outside its own `range`, a 26th entry — invalidates the **whole** `config` block, not just the offending entry. The rest of `meta.json` still prefills.
+Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound.
+
+Anything the rules above reject — a duplicate key, a `range` alongside a bound, a `min` on a `string`, a `value` outside its own `range`, a 26th entry — invalidates the **whole** `config` block, not just the offending entry. Like any other malformed `config`, it is skipped at upload while the rest of `meta.json` still prefills.
+
+Bounds are enforced before a config value reaches the game. They do not change the runtime contract: `getConfigValue` still returns the already-resolved value as a string (or `undefined`).
 
 ```json
 {
   "config": [
     { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100, "moddable": true },
-    { "key": "playerName", "valueType": "string", "value": "Tester" },
-    { "key": "teamTag", "valueType": "string", "value": "QA", "minLength": 2, "maxLength": 12 },
+    { "key": "gravity", "valueType": "number", "value": "9.81", "min": 0.5, "max": 20.5 },
+    { "key": "playerName", "valueType": "string", "value": "Tester", "minLength": 2, "maxLength": 20 },
     { "key": "hardMode", "valueType": "boolean", "value": "false", "moddable": false },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
     { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
@@ -288,7 +292,7 @@ A machine-readable JSON Schema (draft 2020-12) for the whole file ships in this 
 
 The `$schema` key is ignored by the Creator Console's parser, so it is safe to leave in the uploaded file.
 
-The schema also covers the optional per-entry fields the table above omits — `defaultValue` (an alias for `value`; `value` wins if both are present), `min` / `max` (numbers only), `minLength` / `maxLength` (strings only), and `moddable` (`true` open / `false` locked / absent unmarked) — plus the top-level `schemaVersion` and `resultSorting` keys. Three rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, and `min ≤ max` / `minLength ≤ maxLength`.
+The schema encodes every rule described above — the per-type `value` shapes, the type restrictions on each bound pair, and the mutually-exclusive `range`/bounds rule — plus the top-level fields. Three rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, and `min ≤ max` / `minLength ≤ maxLength`.
 
 ### ZIP placement
 
@@ -334,6 +338,8 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config))                                              |
+| `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
+| `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |

@@ -2,11 +2,13 @@ import { addBackground } from "./modules/background.js";
 import type { Background } from "./modules/background.js";
 import { getConfig } from "./modules/config.js";
 import { applyMetaTags } from "./modules/meta.js";
+import { installAudioVisibilityListener } from "./modules/audioVisibility.js";
 import { getEnvironment, isTestEnvironment } from "./utils.js";
 
 // New clean names
 export { getConfig, getConfigValue } from "./modules/config.js";
 export { reportResult } from "./modules/result.js";
+export { registerAudioContext, registerAudioElement } from "./modules/audioVisibility.js";
 export { getUserData } from "./modules/userData.js";
 export { loadingDone } from "./modules/loadingDone.js";
 export { seededRandom, patchSeed } from "./modules/random.js";
@@ -34,6 +36,8 @@ export interface SDKConfig {
 }
 
 export function initializeSDK(config?: SDKConfig): void {
+
+    installAudioVisibilityListener();
 
     if(config?.metaTags === true)
     {

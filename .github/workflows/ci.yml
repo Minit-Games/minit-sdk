@@ -25,7 +25,15 @@ jobs:
         run: npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        # --omit=dev: scope the gate to what actually ships (dist + licenses per
+        # package.json "files") — devDependencies (jest/ts-jest tooling) never
+        # reach a consumer. Without this, GHSA-mh99-v99m-4gvg (brace-expansion
+        # OOM, patched only >=5.0.8) permanently fails the build: it's pulled in
+        # transitively via jest's glob@7 -> minimatch@3 chain, which is pinned to
+        # brace-expansion ^1.1.7 with no patched 1.x release, and forcing a 1.x
+        # -> 5.x cross-major override risks breaking jest's own brace-expansion
+        # usage for zero shipped-code benefit.
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Type check
         run: npm run check
