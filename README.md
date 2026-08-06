@@ -230,20 +230,27 @@ const hardMode = getConfigValue('hardMode', 'false') === 'true';
 
 Max **25** entries. Each entry:
 
-| Key | Description |
-| --- | --- |
-| `key` | Non-empty string. Must be unique across entries. |
-| `valueType` | One of `string`, `number`, `boolean`, `color`. |
-| `value` | The default value, always a **string** — e.g. a `number` config uses `"10"`, a `boolean` uses `"false"`. A `color` value must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive) or the whole `config` is skipped. |
-| `description` | Optional string, max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
-| `range` | Optional array of allowed string values. `value` must be one of them. |
+| Key | Required? | Description |
+| --- | --- | --- |
+| `key` | Yes | Non-empty string, compared after trimming surrounding whitespace. Must be unique across entries. |
+| `valueType` | Yes | One of `string`, `number`, `boolean`, `color`. |
+| `value` | At least one of `value` / `defaultValue` | The default value. Either the native JSON type or its string form works — `10` and `"10"`, `false` and `"false"` all normalize the same way. A `string` value must actually be a string, and a `color` must be a hex string (`#RRGGBB` or `#RRGGBBAA`, case-insensitive). Sticking to strings everywhere is the safe habit, since that is what the game reads back at runtime. |
+| `defaultValue` | — | Alias for `value`. If both are present, `value` wins. |
+| `description` | No | Max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
+| `range` | No | Array of allowed values, each matching `valueType`. `value` must be one of them. Mutually exclusive with the bound pairs below. |
+| `min` / `max` | No | Value bounds, written as JSON numbers (not strings, unlike `value`). `number` entries only, and `min` must be ≤ `max`. |
+| `minLength` / `maxLength` | No | Length bounds, written as non-negative JSON integers. `string` entries only, and `minLength` must be ≤ `maxLength`. |
+| `moddable` | No | `true` = other creators may change this value in their mods, `false` = locked to your declared value, omitted = unmarked (treated as open, for back-compat). Locks only apply to other creators — you always have full access to your own game's values. |
+
+Anything the rules above reject — a duplicate key, a `range` alongside `min`, a `min` on a `string`, a `value` outside its own `range`, a 26th entry — invalidates the **whole** `config` block, not just the offending entry. The rest of `meta.json` still prefills.
 
 ```json
 {
   "config": [
-    { "key": "startScore", "valueType": "number", "value": "10" },
+    { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100, "moddable": true },
     { "key": "playerName", "valueType": "string", "value": "Tester" },
-    { "key": "hardMode", "valueType": "boolean", "value": "false" },
+    { "key": "teamTag", "valueType": "string", "value": "QA", "minLength": 2, "maxLength": 12 },
+    { "key": "hardMode", "valueType": "boolean", "value": "false", "moddable": false },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
     { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
   ]
