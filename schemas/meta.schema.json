@@ -36,7 +36,7 @@
             "items": { "$ref": "#/$defs/configEntry" }
         },
         "license": {
-            "description": "SPDX license identifier for the bundle's content, or \"proprietary\" for the creator's own content. Absent and \"proprietary\" are deliberately distinct: absent means nothing was declared and is never gated, while \"proprietary\" is an affirmative ownership claim. NC, GPL and AGPL licenses are not allowed to be hosted. Licenses that require notice (MIT, BSD, Zlib, ISC, Apache-2.0, all CC-BY variants) expect a THIRD-PARTY-NOTICES.txt file next to index.html in the ZIP. Any other string is accepted and simply ungated.",
+            "description": "SPDX license identifier for the bundle's content, or \"proprietary\" for the creator's own content. Absent and \"proprietary\" are deliberately distinct: absent means nothing was declared and is never gated, while \"proprietary\" is an affirmative ownership claim. The Console matches the identifier EXACTLY against the recognized list enumerated in this schema, and gates only on those: of the recognized identifiers, the NC variants and GPL-2.0/GPL-3.0/AGPL-3.0 cannot be hosted, and MIT, BSD-2-Clause, BSD-3-Clause, Zlib, ISC, Apache-2.0 and the CC-BY variants expect a THIRD-PARTY-NOTICES.txt file next to index.html in the ZIP. Any string outside that list — including an SPDX variant the list does not carry, such as GPL-3.0-only — is accepted and left ungated, exactly like an absent license.",
             "$ref": "#/$defs/licenseId"
         },
         "credits": {
@@ -52,45 +52,61 @@
     },
     "additionalProperties": true,
     "$defs": {
+        "licenseHostable": {
+            "enum": [
+                "proprietary",
+                "CC0-1.0",
+                "Unlicense",
+                "MIT",
+                "BSD-2-Clause",
+                "BSD-3-Clause",
+                "Zlib",
+                "ISC",
+                "Apache-2.0",
+                "CC-BY-4.0"
+            ]
+        },
+        "licenseModdingRestricted": {
+            "enum": ["CC-BY-SA-4.0", "CC-BY-ND-4.0"]
+        },
+        "licenseNotHostable": {
+            "enum": [
+                "CC-BY-NC-4.0",
+                "CC-BY-NC-SA-4.0",
+                "CC-BY-NC-ND-4.0",
+                "GPL-2.0",
+                "GPL-3.0",
+                "AGPL-3.0"
+            ]
+        },
+        "licenseRecognized": {
+            "anyOf": [
+                { "$ref": "#/$defs/licenseHostable" },
+                { "$ref": "#/$defs/licenseModdingRestricted" },
+                { "$ref": "#/$defs/licenseNotHostable" }
+            ]
+        },
         "licenseId": {
             "type": "string",
             "anyOf": [
                 {
                     "title": "Hostable — modding unrestricted",
-                    "enum": [
-                        "proprietary",
-                        "CC0-1.0",
-                        "Unlicense",
-                        "MIT",
-                        "BSD-2-Clause",
-                        "BSD-3-Clause",
-                        "Zlib",
-                        "ISC",
-                        "Apache-2.0",
-                        "CC-BY-4.0"
-                    ]
+                    "$ref": "#/$defs/licenseHostable"
                 },
                 {
                     "title": "Hostable — modding restricted",
                     "description": "CC-BY-SA-4.0 is flagged for review and its derivatives inherit ShareAlike; CC-BY-ND-4.0 forces modding off.",
-                    "enum": ["CC-BY-SA-4.0", "CC-BY-ND-4.0"]
+                    "$ref": "#/$defs/licenseModdingRestricted"
                 },
                 {
                     "title": "Not hostable — the upload will be rejected",
                     "description": "NonCommercial variants conflict with ads and the creator fund; GPL/AGPL are rejected pending counsel (app-store distribution and network-use source disclosure).",
-                    "enum": [
-                        "CC-BY-NC-4.0",
-                        "CC-BY-NC-SA-4.0",
-                        "CC-BY-NC-ND-4.0",
-                        "GPL-2.0",
-                        "GPL-3.0",
-                        "AGPL-3.0"
-                    ]
+                    "$ref": "#/$defs/licenseNotHostable"
                 },
                 {
                     "title": "Any other identifier",
-                    "description": "Accepted by the parser and never gated, exactly like an absent license.",
-                    "type": "string"
+                    "description": "Any string outside the recognized list above, including an SPDX variant the list does not carry (GPL-3.0-only, Apache-2.0-with-LLVM-exception, a typo). Accepted by the parser and never gated, exactly like an absent license.",
+                    "not": { "$ref": "#/$defs/licenseRecognized" }
                 }
             ]
         },

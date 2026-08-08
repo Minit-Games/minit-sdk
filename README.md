@@ -310,7 +310,9 @@ If your game bundle includes third-party assets or libraries — sprites, music,
 | `"proprietary"` | Yes | Yes | Your own content |
 | *absent* | Yes | Yes | Nothing declared — no gate, no warning |
 
-A license in the **No** hosting rows fails the upload. Any identifier not in the table is accepted and ungated, exactly like an absent one — so a typo silently loses you the declaration rather than erroring.
+A license in the **No** hosting rows fails the upload.
+
+**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry. `GPL-3.0-only` and `GPL-3.0-or-later` are the ones to watch: both are current SPDX spellings of a license the table rejects as `GPL-3.0`, and neither is recognized, so declaring one buys you no gate and no warning. Use the exact spelling from the table.
 
 #### `THIRD-PARTY-NOTICES.txt`
 
