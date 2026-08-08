@@ -38,3 +38,13 @@ const _minitApiNoSdkVersion: MinitApi = {
     reportResult: () => {},
     loadingDone: () => {},
 };
+
+// Invalid: `sdkVersion` must be an excess property on MinitApi, not merely
+// omittable. Assigning an object literal that includes it relies on
+// TypeScript's excess-property check, which only fires for a property that
+// does not exist on the target type at all. If `sdkVersion` is reintroduced
+// — even as an optional field — the literal below stops being excess and
+// this assertion stops erroring, so the `@ts-expect-error` becomes unused
+// and `npm run check` fails, catching the regression this test guards against.
+// @ts-expect-error sdkVersion must not be a valid MinitApi property
+const _minitApiWithSdkVersion: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, sdkVersion: "1.7.2" };
