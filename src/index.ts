@@ -57,7 +57,7 @@ export function initializeSDK(config?: SDKConfig): void {
         window.dropApi = window.minit;
     }
 
-    console.log("[MinitSDK] Applied for environment:", getEnvironment(), ", SDK Version:", window.minit?.sdkVersion || "unknown");
+    console.log("[MinitSDK] Applied for environment:", getEnvironment());
     if(isTestEnvironment()) {
         console.log("[MinitSDK] Config", getConfig());
     }
