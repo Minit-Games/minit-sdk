@@ -25,7 +25,6 @@ export type HostResultOptions = Omit<ResultOptions, 'userData'> & {
 
 export type MinitApi = {
     environment: "app" | "web",
-    sdkVersion: string,
     dropConfig: Record<string, string>,
     userData?: string,
 

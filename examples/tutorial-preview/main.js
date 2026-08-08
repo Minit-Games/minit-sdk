@@ -2,7 +2,7 @@ import { shouldShowTutorial } from '/dist/modules/tutorial/gating.js';
 import { createTutorialOverlay } from '/dist/modules/tutorial/overlay.js';
 
 // Minimal host shim for local preview (no bundler).
-window.minit = window.minit || { sdkVersion: 'preview' };
+window.minit = window.minit || {};
 
 function reportResult(score, opts) {
 	console.log('[preview] reportResult', score, opts);

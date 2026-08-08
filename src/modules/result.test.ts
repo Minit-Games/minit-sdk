@@ -8,7 +8,6 @@ function setupMinit(userData?: string): void {
     calls = [];
     window.minit = {
         environment: "app",
-        sdkVersion: "1.3.0",
         dropConfig: {},
         userData,
         reportResult: (result: number | string, options?: HostResultOptions) => {
@@ -122,7 +121,6 @@ describe("reportResult — web environment dispatch", () => {
         calls = [];
         window.minit = {
             environment: "web",
-            sdkVersion: "1.3.0",
             dropConfig: {},
             reportResult: (result: number | string, options?: HostResultOptions) => {
                 calls.push({ result, options });
@@ -141,7 +139,6 @@ describe("reportResult — web environment dispatch", () => {
         calls = [];
         window.minit = {
             environment: "web",
-            sdkVersion: "1.3.0",
             dropConfig: {},
             reportResult: (result: number | string, options?: HostResultOptions) => {
                 calls.push({ result, options });
@@ -158,7 +155,6 @@ describe("reportResult — web environment dispatch", () => {
         calls = [];
         window.minit = {
             environment: "web",
-            sdkVersion: "1.3.0",
             dropConfig: {},
             reportResult: (result: number | string, options?: HostResultOptions) => {
                 calls.push({ result, options });
