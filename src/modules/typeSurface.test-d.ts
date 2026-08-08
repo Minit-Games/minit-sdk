@@ -29,11 +29,9 @@ const _opts4: ResultOptions = { userData: { key: "foo", value: "bar" } };
 //
 // `sdkVersion` was a behavior-inert host-contract field that drifted three
 // ways across surfaces (1.3.0 live / 1.0.0 legacy stub / 1.7.2 npm package)
-// with nothing branching on it. It is being removed from MinitApi entirely:
-// constructing a MinitApi value WITHOUT it must compile cleanly. Until the
-// field is actually removed from MinitApi, `sdkVersion` stays a required
-// string, so the object below (which omits it) is a genuine, UNSUPPRESSED
-// compile error today — the expected red state for this ticket.
+// with nothing branching on it, so it was removed from MinitApi entirely.
+// Constructing a MinitApi value WITHOUT it must compile cleanly — this guards
+// against `sdkVersion` being reintroduced as a required field.
 const _minitApiNoSdkVersion: MinitApi = {
     environment: "web",
     dropConfig: {},
