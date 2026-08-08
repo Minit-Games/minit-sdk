@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://raw.githubusercontent.com/Minit-Games/minit-sdk/master/schemas/meta.schema.json",
     "title": "Minit game meta.json",
-    "description": "Schema for the meta.json shipped at the root of a Minit game ZIP, next to index.html. Mirrors the Creator Console's parser (MetaJsonSchema / DropConfigSchema in minit-root's @minit/shared).",
+    "description": "Schema for the meta.json shipped at the root of a Minit game ZIP, next to index.html. Mirrors the Creator Console's parser (MetaJsonSchema / DropConfigSchema / licensePolicy in minit-root's @minit/shared).",
     "type": "object",
     "properties": {
         "title": {
@@ -34,10 +34,66 @@
             "type": "array",
             "maxItems": 25,
             "items": { "$ref": "#/$defs/configEntry" }
+        },
+        "license": {
+            "description": "SPDX license identifier for the bundle's content, or \"proprietary\" for the creator's own content. Absent and \"proprietary\" are deliberately distinct: absent means nothing was declared and is never gated, while \"proprietary\" is an affirmative ownership claim. NC, GPL and AGPL licenses are not allowed to be hosted. Licenses that require notice (MIT, BSD, Zlib, ISC, Apache-2.0, all CC-BY variants) expect a THIRD-PARTY-NOTICES.txt file next to index.html in the ZIP. Any other string is accepted and simply ungated.",
+            "$ref": "#/$defs/licenseId"
+        },
+        "credits": {
+            "description": "Freeform player-facing credit line for third-party assets. Does NOT replace THIRD-PARTY-NOTICES.txt — a notice-requiring license needs both.",
+            "type": "string"
+        },
+        "sourceUrl": {
+            "description": "URL pointing at the original asset/library source. Must start with http:// or https://.",
+            "type": "string",
+            "format": "uri",
+            "pattern": "^[Hh][Tt][Tt][Pp][Ss]?://"
         }
     },
     "additionalProperties": true,
     "$defs": {
+        "licenseId": {
+            "type": "string",
+            "anyOf": [
+                {
+                    "title": "Hostable — modding unrestricted",
+                    "enum": [
+                        "proprietary",
+                        "CC0-1.0",
+                        "Unlicense",
+                        "MIT",
+                        "BSD-2-Clause",
+                        "BSD-3-Clause",
+                        "Zlib",
+                        "ISC",
+                        "Apache-2.0",
+                        "CC-BY-4.0"
+                    ]
+                },
+                {
+                    "title": "Hostable — modding restricted",
+                    "description": "CC-BY-SA-4.0 is flagged for review and its derivatives inherit ShareAlike; CC-BY-ND-4.0 forces modding off.",
+                    "enum": ["CC-BY-SA-4.0", "CC-BY-ND-4.0"]
+                },
+                {
+                    "title": "Not hostable — the upload will be rejected",
+                    "description": "NonCommercial variants conflict with ads and the creator fund; GPL/AGPL are rejected pending counsel (app-store distribution and network-use source disclosure).",
+                    "enum": [
+                        "CC-BY-NC-4.0",
+                        "CC-BY-NC-SA-4.0",
+                        "CC-BY-NC-ND-4.0",
+                        "GPL-2.0",
+                        "GPL-3.0",
+                        "AGPL-3.0"
+                    ]
+                },
+                {
+                    "title": "Any other identifier",
+                    "description": "Accepted by the parser and never gated, exactly like an absent license.",
+                    "type": "string"
+                }
+            ]
+        },
         "numberLike": {
             "anyOf": [
                 { "type": "number" },

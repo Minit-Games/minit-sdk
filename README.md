@@ -194,6 +194,9 @@ All fields below — including `config` (see next section) — are optional. Mis
 | `resultSorting` | How results are ranked — `"highestScore"` (default), `"lowestScore"`, `"fastestTime"`, or `"slowestTime"`. See below. |
 | `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
 | `config` | Array of tunable values the game exposes. See [`config`](#config). |
+| `license` | SPDX identifier for the bundle's content, or `"proprietary"`. See [Licensing](#licensing). |
+| `credits` | Freeform player-facing credit line for third-party assets. See [Licensing](#licensing). |
+| `sourceUrl` | URL of the original asset/library source. Must start with `http://` or `https://`. |
 
 Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
 
@@ -276,6 +279,67 @@ Bounds are enforced before a config value reaches the game. They do not change t
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
     { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
   ]
+}
+```
+
+### Licensing
+
+If your game bundle includes third-party assets or libraries — sprites, music, SFX, fonts, code — declare where they came from. Three optional top-level fields cover it:
+
+| Field | Description |
+| --- | --- |
+| `license` | An [SPDX identifier](https://spdx.org/licenses/) for the included content, or `"proprietary"` if it's all your own. |
+| `credits` | A freeform credit line shown to players (app burger menu, web project detail). |
+| `sourceUrl` | Where the original asset or library came from. Must start with `http://` or `https://`. |
+
+**Absent and `"proprietary"` are not the same thing.** Leaving `license` out means nothing was declared — no gate, no warning, and existing games are unaffected. `"proprietary"` is an affirmative statement that the content is yours. Never write `"proprietary"` just to fill the field in.
+
+#### What each license allows
+
+| License | Hosting | Modding | Notice |
+| --- | :-: | :-: | --- |
+| `CC0-1.0`, `Unlicense` | Yes | Yes | Not required |
+| `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Zlib`, `ISC` | Yes | Yes | Required |
+| `Apache-2.0` | Yes | Yes | Required, plus reproduce any NOTICE file and mark modified files |
+| `CC-BY-4.0` | Yes | Yes | Required, changes must be indicated |
+| `CC-BY-SA-4.0` | Yes | Flagged | Required; derivatives inherit ShareAlike |
+| `CC-BY-ND-4.0` | Yes | No | Required; modding forced off |
+| `CC-BY-NC-4.0`, `CC-BY-NC-SA-4.0`, `CC-BY-NC-ND-4.0` | **No** | No | Rejected — the platform runs ads and a creator fund |
+| `GPL-2.0`, `GPL-3.0` | **No** | No | Rejected — app-store distribution conflicts |
+| `AGPL-3.0` | **No** | No | Rejected — network use triggers source disclosure |
+| `"proprietary"` | Yes | Yes | Your own content |
+| *absent* | Yes | Yes | Nothing declared — no gate, no warning |
+
+A license in the **No** hosting rows fails the upload. Any identifier not in the table is accepted and ungated, exactly like an absent one — so a typo silently loses you the declaration rather than erroring.
+
+#### `THIRD-PARTY-NOTICES.txt`
+
+A license marked *Required* in the Notice column needs a `THIRD-PARTY-NOTICES.txt` file at the **ZIP root**, next to `index.html` and `meta.json`. Uploading without one is not blocked — the [Creator Console](https://console.minit.games) warns and lets you proceed, so add the file before publishing.
+
+`credits` does not substitute for it, and it does not substitute for `credits` — they satisfy different obligations. The file is the durable legal record that travels with the bundle; `credits` is the player-facing acknowledgment, which can be summarized or never opened.
+
+One entry per third-party asset or library:
+
+```text
+THIRD-PARTY NOTICES
+This bundle includes third-party material listed below. Each item is
+governed by its own license, reproduced or referenced here as required.
+
+--------------------------------------------------------------------------
+Component:  PixelOrb Audio & Sprite Pack v2
+Source:     https://example.com/assets/pixelorb
+Author:     Orb Interactive Ltd.
+License:    MIT
+
+<full license text, or a pointer to where it is reproduced>
+--------------------------------------------------------------------------
+```
+
+```json
+{
+  "license": "CC-BY-4.0",
+  "credits": "Music: \"Neon Drift\" by Orb Interactive (CC-BY-4.0)",
+  "sourceUrl": "https://example.com/assets/pixelorb"
 }
 ```
 
