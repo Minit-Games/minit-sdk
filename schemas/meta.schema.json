@@ -36,7 +36,7 @@
             "items": { "$ref": "#/$defs/configEntry" }
         },
         "license": {
-            "description": "SPDX license identifier for the bundle's content, or \"proprietary\" for the creator's own content. Absent and \"proprietary\" are deliberately distinct: absent means nothing was declared and is never gated, while \"proprietary\" is an affirmative ownership claim. The Console matches the identifier EXACTLY against the recognized list enumerated in this schema, and gates only on those: of the recognized identifiers, the NC variants and GPL-2.0/GPL-3.0/AGPL-3.0 cannot be hosted, and MIT, BSD-2-Clause, BSD-3-Clause, Zlib, ISC, Apache-2.0 and the CC-BY variants expect a THIRD-PARTY-NOTICES.txt file next to index.html in the ZIP. Any string outside that list — including an SPDX variant the list does not carry, such as GPL-3.0-only — is accepted and left ungated, exactly like an absent license.",
+            "description": "SPDX license identifier for the bundle's content, or \"proprietary\" for the creator's own content. Absent and \"proprietary\" are deliberately distinct: absent means nothing was declared and is never gated, while \"proprietary\" is an affirmative ownership claim. The Console matches the identifier EXACTLY against the recognized list enumerated in this schema, and gates only on those: of the recognized identifiers, the NC variants and GPL-2.0/GPL-3.0/AGPL-3.0 (both the deprecated bare spelling and the current -only/-or-later spelling) cannot be hosted, and MIT, BSD-2-Clause, BSD-3-Clause, Zlib, ISC, Apache-2.0 and the CC-BY variants expect a THIRD-PARTY-NOTICES.txt file next to index.html in the ZIP. Any string outside that list — including a variant the list does not carry, such as Apache-2.0-with-LLVM-exception — is accepted and left ungated, exactly like an absent license.",
             "$ref": "#/$defs/licenseId"
         },
         "credits": {
@@ -76,7 +76,13 @@
                 "CC-BY-NC-ND-4.0",
                 "GPL-2.0",
                 "GPL-3.0",
-                "AGPL-3.0"
+                "AGPL-3.0",
+                "GPL-2.0-only",
+                "GPL-2.0-or-later",
+                "GPL-3.0-only",
+                "GPL-3.0-or-later",
+                "AGPL-3.0-only",
+                "AGPL-3.0-or-later"
             ]
         },
         "licenseRecognized": {
@@ -105,7 +111,7 @@
                 },
                 {
                     "title": "Any other identifier",
-                    "description": "Any string outside the recognized list above, including an SPDX variant the list does not carry (GPL-3.0-only, Apache-2.0-with-LLVM-exception, a typo). Accepted by the parser and never gated, exactly like an absent license.",
+                    "description": "Any string outside the recognized list above, including a variant the list does not carry (Apache-2.0-with-LLVM-exception, a typo). Accepted by the parser and never gated, exactly like an absent license.",
                     "not": { "$ref": "#/$defs/licenseRecognized" }
                 }
             ]
