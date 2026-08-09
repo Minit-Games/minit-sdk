@@ -305,14 +305,14 @@ If your game bundle includes third-party assets or libraries — sprites, music,
 | `CC-BY-SA-4.0` | Yes | Flagged | Required; derivatives inherit ShareAlike |
 | `CC-BY-ND-4.0` | Yes | No | Required; modding forced off |
 | `CC-BY-NC-4.0`, `CC-BY-NC-SA-4.0`, `CC-BY-NC-ND-4.0` | **No** | No | Rejected — the platform runs ads and a creator fund |
-| `GPL-2.0`, `GPL-3.0` | **No** | No | Rejected — app-store distribution conflicts |
-| `AGPL-3.0` | **No** | No | Rejected — network use triggers source disclosure |
+| `GPL-2.0`, `GPL-2.0-only`, `GPL-2.0-or-later`, `GPL-3.0`, `GPL-3.0-only`, `GPL-3.0-or-later` | **No** | No | Rejected — app-store distribution conflicts |
+| `AGPL-3.0`, `AGPL-3.0-only`, `AGPL-3.0-or-later` | **No** | No | Rejected — network use triggers source disclosure |
 | `"proprietary"` | Yes | Yes | Your own content |
 | *absent* | Yes | Yes | Nothing declared — no gate, no warning |
 
-A license in the **No** hosting rows fails the upload.
+A license in the **No** hosting rows fails the upload. SPDX deprecated the bare `GPL-2.0`/`GPL-3.0`/`AGPL-3.0` ids in favor of an explicit `-only`/`-or-later` suffix; the deprecated bare spelling and the current suffixed spelling are recognized and rejected identically here, so hosting outcome doesn't depend on which one you declare. That doesn't make `-only` and `-or-later` interchangeable, though — they grant different license scopes. Pick the suffix matching your actual license grant for new metadata; the bare deprecated ids are only for legacy metadata that already used them.
 
-**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry. `GPL-3.0-only` and `GPL-3.0-or-later` are the ones to watch: both are current SPDX spellings of a license the table rejects as `GPL-3.0`, and neither is recognized, so declaring one buys you no gate and no warning. Use the exact spelling from the table.
+**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry, such as `MPL-2.0`. Use the exact spelling from the table.
 
 #### `THIRD-PARTY-NOTICES.txt`
 
