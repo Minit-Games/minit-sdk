@@ -310,9 +310,9 @@ If your game bundle includes third-party assets or libraries — sprites, music,
 | `"proprietary"` | Yes | Yes | Your own content |
 | *absent* | Yes | Yes | Nothing declared — no gate, no warning |
 
-A license in the **No** hosting rows fails the upload. SPDX deprecated the bare `GPL-2.0`/`GPL-3.0`/`AGPL-3.0` ids in favor of an explicit `-only`/`-or-later` suffix — both the old and current spellings are recognized and rejected identically; there's no need to pick one over the other.
+A license in the **No** hosting rows fails the upload. SPDX deprecated the bare `GPL-2.0`/`GPL-3.0`/`AGPL-3.0` ids in favor of an explicit `-only`/`-or-later` suffix; the deprecated bare spelling and the current suffixed spelling are recognized and rejected identically here, so hosting outcome doesn't depend on which one you declare. That doesn't make `-only` and `-or-later` interchangeable, though — they grant different license scopes. Pick the suffix matching your actual license grant for new metadata; the bare deprecated ids are only for legacy metadata that already used them.
 
-**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry, such as `Apache-2.0-with-LLVM-exception`. Use the exact spelling from the table.
+**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry, such as `MPL-2.0`. Use the exact spelling from the table.
 
 #### `THIRD-PARTY-NOTICES.txt`
 
