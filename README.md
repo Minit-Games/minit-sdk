@@ -240,7 +240,7 @@ Practical notes:
 - **Test locally by appending the param yourself** — `index.html?difficulty=hard&startScore=50`.
 - **Pick knobs that change how the game feels**, and keep it to a handful. Bound them (`min`/`max`, `minLength`/`maxLength`, or `range`) so a mod can't produce an unplayable game, and set `"moddable": false` on anything other creators shouldn't touch.
 - `userData` is a reserved key and is never readable through `getConfigValue()` — see [Persistent user data](#persistent-user-data).
-- **The full walkthrough is in the Creator Docs** — [Declaring config values in meta.json](https://minit.studio/docs/declaring-config-values).
+- **The full walkthrough is in the Creator Docs** — [The meta.json file](https://minit.studio/docs/declaring-config-values).
 
 ```ts
 // meta.json declares: { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100 }
