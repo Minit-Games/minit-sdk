@@ -293,7 +293,7 @@ Bounds are enforced before a config value reaches the game. They do not change t
 | `credits` | A freeform credit line shown to players (app burger menu, web project detail). |
 | `sourceUrl` | Where the original asset or library came from. Must start with `http://` or `https://`. |
 
-**Leaving `license` out is not a null/unknown state.** Per the Minit Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; only declare an SPDX identifier when the bundle actually includes third-party content under one.
+**Leaving `license` out is not a null/unknown state.** Per the Minit Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; declare an SPDX identifier only when it's the license you're actually granting for the bundle **as a whole** — not because the bundle happens to include third-party content under one (that detail belongs in `THIRD-PARTY-NOTICES.txt`, per above).
 
 #### What each license allows
 
