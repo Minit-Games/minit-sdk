@@ -285,15 +285,15 @@ Bounds are enforced before a config value reaches the game. They do not change t
 
 ### Licensing
 
-If your game bundle includes third-party assets or libraries — sprites, music, SFX, fonts, code — declare where they came from. Three optional top-level fields cover it:
+`license` declares the license of the **game/bundle as a whole** — it is never a declaration about an individual embedded asset. Bundling a font under the SIL Open Font License, for example, does not make the bundle's `license` value `OFL`; that's a per-asset detail for `THIRD-PARTY-NOTICES.txt` (below), not this field. If your game bundle includes third-party assets or libraries — sprites, music, SFX, fonts, code — declare where they came from. Three optional top-level fields cover it:
 
 | Field | Description |
 | --- | --- |
-| `license` | An [SPDX identifier](https://spdx.org/licenses/) for the included content, or `"proprietary"` if it's all your own. |
+| `license` | An [SPDX identifier](https://spdx.org/licenses/) for the bundle's overall license, or `"proprietary"` if it's all your own. |
 | `credits` | A freeform credit line shown to players (app burger menu, web project detail). |
 | `sourceUrl` | Where the original asset or library came from. Must start with `http://` or `https://`. |
 
-**Absent and `"proprietary"` are not the same thing.** Leaving `license` out means nothing was declared — no gate, no warning, and existing games are unaffected. `"proprietary"` is an affirmative statement that the content is yours. Never write `"proprietary"` just to fill the field in.
+**Leaving `license` out is not a null/unknown state.** Per the Minit Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; only declare an SPDX identifier when the bundle actually includes third-party content under one.
 
 #### What each license allows
 
@@ -308,12 +308,11 @@ If your game bundle includes third-party assets or libraries — sprites, music,
 | `CC-BY-NC-4.0`, `CC-BY-NC-SA-4.0`, `CC-BY-NC-ND-4.0` | **No** | No | Rejected — the platform runs ads and a creator fund |
 | `GPL-2.0`, `GPL-2.0-only`, `GPL-2.0-or-later`, `GPL-3.0`, `GPL-3.0-only`, `GPL-3.0-or-later` | **No** | No | Rejected — app-store distribution conflicts |
 | `AGPL-3.0`, `AGPL-3.0-only`, `AGPL-3.0-or-later` | **No** | No | Rejected — network use triggers source disclosure |
-| `"proprietary"` | Yes | Yes | Your own content |
-| *absent* | Yes | Yes | Nothing declared — no gate, no warning |
+| `"proprietary"` (also the default when `license` is absent) | Yes | Yes | Your own content |
 
 A license in the **No** hosting rows fails the upload. SPDX deprecated the bare `GPL-2.0`/`GPL-3.0`/`AGPL-3.0` ids in favor of an explicit `-only`/`-or-later` suffix; the deprecated bare spelling and the current suffixed spelling are recognized and rejected identically here, so hosting outcome doesn't depend on which one you declare. That doesn't make `-only` and `-or-later` interchangeable, though — they grant different license scopes. Pick the suffix matching your actual license grant for new metadata; the bare deprecated ids are only for legacy metadata that already used them.
 
-**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated, exactly like an absent license — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry, such as `MPL-2.0`. Use the exact spelling from the table.
+**The identifier is matched exactly, against this table only.** Anything else is accepted and ungated too — that covers a typo, but also a legitimate SPDX identifier the table doesn't carry, such as `MPL-2.0`. Unlike the deliberate `proprietary` default above, this is a data-quality miss, not a chosen resolution. Use the exact spelling from the table.
 
 #### `THIRD-PARTY-NOTICES.txt`
 
