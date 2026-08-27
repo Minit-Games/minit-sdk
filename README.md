@@ -45,7 +45,7 @@ reportResult(1500, { flavorText: '12x combo — then whiffed the finish' });
 
 The host (Minit app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
 
-- `**initializeSDK(config?)**` — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`).
+- `**initializeSDK(config?)**` — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`). **Leave `metaTags` off if your `index.html` declares its own viewport meta** — it injects an unpinned one that breaks fixed-surface scaling; see [Screen, viewport, and scaling](#screen-viewport-and-scaling).
 - `**loadingDone()**` — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
 - `**reportResult(result, options?)**` — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
 
@@ -65,6 +65,97 @@ Each flavor text should highlight **one interesting statistic or moment from the
 
 
 Do not render flavor text in-game — pass it only via `reportResult`.
+
+### Screen, viewport, and scaling
+
+Minit games run **portrait, full-screen, inside a mobile WebView** — no browser chrome, no rotation, no window the player can resize. So author against **one fixed design surface** and scale it to whatever viewport you are handed, rather than writing responsive layout. The house convention is **960 × 1480**.
+
+- Author every position, size, and hitbox in that space. Never derive a gameplay coordinate from `window.innerWidth` / `innerHeight`.
+- Hold the whole game in one wrapper element and scale it with a single uniform CSS `transform: scale(...)`. Never compute separate x and y factors — non-uniform scale distorts art and breaks hit-testing.
+- Phone aspect ratios run from roughly 0.46 to 0.75, so a surface that fills the screen always crops or letterboxes a little. Cap the crop at about 5% per axis and keep anything that must stay visible inside the central 90%.
+- Tap targets must survive the scale-down. 44 CSS px on a narrow phone (~390 px wide) is ~108 px on the 960-wide surface — check the scaled size, not the authored one.
+
+#### The viewport must be pinned at the moment your code reads it
+
+**This is the most common way a Minit game ships visibly broken.** If the page scale is not pinned to 1 when your scaling code reads `window.innerWidth`, the renderer is free to zoom out around your 960-wide surface, and `innerWidth` reports roughly the width of your *content* (~980) rather than the width of the *device* (~420). Your scaler multiplies by that, and the game renders about 2.3× too large and clipped — giant HUD, most of the playfield off-screen.
+
+Declare this in `index.html`, and nothing else:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+```
+
+`maximum-scale=1` and `user-scalable=no` are the load-bearing pair — they are what pin the page scale. **The ordinary web viewport meta is not sufficient here:** `width=device-width, initial-scale=1.0` pins nothing, and a game shipping that line renders broken.
+
+**Do not pass `initializeSDK({ metaTags: true })` if you declare your own viewport meta.** `applyMetaTags()` appends a *second* viewport meta containing only `width=device-width, initial-scale=1.0`, and a later viewport meta resets every property it does not restate — so your `maximum-scale` and `user-scalable` are dropped silently, with no error anywhere. Because `initializeSDK()` is the first thing a game calls, that unpinning reliably lands *before* your first scale pass.
+
+```ts
+initializeSDK();   // not { metaTags: true }
+```
+
+Two things this is *not*, both of which cost real debugging time:
+
+- **It is not about having two viewport metas.** Two are harmless if the viewport is pinned at the moment you read it. What matters is the state at that instant, not which tag came last.
+- **It is not a startup race you can re-read your way out of.** Once your transform is computed from a bad number it stays bad. Re-running the scaler later is worth doing (see below) but does not fix this.
+
+##### How to tell
+
+Upload your ZIP and look at the preview image on the Console draft — the bug is visible there, so you do not need a device. And watch a cold launch on a phone: **if the game visibly snaps from one size to another, you have the same bug in its quieter form.** Your scaler happened to re-read after the host adjusted the viewport, so it recovered — but every frame before the snap is wrong, the player sees it on every launch, and the same build renders permanently broken anywhere the viewport is not fixed up for it. A correctly pinned game is right on the first frame and never moves. Note that it only reproduces on a genuinely cold start: force-stop the app between attempts rather than backing out and re-entering.
+
+##### If you genuinely cannot edit `<head>`
+
+Some setups do not give you one — a single-file export from an AI build tool, or an engine that generates its own HTML shell. `metaTags: true` does not solve this for you either; the tag it injects is the unpinned one. Append a pinned meta yourself instead, after `initializeSDK()` and before your scaling code first reads the viewport:
+
+```ts
+initializeSDK();
+
+const vp = document.createElement('meta');
+vp.setAttribute('name', 'viewport');
+vp.setAttribute('content',
+  'width=device-width, initial-scale=1, minimum-scale=1, ' +
+  'maximum-scale=1, user-scalable=no, viewport-fit=cover');
+document.head.appendChild(vp);
+```
+
+Prefer the `<head>` version whenever you can. A parser-visible tag is in effect before the first layout, so the surface is correct from the very first frame rather than corrected a moment later.
+
+#### Re-run your scaler when the viewport really does change
+
+Separate concern from pinning, and neither substitutes for the other: pinning stops you entering the wrong state, re-reading gets you out of it if something changes the viewport later. The host does adjust the viewport after your page loads, and orientation changes and soft keyboards move it too. So keep the scaler cheap and idempotent, and call it from more than one place:
+
+```ts
+const W = 960, H = 1480, MAX_CROP = 0.05;
+const wrapper = document.getElementById('wrapper'); // holds the whole surface
+
+function layout() {
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (vw < 1 || vh < 1) return;
+
+  const cover = Math.max(vw / W, vh / H);        // fill, allowing some crop
+  const cropX = (W * cover - vw) / (W * cover);
+  const cropY = (H * cover - vh) / (H * cover);
+  let scale = cover;
+  if (cropX > MAX_CROP || cropY > MAX_CROP) {    // too much loss — fit instead
+    scale = Math.min(vw / (1 - MAX_CROP) / W, vh / (1 - MAX_CROP) / H);
+  }
+
+  wrapper.style.transform = `scale(${scale})`;
+  wrapper.style.left = `${(vw - W * scale) / 2}px`;
+  wrapper.style.top  = `${(vh - H * scale) / 2}px`;
+  wrapper.style.visibility = 'visible';          // hidden in CSS until now
+}
+
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', layout);
+window.addEventListener('load', layout);
+window.visualViewport?.addEventListener('resize', layout);
+new ResizeObserver(layout).observe(document.documentElement);
+layout();
+```
+
+Give the wrapper `visibility: hidden` in CSS and let `layout()` reveal it, so the player never sees an unscaled first frame. The `ResizeObserver` is the most reliable of these because it fires after layout has settled — but it only tracks the viewport if the root element is sized, so keep `html, body { width: 100%; height: 100% }`.
+
+Keep the CSS that sizes the wrapper — `width`, `height`, `position`, `transform-origin` — in an inline `<style>` in `<head>` rather than in a stylesheet your bundler injects. Bundlers commonly emit that stylesheet after your script; if it ever arrives late, the wrapper has no size and no origin, so the offsets you write do nothing and the scale pivots about the wrong point. `@font-face` and cosmetics are safe in the bundled stylesheet.
 
 ### UI entry point
 
@@ -391,6 +482,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 - `**flavorText` is rendered by the host, not in-game.** It appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
 - **One flying reward per point, not per event.** When a scoring action awards multiple points, spawn one icon per point via `spawnRewards(pointsEarned, ...)` — do not fly a single icon and jump the score by 10. Cluster large payouts into denominations like 5 / 25 / 125 automatically through `spawnRewards`.
 - **No `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Bundle woff2 files and reference them with relative-path `@font-face` rules instead (see [Fonts and assets](#fonts-and-assets)). The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action.
+- **An unpinned viewport meta, or `metaTags: true` on top of your own.** Both make the game render roughly 2.3× too large and clipped, because the page scale is not pinned when the scaling code reads `window.innerWidth`. Check two things: that `index.html` declares `maximum-scale=1, user-scalable=no` (the ordinary `width=device-width, initial-scale=1.0` line pins nothing and is not sufficient), and that the AI has not added `metaTags: true` alongside it — `applyMetaTags()` appends a second, unpinned viewport meta before your first scale pass. The tell is the preview image on the Console draft, or a game that visibly snaps size on a cold launch. See [Screen, viewport, and scaling](#screen-viewport-and-scaling).
 
 ## API overview
 
@@ -410,7 +502,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
 | `addBackground(options?)`        | Apply a styled background to the game container                                                                                                 |
-| `applyMetaTags()`                | Inject charset + viewport meta tags                                                                                                             |
+| `applyMetaTags()`                | Inject charset + viewport meta tags. **Only for games that cannot write to `<head>`** — the viewport meta it injects does not pin the page scale, and appending it over one your page already declares breaks fixed-surface scaling (see [Screen, viewport, and scaling](#screen-viewport-and-scaling)) |
 
 
 #### Legacy aliases
