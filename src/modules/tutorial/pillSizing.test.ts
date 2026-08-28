@@ -235,4 +235,70 @@ describe("tutorial pill — narrow fixed logical surface (DROP-8084)", () => {
         const renderedLines = pillTextEl().textContent?.split("\n").length ?? Infinity;
         expect(renderedLines).toBeLessThanOrEqual(fixedLines);
     });
+
+    // Copilot review finding on PR #49: the wrap-width floor (120) and the
+    // row-layout icon gap (12) / text-budget floor (60) in
+    // `primitives/pill.js` were raw px, not theme tokens, so they stayed
+    // full-size while `screenMarginX`/`padX` shrank with the surface. Below
+    // a surface narrow enough to hit these floors, that mismatch pushes the
+    // card's total width PAST `screenW - 2 * scaledMargin` -- the exact
+    // region `screenMarginX` exists to keep clear.
+    const VERY_NARROW_WIDTH = 160;
+    const VERY_NARROW_HEIGHT = 300;
+
+    it("scales the wrap-width floor itself, so a very narrow fixed logical surface doesn't push the card past its own screen margin", () => {
+        const scale = VERY_NARROW_WIDTH / REF_W;
+        const scaledMargin = TUTORIAL_THEME.pill.screenMarginX * scale;
+        const scaledPadX = TUTORIAL_THEME.pill.padX * scale;
+        const deductionWrapWidth = VERY_NARROW_WIDTH - 2 * scaledMargin - 2 * scaledPadX;
+
+        // Guard the guard: this width must actually be narrow enough that
+        // the RAW (unscaled) 120 floor would have won the `Math.max`, or the
+        // two formulas below never diverge and the test proves nothing.
+        expect(deductionWrapWidth).toBeLessThan(120);
+
+        const expectedWrapWidth = Math.max(120 * scale, deductionWrapWidth);
+
+        overlay = createTutorialOverlay({ width: VERY_NARROW_WIDTH, height: VERY_NARROW_HEIGHT });
+        overlay.showPill("Tap to play", { delay: 0 });
+
+        expect(pillTextMaxWidth()).toBeCloseTo(expectedWrapWidth, 3);
+
+        // The card itself (text + its own padX on both sides) must fit
+        // inside the margin-reserved region -- the invariant `screenMarginX`
+        // exists for. A raw, unscaled 120 floor blows past it by ~9px here.
+        const cardWidth = pillTextMaxWidth() + 2 * scaledPadX;
+        const availableInsideMargin = VERY_NARROW_WIDTH - 2 * scaledMargin;
+        expect(cardWidth).toBeLessThanOrEqual(availableInsideMargin + 1e-6);
+    });
+
+    it("scales the row icon-gap and text-budget floor, so an icon row's text budget doesn't exceed the row's own wrap width", () => {
+        const width = 50;
+        const height = 100;
+        const scale = width / REF_W;
+        const wrapWidth = Math.max(
+            120 * scale,
+            width - 2 * (TUTORIAL_THEME.pill.screenMarginX * scale) - 2 * (TUTORIAL_THEME.pill.padX * scale),
+        );
+        const scaledIconH = TUTORIAL_THEME.pill.fontSize * scale;
+        const scaledIconTextGap = 12 * scale;
+        const iconW = scaledIconH + scaledIconTextGap;
+        const expectedTextBudget = Math.max(60 * scale, wrapWidth - iconW);
+
+        // Guard the guard: at this width the RAW 60px floor (60 > wrapWidth)
+        // would have won the row's own `Math.max`, forcing a text budget
+        // bigger than the row's entire available width. If the scaled floor
+        // doesn't win here, the two formulas never diverge.
+        expect(expectedTextBudget).toBeLessThan(wrapWidth);
+        expect(60).toBeGreaterThan(wrapWidth);
+
+        overlay = createTutorialOverlay({ width, height });
+        overlay.showPill("", {
+            rows: [{ text: "Match three gems", iconSrc: "icon.png" }],
+            delay: 0,
+        });
+
+        expect(pillTextMaxWidth()).toBeCloseTo(expectedTextBudget, 3);
+        expect(pillTextMaxWidth()).toBeLessThanOrEqual(wrapWidth + 1e-6);
+    });
 });

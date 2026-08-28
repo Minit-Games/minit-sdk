@@ -162,10 +162,17 @@ function makeTextEl(text, wrapWidth, align, T) {
 	return el;
 }
 
-/** @param {Array<{ text: string, iconSrc?: string }>} rows */
-function buildPillRowsDom(rows, wrapWidth, T) {
+/**
+ * @param {Array<{ text: string, iconSrc?: string }>} rows
+ * @param {number} s - the same layout scale `pillLayoutScale` returned for
+ *   this card. `iconTextGap` and the row text-budget floor are raw px, not
+ *   theme tokens, so they need this to shrink proportionally on a narrow
+ *   fixed logical surface — otherwise they stay full-size while everything
+ *   else scales down and overflow the card.
+ */
+function buildPillRowsDom(rows, wrapWidth, T, s) {
 	const iconH = T.pill.fontSize;
-	const iconTextGap = 12;
+	const iconTextGap = 12 * s;
 	const rowGap = Math.round(T.pill.fontSize * 0.4);
 	const root = document.createElement('div');
 	root.style.cssText = 'display:flex;flex-direction:column;align-items:center;pointer-events:none;';
@@ -185,7 +192,7 @@ function buildPillRowsDom(rows, wrapWidth, T) {
 			rowEl.appendChild(img);
 		}
 		const iconW = row.iconSrc ? iconH + iconTextGap : 0;
-		const textBudget = wrapWidth > 0 ? Math.max(60, wrapWidth - iconW) : 0;
+		const textBudget = wrapWidth > 0 ? Math.max(60 * s, wrapWidth - iconW) : 0;
 		rowEl.appendChild(makeTextEl(row.text, textBudget, 'left', T));
 		root.appendChild(rowEl);
 		if (idx > 0) totalH += rowGap;
@@ -324,10 +331,8 @@ export function createPill({
 	text, rows, x, y, delay, onClose,
 }) {
 	const viewport = getViewport();
-	const T = scalePillTheme(
-		TUTORIAL_THEME,
-		pillLayoutScale(TUTORIAL_THEME, viewport, isLogical),
-	);
+	const layoutScale = pillLayoutScale(TUTORIAL_THEME, viewport, isLogical);
+	const T = scalePillTheme(TUTORIAL_THEME, layoutScale);
 	const okBtnTheme = T.modal.okButton;
 	const screenW = viewport.width;
 
@@ -343,8 +348,11 @@ export function createPill({
 	visualRoot.appendChild(card);
 
 	const sideMargin = T.pill.screenMarginX;
+	// The 120 floor is a raw px minimum, not a theme token, so it must scale
+	// with everything else or it stops being a floor on a narrow fixed
+	// logical surface and instead forces an overflow — see DROP-8084.
 	const wrapWidth = screenW > 0
-		? Math.max(120, screenW - 2 * sideMargin - 2 * T.pill.padX)
+		? Math.max(120 * layoutScale, screenW - 2 * sideMargin - 2 * T.pill.padX)
 		: 0;
 
 	const targetH = okBtnTheme.height || 100;
@@ -384,7 +392,7 @@ export function createPill({
 	let primaryH;
 	let primaryW;
 	if (rows && rows.length > 0) {
-		primaryContent = buildPillRowsDom(rows, wrapWidth, T);
+		primaryContent = buildPillRowsDom(rows, wrapWidth, T, layoutScale);
 		primaryH = primaryContent._rowsHeight;
 		primaryW = primaryContent._rowsWidth;
 	} else {
