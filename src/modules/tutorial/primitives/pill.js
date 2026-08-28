@@ -51,25 +51,28 @@ function hardWrapText(text, maxWidth, font) {
 
 /**
  * Layout tokens live in theme.js in a fixed design space
- * (`referenceWidth` x `referenceHeight`). Games that pass width/height to
- * createTutorialOverlay render in that space already; games with a fluid,
- * CSS-pixel canvas do not, and consuming the tokens raw makes the card
- * enormous on a phone. Scale every LENGTH by the contain-fit factor a fixed
- * surface of the reference size would get on this viewport, so the card
- * covers the same fraction of the screen either way.
+ * (`referenceWidth` x `referenceHeight`). Fixed logical surfaces already use
+ * the layer transform, but surfaces narrower than the reference width still
+ * need their pill lengths reduced proportionally. Their multiplier therefore
+ * uses width/referenceWidth only, clamped at 1 so short or wide fixed surfaces
+ * do not shrink by height or inflate the authored tokens.
  *
- * FLUID MODE ONLY — see the `isLogical` guard in createPill. In logical mode
- * getViewport() returns the supplied logical size, not the real viewport, and
- * the layer transform already scales the tokens; applying this on top would
- * shrink the card by a second factor (a 960x560 surface would get
- * min(960/960, 560/1480) ~= 0.38).
+ * Fluid CSS-pixel canvases have no layer transform, so they retain the
+ * contain-fit multiplier min(viewportW/refW, viewportH/refH). Keeping height
+ * out of the logical branch preserves the authored 1:1 tokens on the
+ * documented 960x560 surface.
  *
+ * @param {boolean} isLogical
  * @returns {number} 1 when the viewport already matches the design space.
  */
-function pillLayoutScale(T, viewport) {
+function pillLayoutScale(T, viewport, isLogical) {
 	const refW = T.referenceWidth;
 	const refH = T.referenceHeight;
 	if (!(refW > 0) || !(refH > 0)) return 1;
+	if (isLogical) {
+		const s = Math.min(1, viewport.width / refW);
+		return s > 0 && Number.isFinite(s) ? s : 1;
+	}
 	const w = viewport.width > 0 ? viewport.width / refW : 1;
 	const h = viewport.height > 0 ? viewport.height / refH : w;
 	const s = Math.min(w, h);
@@ -159,10 +162,19 @@ function makeTextEl(text, wrapWidth, align, T) {
 	return el;
 }
 
-/** @param {Array<{ text: string, iconSrc?: string }>} rows */
-function buildPillRowsDom(rows, wrapWidth, T) {
+/**
+ * @param {Array<{ text: string, iconSrc?: string }>} rows
+ * @param {number} s - `createPill`'s `rawConstantScale`: the layout scale on a
+ *   narrow fixed logical surface, or exactly 1 for a fluid canvas.
+ *   `iconTextGap` and the row text-budget floor are raw px, not theme tokens,
+ *   so they need this to shrink proportionally on a narrow fixed logical
+ *   surface — otherwise they stay full-size while everything else scales
+ *   down and overflow the card. Fluid canvases pass 1 unchanged so the PR
+ *   #48-tuned fluid row layout is unaffected.
+ */
+function buildPillRowsDom(rows, wrapWidth, T, s) {
 	const iconH = T.pill.fontSize;
-	const iconTextGap = 12;
+	const iconTextGap = 12 * s;
 	const rowGap = Math.round(T.pill.fontSize * 0.4);
 	const root = document.createElement('div');
 	root.style.cssText = 'display:flex;flex-direction:column;align-items:center;pointer-events:none;';
@@ -182,7 +194,7 @@ function buildPillRowsDom(rows, wrapWidth, T) {
 			rowEl.appendChild(img);
 		}
 		const iconW = row.iconSrc ? iconH + iconTextGap : 0;
-		const textBudget = wrapWidth > 0 ? Math.max(60, wrapWidth - iconW) : 0;
+		const textBudget = wrapWidth > 0 ? Math.max(60 * s, wrapWidth - iconW) : 0;
 		rowEl.appendChild(makeTextEl(row.text, textBudget, 'left', T));
 		root.appendChild(rowEl);
 		if (idx > 0) totalH += rowGap;
@@ -311,18 +323,25 @@ function attachInputBlocker({ mount, layerZIndex, getOkRect, getCardRect, isInte
  * @param {number} [opts.layerZIndex]
  * @param {() => { width: number, height: number }} opts.getViewport
  * @param {boolean} [opts.isLogical] - true when the overlay renders into a fixed
- *   logical surface (createTutorialOverlay got width/height). Those tokens are
- *   already scaled by the layer transform, so the theme multiplier is a
- *   fluid-canvas-only correction. See pillLayoutScale.
+ *   logical surface (createTutorialOverlay got width/height). Pill lengths
+ *   scale down when that surface is narrower than the reference width; fluid
+ *   canvases instead use the viewport contain-fit correction. See
+ *   pillLayoutScale.
  */
 export function createPill({
 	container, mount, layerZIndex, getViewport, isLogical, tickRegistry, teardownRegistry,
 	text, rows, x, y, delay, onClose,
 }) {
 	const viewport = getViewport();
-	const T = isLogical
-		? TUTORIAL_THEME
-		: scalePillTheme(TUTORIAL_THEME, pillLayoutScale(TUTORIAL_THEME, viewport));
+	const layoutScale = pillLayoutScale(TUTORIAL_THEME, viewport, isLogical);
+	const T = scalePillTheme(TUTORIAL_THEME, layoutScale);
+	// The 120/12/60 constants below are raw px, not theme tokens (see their
+	// call sites), and only need to shrink on a narrow FIXED LOGICAL surface.
+	// `layoutScale` is also < 1 for ordinary fluid canvases (the contain-fit
+	// correction), so applying it there too would shrink these raw constants
+	// on every fluid render and change the PR #48-tuned fluid look. Gate them
+	// on `isLogical` so fluid mode keeps the pre-DROP-8084 raw values.
+	const rawConstantScale = isLogical ? layoutScale : 1;
 	const okBtnTheme = T.modal.okButton;
 	const screenW = viewport.width;
 
@@ -338,8 +357,15 @@ export function createPill({
 	visualRoot.appendChild(card);
 
 	const sideMargin = T.pill.screenMarginX;
+	// The 120 floor is a raw px minimum, not a theme token, so it must scale
+	// with everything else or it stops being a floor on a narrow fixed
+	// logical surface and instead forces an overflow — see DROP-8084. Only on
+	// a fixed logical surface, though: `rawConstantScale` is 1 for a fluid
+	// canvas, so this floor stays the untouched raw 120 there (Copilot review
+	// on PR #49 — a prior version of this fix applied `layoutScale`
+	// unconditionally, which also shrinks this floor on every fluid render).
 	const wrapWidth = screenW > 0
-		? Math.max(120, screenW - 2 * sideMargin - 2 * T.pill.padX)
+		? Math.max(120 * rawConstantScale, screenW - 2 * sideMargin - 2 * T.pill.padX)
 		: 0;
 
 	const targetH = okBtnTheme.height || 100;
@@ -379,7 +405,7 @@ export function createPill({
 	let primaryH;
 	let primaryW;
 	if (rows && rows.length > 0) {
-		primaryContent = buildPillRowsDom(rows, wrapWidth, T);
+		primaryContent = buildPillRowsDom(rows, wrapWidth, T, rawConstantScale);
 		primaryH = primaryContent._rowsHeight;
 		primaryW = primaryContent._rowsWidth;
 	} else {

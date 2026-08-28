@@ -14,16 +14,52 @@ const scoreEl = document.getElementById('score');
 const tapTarget = document.getElementById('tap-target');
 const holdTarget = document.getElementById('hold-target');
 const swipeDot = document.getElementById('swipe-dot');
+const surfaceEl = document.getElementById('surface');
 
 let score = 0;
 let tutorial = null;
 let activeHandles = [];
 let step = 0;
 
-const GAME_W = 960;
-const GAME_H = 560;
+const DEFAULT_GAME_W = 960;
+const DEFAULT_GAME_H = 560;
 
-/** Element center in fixed logical game coordinates (matches canvas size). */
+// `minit_previewSurface` is the single, uniquely-named param controlling the preview
+// surface: absent/invalid -> fixed 960x560 default, `fluid` -> fluid canvas,
+// `<W>x<H>` (e.g. `400x700`) -> fixed logical surface of those dimensions.
+const params = new URLSearchParams(window.location.search);
+const minitPreviewSurface = params.get('minit_previewSurface');
+const isFluid = minitPreviewSurface === 'fluid';
+const surfaceMatch = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(minitPreviewSurface || '');
+const parsedWidth = surfaceMatch ? Number(surfaceMatch[1]) : NaN;
+const parsedHeight = surfaceMatch ? Number(surfaceMatch[2]) : NaN;
+const isSurfaceValid = Number.isFinite(parsedWidth) && parsedWidth > 0 && Number.isFinite(parsedHeight) && parsedHeight > 0;
+const gameWidth = isSurfaceValid ? parsedWidth : DEFAULT_GAME_W;
+const gameHeight = isSurfaceValid ? parsedHeight : DEFAULT_GAME_H;
+
+if (isFluid) {
+	game.classList.add('fluid', 'adaptive');
+} else {
+	game.style.width = `${gameWidth}px`;
+	game.style.height = `${gameHeight}px`;
+	game.style.aspectRatio = `${gameWidth} / ${gameHeight}`;
+	if (gameWidth !== DEFAULT_GAME_W || gameHeight !== DEFAULT_GAME_H) {
+		game.classList.add('adaptive');
+	}
+}
+
+function syncSurfaceLabel() {
+	if (isFluid) {
+		surfaceEl.textContent = `Mode: fluid — ${game.clientWidth}×${game.clientHeight} CSS px`;
+	} else {
+		surfaceEl.textContent = `Mode: fixed logical — ${gameWidth}×${gameHeight}`;
+	}
+}
+
+syncSurfaceLabel();
+window.addEventListener('resize', syncSurfaceLabel);
+
+/** Element center in the active game coordinate space. */
 function targetCenter(el) {
 	return {
 		x: el.offsetLeft + el.offsetWidth / 2,
@@ -120,12 +156,15 @@ function runStep() {
 
 function startTutorial() {
 	if (tutorial) tutorial.destroy();
-	tutorial = createTutorialOverlay({
+	const overlayOptions = {
 		container: game,
-		width: GAME_W,
-		height: GAME_H,
 		zIndex: 50,
-	});
+	};
+	if (!isFluid) {
+		overlayOptions.width = gameWidth;
+		overlayOptions.height = gameHeight;
+	}
+	tutorial = createTutorialOverlay(overlayOptions);
 	step = 0;
 	tapTarget.classList.remove('done');
 	holdTarget.classList.remove('done');
