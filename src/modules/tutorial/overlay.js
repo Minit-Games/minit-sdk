@@ -122,6 +122,7 @@ export function createTutorialOverlay({ container, width, height, zIndex } = {})
 				mount,
 				layerZIndex: zIndex !== undefined ? zIndex : TUTORIAL_THEME.zIndex,
 				getViewport,
+				isLogical: !!logical,
 				text,
 				tickRegistry,
 				teardownRegistry,
