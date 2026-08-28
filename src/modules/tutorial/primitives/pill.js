@@ -164,11 +164,13 @@ function makeTextEl(text, wrapWidth, align, T) {
 
 /**
  * @param {Array<{ text: string, iconSrc?: string }>} rows
- * @param {number} s - the same layout scale `pillLayoutScale` returned for
- *   this card. `iconTextGap` and the row text-budget floor are raw px, not
- *   theme tokens, so they need this to shrink proportionally on a narrow
- *   fixed logical surface — otherwise they stay full-size while everything
- *   else scales down and overflow the card.
+ * @param {number} s - `createPill`'s `rawConstantScale`: the layout scale on a
+ *   narrow fixed logical surface, or exactly 1 for a fluid canvas.
+ *   `iconTextGap` and the row text-budget floor are raw px, not theme tokens,
+ *   so they need this to shrink proportionally on a narrow fixed logical
+ *   surface — otherwise they stay full-size while everything else scales
+ *   down and overflow the card. Fluid canvases pass 1 unchanged so the PR
+ *   #48-tuned fluid row layout is unaffected.
  */
 function buildPillRowsDom(rows, wrapWidth, T, s) {
 	const iconH = T.pill.fontSize;
@@ -333,6 +335,13 @@ export function createPill({
 	const viewport = getViewport();
 	const layoutScale = pillLayoutScale(TUTORIAL_THEME, viewport, isLogical);
 	const T = scalePillTheme(TUTORIAL_THEME, layoutScale);
+	// The 120/12/60 constants below are raw px, not theme tokens (see their
+	// call sites), and only need to shrink on a narrow FIXED LOGICAL surface.
+	// `layoutScale` is also < 1 for ordinary fluid canvases (the contain-fit
+	// correction), so applying it there too would shrink these raw constants
+	// on every fluid render and change the PR #48-tuned fluid look. Gate them
+	// on `isLogical` so fluid mode keeps the pre-DROP-8084 raw values.
+	const rawConstantScale = isLogical ? layoutScale : 1;
 	const okBtnTheme = T.modal.okButton;
 	const screenW = viewport.width;
 
@@ -350,9 +359,13 @@ export function createPill({
 	const sideMargin = T.pill.screenMarginX;
 	// The 120 floor is a raw px minimum, not a theme token, so it must scale
 	// with everything else or it stops being a floor on a narrow fixed
-	// logical surface and instead forces an overflow — see DROP-8084.
+	// logical surface and instead forces an overflow — see DROP-8084. Only on
+	// a fixed logical surface, though: `rawConstantScale` is 1 for a fluid
+	// canvas, so this floor stays the untouched raw 120 there (Copilot review
+	// on PR #49 — a prior version of this fix applied `layoutScale`
+	// unconditionally, which also shrinks this floor on every fluid render).
 	const wrapWidth = screenW > 0
-		? Math.max(120 * layoutScale, screenW - 2 * sideMargin - 2 * T.pill.padX)
+		? Math.max(120 * rawConstantScale, screenW - 2 * sideMargin - 2 * T.pill.padX)
 		: 0;
 
 	const targetH = okBtnTheme.height || 100;
@@ -392,7 +405,7 @@ export function createPill({
 	let primaryH;
 	let primaryW;
 	if (rows && rows.length > 0) {
-		primaryContent = buildPillRowsDom(rows, wrapWidth, T, layoutScale);
+		primaryContent = buildPillRowsDom(rows, wrapWidth, T, rawConstantScale);
 		primaryH = primaryContent._rowsHeight;
 		primaryW = primaryContent._rowsWidth;
 	} else {

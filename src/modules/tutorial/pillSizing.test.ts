@@ -139,6 +139,45 @@ describe("tutorial pill — layout-token scaling by canvas mode", () => {
 
         expect(okButtonHeight()).toBeCloseTo(OK_BUTTON_HEIGHT * expected, 5);
     });
+
+    // Copilot review finding on PR #49: the DROP-8084 fix that scaled the raw
+    // 120/12/60 px constants by `layoutScale` for narrow fixed logical
+    // surfaces applied that scale UNCONDITIONALLY, so a fluid canvas -- whose
+    // `layoutScale` is the contain-fit factor, not 1 -- also had its icon-row
+    // gap and text-budget floor shrunk, changing the PR #48-tuned fluid row
+    // layout. The fix gates the 120/12/60 constants on `isLogical` so a
+    // fluid canvas keeps them raw (unscaled); only the theme-token lengths
+    // (fontSize etc, via `scalePillTheme`) still scale by the contain-fit
+    // factor as before.
+    it("keeps the row icon-gap and text-budget floor RAW (unscaled) for a fluid canvas", () => {
+        const viewportW = window.innerWidth;
+        const viewportH = window.innerHeight;
+        const expected = Math.min(viewportW / REF_W, viewportH / REF_H);
+        // Guard the guard: the contain-fit factor must be materially below 1,
+        // or a raw vs. scaled constant would be indistinguishable here.
+        expect(expected).toBeLessThan(0.9);
+
+        const scaledMargin = TUTORIAL_THEME.pill.screenMarginX * expected;
+        const scaledPadX = TUTORIAL_THEME.pill.padX * expected;
+        const wrapWidth = Math.max(120, viewportW - 2 * scaledMargin - 2 * scaledPadX);
+        // Guard the guard: the OUTER wrap-width floor must not itself bind,
+        // or this test can't isolate the row-level (icon-gap/text-budget)
+        // regression from the outer-floor one.
+        expect(wrapWidth).toBeGreaterThan(120);
+
+        const scaledIconH = TUTORIAL_THEME.pill.fontSize * expected;
+        const rawIconTextGap = 12;
+        const iconW = scaledIconH + rawIconTextGap;
+        const expectedTextBudget = Math.max(60, wrapWidth - iconW);
+
+        overlay = createTutorialOverlay({});
+        overlay.showPill("", {
+            rows: [{ text: "Match three gems", iconSrc: "icon.png" }],
+            delay: 0,
+        });
+
+        expect(pillTextMaxWidth()).toBeCloseTo(expectedTextBudget, 3);
+    });
 });
 
 describe("tutorial pill — narrow fixed logical surface (DROP-8084)", () => {
