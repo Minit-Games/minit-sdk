@@ -156,6 +156,50 @@ describe("feedback label — line-budget fitting", () => {
         expect(appliedFontScale()).toBeLessThan(1);
     });
 
+    it("survives a Font Loading API stub that exposes check but not load", () => {
+        // Hosts stub `document.fonts` unevenly — feedback.test.ts in this very
+        // repo defines only `load`. The mirror shape (check, no load) used to
+        // throw a TypeError straight out of showFeedback into the game.
+        Object.defineProperty(document, "fonts", {
+            configurable: true,
+            writable: true,
+            value: { check: () => false },
+        });
+        stubLayout(MAX_WIDTH * 0.5, () => 1);
+
+        expect(() => showFeedback("Combo x3!")).not.toThrow();
+        expect(document.querySelector(".drop-feedback-text")).not.toBeNull();
+    });
+
+    it("skips the post-swap re-fit for a label already fading out", () => {
+        let resolveLoad!: (v: unknown) => void;
+        const loaded = new Promise((r) => {
+            resolveLoad = r;
+        });
+        (document.fonts as unknown as { check: () => boolean }).check = () => false;
+        (document.fonts as unknown as { load: jest.Mock }).load = jest
+            .fn()
+            .mockReturnValue(loaded);
+
+        let swapped = false;
+        stubLayout(MAX_WIDTH * 1.8, (scale) => {
+            if (!swapped) return 1;
+            return scale >= 1 ? 3 : 2;
+        });
+
+        showFeedback("Alpha Bravo Charlie");
+        const el = document.querySelector<HTMLElement>(".drop-feedback-text")!;
+
+        // The pop has started disappearing before the font resolved.
+        el.classList.add("fade-out");
+        swapped = true;
+        resolveLoad([]);
+
+        return loaded.then(() => Promise.resolve()).then(() => {
+            expect(appliedFontScale()).toBe(1);
+        });
+    });
+
     it("widens the budget to the line count the caller forced with newlines", () => {
         // `white-space: pre-line` honours these breaks, so a deliberate
         // three-line label can never reach a two-line target — shrinking it

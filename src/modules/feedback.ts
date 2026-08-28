@@ -229,20 +229,27 @@ function fitLabel(element: HTMLElement, text: string, maxWidth: number): void {
     fitLabelToLineBudget(element, text, maxWidth);
     applyOverflowSafetyNet(element, maxWidth);
 
-    let fontReady = true;
+    // The whole font-loading probe is best-effort: a host without the CSS Font
+    // Loading API, or with a partial stub of it, must not throw out of
+    // showFeedback() into the game's call site. Both `check` and `load` are
+    // inside the guard for that reason — a stub carrying only one of them is a
+    // shape that actually occurs.
     try {
-        fontReady = document.fonts?.check(`1em '${FEEDBACK_FONT_FAMILY}'`) ?? true;
-    } catch {
-        fontReady = true;
-    }
-    if (fontReady) return;
+        if (document.fonts?.check(`1em '${FEEDBACK_FONT_FAMILY}'`) ?? true) return;
 
-    document.fonts.load(`1em '${FEEDBACK_FONT_FAMILY}'`).then(() => {
-        if (!element.isConnected) return;
-        element.style.removeProperty('--fit-scale');
-        fitLabelToLineBudget(element, text, maxWidth);
-        applyOverflowSafetyNet(element, maxWidth);
-    }).catch(() => { /* font stays on the fallback; the first fit still applies */ });
+        document.fonts.load(`1em '${FEEDBACK_FONT_FAMILY}'`).then(() => {
+            // Skip a label that has been removed, or has already begun fading
+            // out — re-laying out a disappearing pop buys nothing and can jump
+            // its size on the way out.
+            if (!element.isConnected) return;
+            if (element.classList.contains('fade-out')) return;
+            element.style.removeProperty('--fit-scale');
+            fitLabelToLineBudget(element, text, maxWidth);
+            applyOverflowSafetyNet(element, maxWidth);
+        }).catch(() => { /* font stays on the fallback; the first fit still applies */ });
+    } catch {
+        /* no usable Font Loading API — the first fit stands */
+    }
 }
 
 /**
