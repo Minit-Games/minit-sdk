@@ -6,7 +6,7 @@
 
 export const TUTORIAL_THEME = {
 	// Design space every LENGTH token below is authored in. A game that
-	// renders a fixed logical surface of this size (the `width` / `height`
+	// renders a fixed logical surface of this WIDTH (the `width` / `height`
 	// passed to createTutorialOverlay) consumes the tokens 1:1.
 	//
 	// A game with a FLUID canvas — one sized in CSS pixels straight from
@@ -16,9 +16,18 @@ export const TUTORIAL_THEME = {
 	// pill wraps one word per line and fills the screen. `primitives/pill.js`
 	// therefore scales its layout tokens by the same contain-fit factor a
 	// fixed surface of this size would get, which keeps the card at the same
-	// FRACTION of the screen in both modes. That correction applies to the
-	// FLUID path only — in fixed-logical mode the layer transform already
-	// does it, and doing both would shrink the card twice.
+	// FRACTION of the screen in both modes.
+	//
+	// A fixed-logical surface NARROWER than referenceWidth hits the same
+	// one-word-per-line collapse for the same reason, so `primitives/pill.js`
+	// applies its own INDEPENDENT correction there: width / referenceWidth,
+	// clamped at 1. The two corrections never compound — each mode takes
+	// exactly one branch — and the clamp keeps a reference-width surface at
+	// 1:1, so the layer transform remains the only scaling that mode gets.
+	//
+	// Both corrections live in `primitives/pill.js` and apply to the PILL
+	// only. Every other primitive (_cues, _ripple, swipe, highlight, finger)
+	// reads these tokens raw, so changing a VALUE here shifts all of them.
 	referenceWidth: 960,
 	referenceHeight: 1480,
 
