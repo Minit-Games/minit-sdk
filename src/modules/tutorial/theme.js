@@ -5,6 +5,21 @@
 // updating the SDK-wide tutorial appearance for all drops.
 
 export const TUTORIAL_THEME = {
+	// Design space every LENGTH token below is authored in. A game that
+	// renders a fixed logical surface of this size (the `width` / `height`
+	// passed to createTutorialOverlay) consumes the tokens 1:1.
+	//
+	// A game with a FLUID canvas — one sized in CSS pixels straight from
+	// window.innerWidth, passing no width/height — would otherwise consume
+	// them as raw px: on a 324px-wide phone a 48px message inside 48px of
+	// padding and a 100px screen margin leaves a 120px text budget, so the
+	// pill wraps one word per line and fills the screen. `primitives/pill.js`
+	// therefore scales its layout tokens by the same contain-fit factor a
+	// fixed surface of this size would get, which keeps the card at the same
+	// FRACTION of the screen in both modes and is a no-op at this exact size.
+	referenceWidth: 960,
+	referenceHeight: 1480,
+
 	// Default zIndex for the overlay container. Sits above gameplay
 	// (typically <100) but below modal screens (e.g. game-over at zIndex 10000).
 	zIndex: 1000,

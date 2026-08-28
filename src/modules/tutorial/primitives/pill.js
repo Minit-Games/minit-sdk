@@ -49,6 +49,68 @@ function hardWrapText(text, maxWidth, font) {
 	return lines.join('\n');
 }
 
+/**
+ * Layout tokens live in theme.js in a fixed design space
+ * (`referenceWidth` x `referenceHeight`). Games that pass width/height to
+ * createTutorialOverlay render in that space already; games with a fluid,
+ * CSS-pixel canvas do not, and consuming the tokens raw makes the card
+ * enormous on a phone. Scale every LENGTH by the contain-fit factor a fixed
+ * surface of the reference size would get on this viewport, so the card
+ * covers the same fraction of the screen either way.
+ *
+ * @returns {number} 1 when the viewport already matches the design space.
+ */
+function pillLayoutScale(T, viewport) {
+	const refW = T.referenceWidth;
+	const refH = T.referenceHeight;
+	if (!(refW > 0) || !(refH > 0)) return 1;
+	const w = viewport.width > 0 ? viewport.width / refW : 1;
+	const h = viewport.height > 0 ? viewport.height / refH : w;
+	const s = Math.min(w, h);
+	return s > 0 && Number.isFinite(s) ? s : 1;
+}
+
+/** Shallow copy of the pill/modal tokens with every length multiplied by `s`. */
+function scalePillTheme(T, s) {
+	if (s === 1) return T;
+	const px = (v) => (typeof v === 'number' ? v * s : v);
+	const atLeast1 = (v) => (typeof v === 'number' ? Math.max(1, v * s) : v);
+	return {
+		...T,
+		pill: {
+			...T.pill,
+			padX: px(T.pill.padX),
+			padY: px(T.pill.padY),
+			screenMarginX: px(T.pill.screenMarginX),
+			cornerRadius: px(T.pill.cornerRadius),
+			fontSize: px(T.pill.fontSize),
+			lineHeight: px(T.pill.lineHeight),
+			dropShadow: T.pill.dropShadow && {
+				...T.pill.dropShadow,
+				blur: px(T.pill.dropShadow.blur),
+				distance: px(T.pill.dropShadow.distance),
+			},
+			outline: T.pill.outline && {
+				...T.pill.outline,
+				width: atLeast1(T.pill.outline.width),
+			},
+		},
+		modal: {
+			...T.modal,
+			okButton: {
+				...T.modal.okButton,
+				height: px(T.modal.okButton.height),
+				marginTop: px(T.modal.okButton.marginTop),
+				marginBottom: px(T.modal.okButton.marginBottom),
+			},
+			nudge: T.modal.nudge && {
+				...T.modal.nudge,
+				flashWidthPx: atLeast1(T.modal.nudge.flashWidthPx),
+			},
+		},
+	};
+}
+
 function pillTextStyle(T) {
 	const lh = typeof T.pill.lineHeight === 'number'
 		? T.pill.lineHeight
@@ -247,9 +309,10 @@ export function createPill({
 	container, mount, layerZIndex, getViewport, tickRegistry, teardownRegistry,
 	text, rows, x, y, delay, onClose,
 }) {
-	const T = TUTORIAL_THEME;
+	const viewport = getViewport();
+	const T = scalePillTheme(TUTORIAL_THEME, pillLayoutScale(TUTORIAL_THEME, viewport));
 	const okBtnTheme = T.modal.okButton;
-	const screenW = getViewport().width;
+	const screenW = viewport.width;
 
 	const resolvedDelay = delay === undefined ? T.pill.defaultDelaySeconds : delay;
 	const delayMs = Math.max(0, (Number(resolvedDelay) || 0) * 1000);

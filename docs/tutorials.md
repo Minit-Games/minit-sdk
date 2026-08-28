@@ -22,6 +22,8 @@ tutorial.highlight({ x: GAME_W / 2, y: GAME_H / 2 });
 
 Pass `width` and `height` when your game uses a **fixed logical canvas** (e.g. 960×560) that CSS may scale to fit the screen. The overlay clips to `container` and scales gestures/pills to match. Omit both when `(x, y)` are already in the container's displayed pixel space.
 
+**The modal pill sizes itself either way.** Its layout tokens are authored in the `referenceWidth` × `referenceHeight` design space declared in `theme.js` (960×1480), and `showPill` scales them by the contain-fit factor a fixed surface of that size would get on the current viewport. A fluid, CSS-pixel canvas therefore gets the same card proportions — roughly 80% of the viewport width — as a fixed-surface game, instead of consuming a 48px font and 100px screen margin as raw pixels on a 390px-wide phone.
+
 ## Local preview
 
 A minimal walkthrough game lives in `examples/tutorial-preview/`. It exercises every primitive (pill, highlight, tap finger, long-press, swipe) and the gating URL params.

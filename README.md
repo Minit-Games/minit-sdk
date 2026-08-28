@@ -166,6 +166,9 @@ import { showPositiveFeedback, createHeaderBar, spawnRewards } from '@minit-game
 showPositiveFeedback('Combo x3!');  // scoring, combos, bonuses, level ups
 showNegativeFeedback('Life Lost');  // mistakes, penalties, lives lost, time up
 showNeutralFeedback('x2 Speed');    // modifiers, streak resets, neutral milestones
+// Keep labels short. A label that fits on one line renders at the full punchy
+// size; a longer one wraps inside 85% of the viewport width and the font shrinks
+// (down to half size) so it lands on at most two lines instead of a tall stack.
 
 // Header bar — positioning and alignment only (no custom styling by default)
 const header = createHeaderBar({ y: 60, padding: 40 });

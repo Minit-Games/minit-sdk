@@ -4,6 +4,26 @@ const FEEDBACK_CONTAINER_CLASS = "drop-feedback-text";
 
 export type FeedbackVariant = "positive" | "neutral" | "negative";
 
+/**
+ * Wrap budget for a label that does not fit on one line: the font shrinks
+ * until the text needs at most this many lines. Two keeps a pop reading as a
+ * pop rather than a paragraph.
+ */
+const MAX_LINES = 2;
+
+/**
+ * Floor on that shrink. A label long enough to hit it is being used as prose
+ * (the API asks for short, punchy text) — it wraps past MAX_LINES rather than
+ * shrinking to something unreadable.
+ */
+const MIN_FONT_SCALE = 0.5;
+
+/** Step the shrink walks down in when the opening estimate still overflows. */
+const FONT_SCALE_STEP = 0.05;
+
+/** Must match the `line-height` in the injected CSS. */
+const LINE_HEIGHT = 1.1;
+
 let stylesInjected = false;
 let fontPreloaded = false;
 
@@ -51,9 +71,25 @@ function injectStyles(): void {
             z-index: 10000;
             font-family: 'Bowlby One SC', sans-serif;
             font-size: clamp(40px, 12vw, 72px);
+            line-height: 1.1;
             text-align: center;
             pointer-events: none;
-            white-space: nowrap;
+            /* Labels are meant to be short and punchy, but a longer one must
+               wrap onto a second line rather than stay on one line and be
+               shrunk to illegibility by --fit-scale. pre-line keeps any
+               explicit newline the caller passes; break-word is the last
+               resort for a single word wider than the cap.
+
+               width:max-content is what actually makes the cap bind: the
+               element is fixed at left/top 50%, so its shrink-to-fit width
+               would otherwise be limited by the space left of that offset
+               (half the viewport) and a label would wrap far narrower than
+               85vw. max-content sizing ignores the available space, and
+               max-width then clamps it to the cap. */
+            white-space: pre-line;
+            overflow-wrap: break-word;
+            width: max-content;
+            max-width: 85vw;
             --fit-scale: 1;
             opacity: 0;
             transform: translate(-50%, -50%) scale(calc(0.5 * var(--fit-scale)));
@@ -125,6 +161,13 @@ function injectStyles(): void {
     document.head.appendChild(style);
 }
 
+/** Lines the label currently wraps onto, from its laid-out height. */
+function renderedLines(element: HTMLElement, fontSize: number): number {
+    const lineHeight = fontSize * LINE_HEIGHT;
+    if (!(lineHeight > 0)) return 1;
+    return Math.max(1, Math.round(element.scrollHeight / lineHeight));
+}
+
 /**
  * Show a temporary feedback text on the center of the screen.
  * The text is non-interactive and auto-dismisses after ~1 second.
@@ -163,8 +206,35 @@ export function showFeedback(text: string, variant: FeedbackVariant = "neutral",
     element.style.animation = 'none';
     document.body.appendChild(element);
 
-    // Calculate fit scale if text is too wide
     const maxWidth = window.innerWidth * 0.85;
+
+    // The base size is tuned for a short, punchy label — a whole sentence at
+    // that size wraps into a tower of four near-empty lines. Shrink the FONT
+    // (not the transform) until the wrap lands within MAX_LINES: a smaller
+    // font lets more words share a line, where a transform would keep the
+    // same four lines and only make them smaller.
+    //
+    // Measure on ONE line for the opening estimate, then correct by the line
+    // count actually rendered — greedy line breaking leaves a ragged tail, so
+    // text that is exactly MAX_LINES * maxWidth wide still wraps past the
+    // budget. All measurements use layout values (scrollWidth/scrollHeight),
+    // which the class's own transform does not affect.
+    const baseFontSize = parseFloat(window.getComputedStyle(element).fontSize);
+    element.style.whiteSpace = 'nowrap';
+    const singleLineWidth = element.scrollWidth;
+    element.style.whiteSpace = '';
+    if (baseFontSize > 0 && singleLineWidth > maxWidth * MAX_LINES) {
+        let fit = Math.max(MIN_FONT_SCALE, (maxWidth * MAX_LINES) / singleLineWidth);
+        element.style.fontSize = `${baseFontSize * fit}px`;
+        while (fit > MIN_FONT_SCALE && renderedLines(element, baseFontSize * fit) > MAX_LINES) {
+            fit = Math.max(MIN_FONT_SCALE, fit - FONT_SCALE_STEP);
+            element.style.fontSize = `${baseFontSize * fit}px`;
+        }
+    }
+
+    // Safety net only: the width cap + overflow-wrap already keep the text
+    // inside `maxWidth`, so this shrink fires only where wrapping cannot
+    // (a browser that ignores overflow-wrap on an unbreakable string).
     const textWidth = element.scrollWidth;
     if (textWidth > maxWidth) {
         const fitScale = maxWidth / textWidth;
