@@ -24,13 +24,13 @@ let step = 0;
 const DEFAULT_GAME_W = 960;
 const DEFAULT_GAME_H = 560;
 
-// `previewSurface` is the single, uniquely-named param controlling the preview
+// `minit_previewSurface` is the single, uniquely-named param controlling the preview
 // surface: absent/invalid -> fixed 960x560 default, `fluid` -> fluid canvas,
 // `<W>x<H>` (e.g. `400x700`) -> fixed logical surface of those dimensions.
 const params = new URLSearchParams(window.location.search);
-const previewSurface = params.get('previewSurface');
-const isFluid = previewSurface === 'fluid';
-const surfaceMatch = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(previewSurface || '');
+const minitPreviewSurface = params.get('minit_previewSurface');
+const isFluid = minitPreviewSurface === 'fluid';
+const surfaceMatch = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(minitPreviewSurface || '');
 const parsedWidth = surfaceMatch ? Number(surfaceMatch[1]) : NaN;
 const parsedHeight = surfaceMatch ? Number(surfaceMatch[2]) : NaN;
 const isSurfaceValid = Number.isFinite(parsedWidth) && parsedWidth > 0 && Number.isFinite(parsedHeight) && parsedHeight > 0;
