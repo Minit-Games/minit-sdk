@@ -51,25 +51,28 @@ function hardWrapText(text, maxWidth, font) {
 
 /**
  * Layout tokens live in theme.js in a fixed design space
- * (`referenceWidth` x `referenceHeight`). Games that pass width/height to
- * createTutorialOverlay render in that space already; games with a fluid,
- * CSS-pixel canvas do not, and consuming the tokens raw makes the card
- * enormous on a phone. Scale every LENGTH by the contain-fit factor a fixed
- * surface of the reference size would get on this viewport, so the card
- * covers the same fraction of the screen either way.
+ * (`referenceWidth` x `referenceHeight`). Fixed logical surfaces already use
+ * the layer transform, but surfaces narrower than the reference width still
+ * need their pill lengths reduced proportionally. Their multiplier therefore
+ * uses width/referenceWidth only, clamped at 1 so short or wide fixed surfaces
+ * do not shrink by height or inflate the authored tokens.
  *
- * FLUID MODE ONLY — see the `isLogical` guard in createPill. In logical mode
- * getViewport() returns the supplied logical size, not the real viewport, and
- * the layer transform already scales the tokens; applying this on top would
- * shrink the card by a second factor (a 960x560 surface would get
- * min(960/960, 560/1480) ~= 0.38).
+ * Fluid CSS-pixel canvases have no layer transform, so they retain the
+ * contain-fit multiplier min(viewportW/refW, viewportH/refH). Keeping height
+ * out of the logical branch preserves the authored 1:1 tokens on the
+ * documented 960x560 surface.
  *
+ * @param {boolean} isLogical
  * @returns {number} 1 when the viewport already matches the design space.
  */
-function pillLayoutScale(T, viewport) {
+function pillLayoutScale(T, viewport, isLogical) {
 	const refW = T.referenceWidth;
 	const refH = T.referenceHeight;
 	if (!(refW > 0) || !(refH > 0)) return 1;
+	if (isLogical) {
+		const s = Math.min(1, viewport.width / refW);
+		return s > 0 && Number.isFinite(s) ? s : 1;
+	}
 	const w = viewport.width > 0 ? viewport.width / refW : 1;
 	const h = viewport.height > 0 ? viewport.height / refH : w;
 	const s = Math.min(w, h);
@@ -311,18 +314,20 @@ function attachInputBlocker({ mount, layerZIndex, getOkRect, getCardRect, isInte
  * @param {number} [opts.layerZIndex]
  * @param {() => { width: number, height: number }} opts.getViewport
  * @param {boolean} [opts.isLogical] - true when the overlay renders into a fixed
- *   logical surface (createTutorialOverlay got width/height). Those tokens are
- *   already scaled by the layer transform, so the theme multiplier is a
- *   fluid-canvas-only correction. See pillLayoutScale.
+ *   logical surface (createTutorialOverlay got width/height). Pill lengths
+ *   scale down when that surface is narrower than the reference width; fluid
+ *   canvases instead use the viewport contain-fit correction. See
+ *   pillLayoutScale.
  */
 export function createPill({
 	container, mount, layerZIndex, getViewport, isLogical, tickRegistry, teardownRegistry,
 	text, rows, x, y, delay, onClose,
 }) {
 	const viewport = getViewport();
-	const T = isLogical
-		? TUTORIAL_THEME
-		: scalePillTheme(TUTORIAL_THEME, pillLayoutScale(TUTORIAL_THEME, viewport));
+	const T = scalePillTheme(
+		TUTORIAL_THEME,
+		pillLayoutScale(TUTORIAL_THEME, viewport, isLogical),
+	);
 	const okBtnTheme = T.modal.okButton;
 	const screenW = viewport.width;
 

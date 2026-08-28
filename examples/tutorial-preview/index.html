@@ -40,6 +40,7 @@
     }
     .hud a:hover, .hud button:hover { background: #3a3a6a; }
     .hud .status { color: #9cf; min-width: 12rem; text-align: center; }
+    .surface { color: #fc9; font-size: 0.85rem; }
     #game {
       position: relative;
       width: 960px;
@@ -51,6 +52,11 @@
       overflow: hidden;
       box-shadow: 0 8px 32px rgba(0,0,0,0.4);
       touch-action: none;
+    }
+    #game.fluid {
+      width: min(960px, 100%);
+      height: min(560px, calc(100vh - 180px));
+      aspect-ratio: auto;
     }
     .tile {
       position: absolute;
@@ -100,6 +106,22 @@
       opacity: 0;
       transition: opacity 0.2s;
     }
+    #game.adaptive #tap-target {
+      left: 8%; top: 36%;
+      width: min(160px, 22%); height: auto; aspect-ratio: 1;
+    }
+    #game.adaptive #hold-target {
+      right: 8%; top: 36%;
+      width: min(160px, 22%); height: auto; aspect-ratio: 1;
+    }
+    #game.adaptive #swipe-lane {
+      left: 12.5%; bottom: 10%;
+      width: 75%; height: min(100px, 18%);
+    }
+    #game.adaptive #swipe-dot {
+      left: 15%; bottom: 14%;
+      width: min(48px, 12%); height: auto; aspect-ratio: 1;
+    }
     #swipe-dot.visible { opacity: 1; }
     #score {
       position: absolute;
@@ -120,12 +142,15 @@
 </head>
 <body>
   <h1>Tutorial preview</h1>
+  <div class="surface" id="surface">Mode: loading…</div>
   <div class="hud">
     <span class="status" id="status">Loading…</span>
     <a href="?tutorial=1">Force tutorial</a>
     <a href="?tutorial=0">Skip tutorial</a>
     <a href="?userData=true">Simulate returning player</a>
     <a href="?">Fresh player</a>
+    <a href="?w=400&amp;h=700&amp;tutorial=1">Fixed 400×700</a>
+    <a href="?mode=fluid&amp;tutorial=1">Fluid</a>
     <button type="button" id="restart">Restart tutorial</button>
   </div>
   <div id="game">
