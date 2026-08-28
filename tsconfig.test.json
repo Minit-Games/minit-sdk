@@ -3,7 +3,11 @@
     "compilerOptions": {
         "module": "commonjs",
         "moduleResolution": "node",
-        "types": ["jest", "node"]
+        "types": ["jest", "node"],
+        // The tutorial module is plain JS; ts-jest must be allowed to compile
+        // it, but it is not annotated, so it is not type-checked.
+        "allowJs": true,
+        "checkJs": false
     },
     "include": ["src/**/*"]
 }

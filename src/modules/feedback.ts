@@ -2,6 +2,9 @@ import { getBowlbyOneSCFontFaceCSS } from './fonts/bowlbyOneSC.js';
 
 const FEEDBACK_CONTAINER_CLASS = "drop-feedback-text";
 
+/** Must match the family name in the injected @font-face and CSS below. */
+const FEEDBACK_FONT_FAMILY = "Bowlby One SC";
+
 export type FeedbackVariant = "positive" | "neutral" | "negative";
 
 /**
@@ -169,6 +172,92 @@ function renderedLines(element: HTMLElement, fontSize: number): number {
 }
 
 /**
+ * Shrink the FONT (not the transform) until the label wraps within its line
+ * budget. A smaller font lets more words share a line, where a transform would
+ * keep the same tall stack and only make it smaller.
+ *
+ * The budget is MAX_LINES, widened to whatever the caller forced with explicit
+ * newlines — `white-space: pre-line` honours those, so a deliberate three-line
+ * label must not be shrunk to MIN_FONT_SCALE chasing a two-line target it can
+ * never reach.
+ *
+ * Line count is read from layout on EVERY pass rather than inferred from
+ * width: greedy line breaking leaves a ragged tail, so a label narrower than
+ * `maxWidth * MAX_LINES` can still wrap onto MAX_LINES + 1 lines (three words
+ * each just over half the cap take a line apiece). The single-line width only
+ * seeds the opening guess, and only when no explicit break makes it
+ * meaningless. All measurements use layout values (scrollWidth/scrollHeight),
+ * which the class's own transform does not affect.
+ */
+function fitLabelToLineBudget(element: HTMLElement, text: string, maxWidth: number): void {
+    element.style.fontSize = '';
+    const baseFontSize = parseFloat(window.getComputedStyle(element).fontSize);
+    if (!(baseFontSize > 0) || !(maxWidth > 0)) return;
+
+    const lineBudget = Math.max(MAX_LINES, text.split('\n').length);
+    if (renderedLines(element, baseFontSize) <= lineBudget) return;
+
+    // Seed from the one-line width: `nowrap` collapses newlines, so this is
+    // only a usable estimate for text the caller did not pre-break.
+    let fit = 1;
+    if (lineBudget === MAX_LINES) {
+        element.style.whiteSpace = 'nowrap';
+        const singleLineWidth = element.scrollWidth;
+        element.style.whiteSpace = '';
+        if (singleLineWidth > maxWidth * lineBudget) {
+            fit = Math.max(MIN_FONT_SCALE, (maxWidth * lineBudget) / singleLineWidth);
+            element.style.fontSize = `${baseFontSize * fit}px`;
+        }
+    }
+
+    while (fit > MIN_FONT_SCALE && renderedLines(element, baseFontSize * fit) > lineBudget) {
+        fit = Math.max(MIN_FONT_SCALE, fit - FONT_SCALE_STEP);
+        element.style.fontSize = `${baseFontSize * fit}px`;
+    }
+}
+
+/**
+ * Fit, then re-fit once the real font is in use.
+ *
+ * The @font-face is `font-display: swap` with a zero block period, so the very
+ * first measurement after injecting it lays out in the fallback face and the
+ * browser swaps Bowlby One SC in afterwards — different widths, different line
+ * breaks, after fitting had finished. Callers who ran preloadFeedbackFont()
+ * skip the second pass; everyone else gets it on the first label only.
+ */
+function fitLabel(element: HTMLElement, text: string, maxWidth: number): void {
+    fitLabelToLineBudget(element, text, maxWidth);
+    applyOverflowSafetyNet(element, maxWidth);
+
+    let fontReady = true;
+    try {
+        fontReady = document.fonts?.check(`1em '${FEEDBACK_FONT_FAMILY}'`) ?? true;
+    } catch {
+        fontReady = true;
+    }
+    if (fontReady) return;
+
+    document.fonts.load(`1em '${FEEDBACK_FONT_FAMILY}'`).then(() => {
+        if (!element.isConnected) return;
+        element.style.removeProperty('--fit-scale');
+        fitLabelToLineBudget(element, text, maxWidth);
+        applyOverflowSafetyNet(element, maxWidth);
+    }).catch(() => { /* font stays on the fallback; the first fit still applies */ });
+}
+
+/**
+ * Safety net only: the width cap + overflow-wrap already keep the text inside
+ * `maxWidth`, so this shrink fires only where wrapping cannot (a browser that
+ * ignores overflow-wrap on an unbreakable string).
+ */
+function applyOverflowSafetyNet(element: HTMLElement, maxWidth: number): void {
+    const textWidth = element.scrollWidth;
+    if (textWidth > maxWidth) {
+        element.style.setProperty('--fit-scale', (maxWidth / textWidth).toString());
+    }
+}
+
+/**
  * Show a temporary feedback text on the center of the screen.
  * The text is non-interactive and auto-dismisses after ~1 second.
  *
@@ -206,40 +295,9 @@ export function showFeedback(text: string, variant: FeedbackVariant = "neutral",
     element.style.animation = 'none';
     document.body.appendChild(element);
 
-    const maxWidth = window.innerWidth * 0.85;
-
     // The base size is tuned for a short, punchy label — a whole sentence at
-    // that size wraps into a tower of four near-empty lines. Shrink the FONT
-    // (not the transform) until the wrap lands within MAX_LINES: a smaller
-    // font lets more words share a line, where a transform would keep the
-    // same four lines and only make them smaller.
-    //
-    // Measure on ONE line for the opening estimate, then correct by the line
-    // count actually rendered — greedy line breaking leaves a ragged tail, so
-    // text that is exactly MAX_LINES * maxWidth wide still wraps past the
-    // budget. All measurements use layout values (scrollWidth/scrollHeight),
-    // which the class's own transform does not affect.
-    const baseFontSize = parseFloat(window.getComputedStyle(element).fontSize);
-    element.style.whiteSpace = 'nowrap';
-    const singleLineWidth = element.scrollWidth;
-    element.style.whiteSpace = '';
-    if (baseFontSize > 0 && singleLineWidth > maxWidth * MAX_LINES) {
-        let fit = Math.max(MIN_FONT_SCALE, (maxWidth * MAX_LINES) / singleLineWidth);
-        element.style.fontSize = `${baseFontSize * fit}px`;
-        while (fit > MIN_FONT_SCALE && renderedLines(element, baseFontSize * fit) > MAX_LINES) {
-            fit = Math.max(MIN_FONT_SCALE, fit - FONT_SCALE_STEP);
-            element.style.fontSize = `${baseFontSize * fit}px`;
-        }
-    }
-
-    // Safety net only: the width cap + overflow-wrap already keep the text
-    // inside `maxWidth`, so this shrink fires only where wrapping cannot
-    // (a browser that ignores overflow-wrap on an unbreakable string).
-    const textWidth = element.scrollWidth;
-    if (textWidth > maxWidth) {
-        const fitScale = maxWidth / textWidth;
-        element.style.setProperty('--fit-scale', fitScale.toString());
-    }
+    // that size wraps into a tower of near-empty lines.
+    fitLabel(element, text, window.innerWidth * 0.85);
 
     // Now show with animation
     element.style.visibility = '';

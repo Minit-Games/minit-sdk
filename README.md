@@ -168,7 +168,8 @@ showNegativeFeedback('Life Lost');  // mistakes, penalties, lives lost, time up
 showNeutralFeedback('x2 Speed');    // modifiers, streak resets, neutral milestones
 // Keep labels short. A label that fits on one line renders at the full punchy
 // size; a longer one wraps inside 85% of the viewport width and the font shrinks
-// (down to half size) so it lands on at most two lines instead of a tall stack.
+// toward a two-line target. The shrink stops at half size for readability, so
+// prose-length text still wraps past two lines rather than becoming unreadable.
 
 // Header bar — positioning and alignment only (no custom styling by default)
 const header = createHeaderBar({ y: 60, padding: 40 });

@@ -16,7 +16,9 @@ export const TUTORIAL_THEME = {
 	// pill wraps one word per line and fills the screen. `primitives/pill.js`
 	// therefore scales its layout tokens by the same contain-fit factor a
 	// fixed surface of this size would get, which keeps the card at the same
-	// FRACTION of the screen in both modes and is a no-op at this exact size.
+	// FRACTION of the screen in both modes. That correction applies to the
+	// FLUID path only — in fixed-logical mode the layer transform already
+	// does it, and doing both would shrink the card twice.
 	referenceWidth: 960,
 	referenceHeight: 1480,
 

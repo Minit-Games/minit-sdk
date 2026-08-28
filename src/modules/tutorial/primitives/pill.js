@@ -58,6 +58,12 @@ function hardWrapText(text, maxWidth, font) {
  * surface of the reference size would get on this viewport, so the card
  * covers the same fraction of the screen either way.
  *
+ * FLUID MODE ONLY — see the `isLogical` guard in createPill. In logical mode
+ * getViewport() returns the supplied logical size, not the real viewport, and
+ * the layer transform already scales the tokens; applying this on top would
+ * shrink the card by a second factor (a 960x560 surface would get
+ * min(960/960, 560/1480) ~= 0.38).
+ *
  * @returns {number} 1 when the viewport already matches the design space.
  */
 function pillLayoutScale(T, viewport) {
@@ -304,13 +310,19 @@ function attachInputBlocker({ mount, layerZIndex, getOkRect, getCardRect, isInte
  * @param {HTMLElement} opts.mount - game canvas (input blocker covers this element only)
  * @param {number} [opts.layerZIndex]
  * @param {() => { width: number, height: number }} opts.getViewport
+ * @param {boolean} [opts.isLogical] - true when the overlay renders into a fixed
+ *   logical surface (createTutorialOverlay got width/height). Those tokens are
+ *   already scaled by the layer transform, so the theme multiplier is a
+ *   fluid-canvas-only correction. See pillLayoutScale.
  */
 export function createPill({
-	container, mount, layerZIndex, getViewport, tickRegistry, teardownRegistry,
+	container, mount, layerZIndex, getViewport, isLogical, tickRegistry, teardownRegistry,
 	text, rows, x, y, delay, onClose,
 }) {
 	const viewport = getViewport();
-	const T = scalePillTheme(TUTORIAL_THEME, pillLayoutScale(TUTORIAL_THEME, viewport));
+	const T = isLogical
+		? TUTORIAL_THEME
+		: scalePillTheme(TUTORIAL_THEME, pillLayoutScale(TUTORIAL_THEME, viewport));
 	const okBtnTheme = T.modal.okButton;
 	const screenW = viewport.width;
 
