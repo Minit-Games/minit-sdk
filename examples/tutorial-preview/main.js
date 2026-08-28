@@ -24,12 +24,18 @@ let step = 0;
 const DEFAULT_GAME_W = 960;
 const DEFAULT_GAME_H = 560;
 
+// `previewSurface` is the single, uniquely-named param controlling the preview
+// surface: absent/invalid -> fixed 960x560 default, `fluid` -> fluid canvas,
+// `<W>x<H>` (e.g. `400x700`) -> fixed logical surface of those dimensions.
 const params = new URLSearchParams(window.location.search);
-const isFluid = params.get('mode') === 'fluid';
-const parsedWidth = Number(params.get('w'));
-const parsedHeight = Number(params.get('h'));
-const gameWidth = Number.isFinite(parsedWidth) && parsedWidth > 0 ? parsedWidth : DEFAULT_GAME_W;
-const gameHeight = Number.isFinite(parsedHeight) && parsedHeight > 0 ? parsedHeight : DEFAULT_GAME_H;
+const previewSurface = params.get('previewSurface');
+const isFluid = previewSurface === 'fluid';
+const surfaceMatch = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/i.exec(previewSurface || '');
+const parsedWidth = surfaceMatch ? Number(surfaceMatch[1]) : NaN;
+const parsedHeight = surfaceMatch ? Number(surfaceMatch[2]) : NaN;
+const isSurfaceValid = Number.isFinite(parsedWidth) && parsedWidth > 0 && Number.isFinite(parsedHeight) && parsedHeight > 0;
+const gameWidth = isSurfaceValid ? parsedWidth : DEFAULT_GAME_W;
+const gameHeight = isSurfaceValid ? parsedHeight : DEFAULT_GAME_H;
 
 if (isFluid) {
 	game.classList.add('fluid', 'adaptive');

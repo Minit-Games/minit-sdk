@@ -32,7 +32,7 @@ A minimal walkthrough game lives in `examples/tutorial-preview/`. It exercises e
 npm run preview:tutorial
 ```
 
-Opens **http://localhost:5173/** — rebuilds `dist/` first, then serves the example with native ESM (no bundler). It defaults to the fixed 960×560 surface; use `?w=400&h=700` for an arbitrary fixed logical surface or `?mode=fluid` for a fluid canvas. The HUD also links the tutorial gating parameters.
+Opens **http://localhost:5173/** — rebuilds `dist/` first, then serves the example with native ESM (no bundler). It defaults to the fixed 960×560 surface; use `?previewSurface=400x700` for an arbitrary fixed logical surface or `?previewSurface=fluid` for a fluid canvas. The HUD also links the tutorial gating parameters.
 
 ## Gating — always check userData first
 
