@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- docs: terminology — Minit Games / Game / Post
+
+---
+
 ## [1.3.0] — 2026-05-11
 
 ### Breaking Changes
