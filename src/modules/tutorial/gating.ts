@@ -2,7 +2,7 @@ import { getConfigValue } from "../config.js";
 import { getUserData } from "../userData.js";
 
 /**
- * Decide whether to run the first-play tutorial for this drop.
+ * Decide whether to run the first-play tutorial for this Post.
  *
  * **Always call this before creating a tutorial overlay.** If it returns
  * `false`, do not show any tutorial UI — the host has persisted userData for
@@ -12,7 +12,7 @@ import { getUserData } from "../userData.js";
  * 1. `?tutorial=1` or `?tutorial=true` → force **show** (QA / preview)
  * 2. `?tutorial=0` or `?tutorial=false` → force **hide**
  * 3. `getUserData()` is a non-empty string → **hide** (returning player; host or a
- *    previous `reportResult` already stored a value in this drop's userData slot)
+ *    previous `reportResult` already stored a value in this Post's userData slot)
  * 4. otherwise → **show** (default-on for new players)
  *
  * After any play session, persist the flag from **every** `reportResult` call:

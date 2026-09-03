@@ -2,7 +2,7 @@
 
 Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (feedback text, flying rewards, header bars), and background utilities.
 
-> **Building with an AI assistant?** Claude, ChatGPT, Gemini, Google AI Studio, Lovable, and similar tools can scaffold a complete Minit game — but they reliably miss two things: the game must be **built into a self-contained ZIP** before upload, and a handful of lifecycle calls must be wired correctly. See [Building & uploading your game](#building--uploading-your-game) and [Common mistakes AI assistants make](#common-mistakes-ai-assistants-make).
+> **Building with an AI assistant?** Claude, ChatGPT, Gemini, Google AI Studio, Lovable, and similar tools can scaffold a complete game for Minit Games — but they reliably miss two things: the game must be **built into a self-contained ZIP** before upload, and a handful of lifecycle calls must be wired correctly. See [Building & uploading your game](#building--uploading-your-game) and [Common mistakes AI assistants make](#common-mistakes-ai-assistants-make).
 
 ## Install
 
@@ -29,12 +29,12 @@ initializeSDK();
 const difficulty = getConfigValue('difficulty', 'normal');
 
 // Signal that assets are loaded and the game is ready to be shown.
-// Until this is called, the Minit app keeps a loading state on top
+// Until this is called, the Minit Games app keeps a loading state on top
 // of the WebView — call it as soon as the first interactive frame
 // is ready.
 loadingDone();
 
-// At game end, report the result. The Minit app immediately overlays
+// At game end, report the result. The Minit Games app immediately overlays
 // its own result screen on top of the WebView, so the game loses
 // focus — do NOT render an in-game "result submitted" confirmation,
 // and stop driving updates after this call.
@@ -43,13 +43,13 @@ reportResult(1500, { flavorText: '12x combo — then whiffed the finish' });
 
 ### Game lifecycle
 
-The host (Minit app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
+The host (Minit Games app or web player) wraps the game in a controlled lifecycle. Three SDK calls drive it:
 
 - `**initializeSDK(config?)**` — call once at startup to bootstrap the SDK and set up backward-compat shims. Cheap and synchronous. The optional `config` arg can apply a background (`config.background`) and inject meta tags (`config.metaTags: true`). **Leave `metaTags` off if your `index.html` declares its own viewport meta** — it injects an unpinned one that breaks fixed-surface scaling; see [Screen, viewport, and scaling](#screen-viewport-and-scaling).
 - `**loadingDone()**` — call once when the game is interactive (assets loaded, first frame ready). Until this fires, the app keeps a loading state on top of the WebView; the player sees the loader, not your game. Calling it more than once is a no-op.
 - `**reportResult(result, options?)**` — call once when the game ends. The host immediately overlays its own result screen, takes focus away from the WebView, and prepares to tear it down. **Do not** render any "submitted" confirmation in-game, and stop scheduling animations / audio / network calls after the call.
 
-**No start menu, no replay menu.** A Minit drop is one session: load → play → result. Do **not** add a title screen, "Play" / "Start" button, or tap-to-begin gate — after assets are ready, call `loadingDone()` and drop the player straight into the first interactive frame. When the run ends, call `reportResult(...)` immediately; do **not** show an in-game "Play again" / replay / game-over menu. The host owns what happens next.
+**No start menu, no replay menu.** A Post is one session: load → play → result. Do **not** add a title screen, "Play" / "Start" button, or tap-to-begin gate — after assets are ready, call `loadingDone()` and drop the player straight into the first interactive frame. When the run ends, call `reportResult(...)` immediately; do **not** show an in-game "Play again" / replay / game-over menu. The host owns what happens next.
 
 The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results.
 
@@ -68,7 +68,7 @@ Do not render flavor text in-game — pass it only via `reportResult`.
 
 ### Screen, viewport, and scaling
 
-Minit games run **portrait, full-screen, inside a mobile WebView** — no browser chrome, no rotation, no window the player can resize. So author against **one fixed design surface** and scale it to whatever viewport you are handed, rather than writing responsive layout. The house convention is **960 × 1480**.
+Minit Games games run **portrait, full-screen, inside a mobile WebView** — no browser chrome, no rotation, no window the player can resize. So author against **one fixed design surface** and scale it to whatever viewport you are handed, rather than writing responsive layout. The house convention is **960 × 1480**.
 
 - Author every position, size, and hitbox in that space. Never derive a gameplay coordinate from `window.innerWidth` / `innerHeight`.
 - Hold the whole game in one wrapper element and scale it with a single uniform CSS `transform: scale(...)`. Never compute separate x and y factors — non-uniform scale distorts art and breaks hit-testing.
@@ -77,7 +77,7 @@ Minit games run **portrait, full-screen, inside a mobile WebView** — no browse
 
 #### The viewport must be pinned at the moment your code reads it
 
-**This is the most common way a Minit game ships visibly broken.** If the page scale is not pinned to 1 when your scaling code reads `window.innerWidth`, the renderer is free to zoom out around your 960-wide surface, and `innerWidth` reports roughly the width of your *content* (~980) rather than the width of the *device* (~420). Your scaler multiplies by that, and the game renders about 2.3× too large and clipped — giant HUD, most of the playfield off-screen.
+**This is the most common way a Minit Games game ships visibly broken.** If the page scale is not pinned to 1 when your scaling code reads `window.innerWidth`, the renderer is free to zoom out around your 960-wide surface, and `innerWidth` reports roughly the width of your *content* (~980) rather than the width of the *device* (~420). Your scaler multiplies by that, and the game renders about 2.3× too large and clipped — giant HUD, most of the playfield off-screen.
 
 Declare this in `index.html`, and nothing else:
 
@@ -212,7 +212,7 @@ Feedback pops should fire on **every moment with clear emotional weight** — by
 
 #### Input conventions
 
-Minit games run on **mobile phones**. Touch is the only input that matters.
+Minit Games games run on **mobile phones**. Touch is the only input that matters.
 
 - **All interaction must work with `pointerdown` / `pointerup` / `pointermove`** (or the equivalent touch events). Pointer events fire for both touch and mouse, so they work in desktop browsers during development too.
 - **Never rely on mouse-only events:** `mouseover`, `mouseenter`, `mouseleave`, `contextmenu`, scroll wheel (`wheel`). These do not fire on touch screens.
@@ -221,7 +221,7 @@ Minit games run on **mobile phones**. Touch is the only input that matters.
 - **Tap targets must be large enough to hit with a finger** — aim for at least 44×44 CSS px. Tiny interactive areas that are easy to click with a cursor become unreachable on touch.
 - **Drag / swipe must use pointer capture.** Call `element.setPointerCapture(e.pointerId)` on `pointerdown` so the gesture keeps tracking even when the finger slides off the element.
 
-The header bar is the standard HUD across Minit drops. Treat it as **layout only**:
+The header bar is the standard HUD across Posts. Treat it as **layout only**:
 
 - **Position the bar** with `createHeaderBar({ y, padding })` — distance from the top and side inset.
 - **Place panels** with `align: 'left'` (default) or `align: 'right'`. Put **Score on the right**; secondary stats (turns, moves, lives) on the left unless the creator says otherwise.
@@ -232,9 +232,9 @@ The header bar is the standard HUD across Minit drops. Treat it as **layout only
 
 ## Building & uploading your game
 
-Minit games are uploaded to the [Creator Console](https://console.minit.games) as a **self-contained, pre-built ZIP**. Chat-based AI assistants (Claude, ChatGPT, Gemini, Google AI Studio, and others) can scaffold a complete game, but their output is almost always raw source — it needs a build step before it can be uploaded.
+Minit Games games are uploaded to the [Creator Console](https://console.minit.games) as a **self-contained, pre-built ZIP**. Chat-based AI assistants (Claude, ChatGPT, Gemini, Google AI Studio, and others) can scaffold a complete game, but their output is almost always raw source — it needs a build step before it can be uploaded.
 
-### What a Minit-ready ZIP looks like
+### What a Minit Games-ready ZIP looks like
 
 - `index.html` at the **root** of the ZIP (the built entry point) — not inside a `dist/` subfolder
 - All JS, CSS, and assets bundled alongside it — **including fonts** (see [Fonts and assets](#fonts-and-assets))
@@ -256,14 +256,14 @@ The AI will run the build and hand you a ZIP of the compiled output. That ZIP is
 
 ### Google AI Studio (Build Mode)
 
-Google AI Studio's **Build Mode** is a popular way to prototype Minit games. By default it exports the project's **source files** rather than a built bundle — so the default export button produces a ZIP the Creator Console will reject. Two ways around it:
+Google AI Studio's **Build Mode** is a popular way to prototype games for Minit Games. By default it exports the project's **source files** rather than a built bundle — so the default export button produces a ZIP the Creator Console will reject. Two ways around it:
 
 - **Ask the AI to build for you** — send the build prompt above in the Build Mode chat; AI Studio runs `npm run build` and gives you a ZIP of `dist/`.
 - **Build locally** — download the source export, then in the project folder run `npm install` followed by `npm run build`, and zip the **contents** of the `dist/` folder.
 
 ## Game metadata (`meta.json`)
 
-Every Minit game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Minit draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
+Every Minit Games game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Post draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
 
 ### Format
 
@@ -297,7 +297,7 @@ Unrecognised top-level keys are ignored, so extras like `$schema` are safe to le
 
 ### `resultSorting`
 
-Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Minit form:
+Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Post form:
 
 | Value | Meaning |
 | --- | --- |
@@ -310,7 +310,7 @@ This only sets the **initial** choice; the creator can still change it on the fo
 
 ### `config`
 
-An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Project's** config definitions (not per-post values).
+An optional array of config value definitions the game exposes to creators. Missing is simply skipped; if present but malformed, `config` is skipped and the rest of `meta.json` still prefills. On upload, it prefills the **Game's** config definitions (not per-post values).
 
 #### What config values are, and what they're for
 
@@ -323,8 +323,8 @@ Why expose them:
 
 How a value gets from `meta.json` into the running game:
 
-1. You declare it in `meta.json` and upload the ZIP → the console stores it as a **Project** config definition.
-2. Each post of that project stores only the values it overrides; unset keys keep the declared default.
+1. You declare it in `meta.json` and upload the ZIP → the console stores it as a **Game** config definition.
+2. Each post of that Game stores only the values it overrides; unset keys keep the declared default.
 3. At play time the host appends **every** resolved key to the game URL as a query param — on the app and on the web player alike.
 4. Your game reads it with `getConfigValue('key', 'fallback')`.
 
@@ -385,10 +385,10 @@ Bounds are enforced before a config value reaches the game. They do not change t
 | Field | Description |
 | --- | --- |
 | `license` | An [SPDX identifier](https://spdx.org/licenses/) for the bundle's overall license, or `"proprietary"` if it's all your own. |
-| `credits` | A freeform credit line shown to players (app burger menu, web project detail). |
+| `credits` | A freeform credit line shown to players (app burger menu, web game details). |
 | `sourceUrl` | Where the original asset or library came from. Must start with `http://` or `https://`. |
 
-**Leaving `license` out is not a null/unknown state.** Per the Minit Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; declare an SPDX identifier only when it's the license you're actually granting for the bundle **as a whole** — not because the bundle happens to include third-party content under one (that detail belongs in `THIRD-PARTY-NOTICES.txt`, per above).
+**Leaving `license` out is not a null/unknown state.** Per the Minit Games Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit Games to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; declare an SPDX identifier only when it's the license you're actually granting for the bundle **as a whole** — not because the bundle happens to include third-party content under one (that detail belongs in `THIRD-PARTY-NOTICES.txt`, per above).
 
 #### What each license allows
 
@@ -478,7 +478,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 
 - **Create and maintain `meta.json` at the ZIP root.** When starting a new game, create a `meta.json` with `title`, `controls`, `logic`, and `description` fields following the [Game metadata](#game-metadata-metajson) format. Place it at the root of the uploaded ZIP alongside `index.html` — the Creator Console reads it from the ZIP root to pre-fill the draft. Update it whenever the game concept changes (new mechanic, scoring change, controls update).
 - **Touch-only input — no mouse-specific events.** Games run on mobile phones; touch is the only input that matters. Use `pointerdown` / `pointerup` / `pointermove` for all interaction. Remove any `mouseover`, `mouseenter`, `wheel` (scroll), or `:hover`-dependent logic the AI added — these do not fire on touch screens. Tap targets must be at least 44×44 px. Drag / swipe gestures must call `element.setPointerCapture(e.pointerId)` on `pointerdown`. Do not add keyboard controls unless the creator asks for desktop support.
-- **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
+- **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit Games app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
 - **No start menu or replay menu.** The game should begin straight into gameplay (no title screen, "Play" button, or tap-to-begin), and end with `reportResult(...)` — not an in-game "Play again" or game-over menu. The host handles restart and the result screen.
 - **Fire feedback on every emotionally significant moment.** Score gain, combo, life lost, penalty, time-up, level clear — each needs a matching `showPositiveFeedback` / `showNegativeFeedback` / `showNeutralFeedback` call. The flash is non-blocking and auto-dismisses; omitting it makes the game feel unresponsive. Never silently subtract health or lives.
 - **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView and the player is stuck on the loader. Do not wire it to a "Start" button — call it when gameplay is ready to begin.
@@ -585,9 +585,9 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 
 ### Game assets must be self-contained
 
-Minit games run sandboxed — the game WebView has no external network access at runtime. All assets (images, audio, fonts, etc.) must ship inside the game ZIP. Any `<link>` to `fonts.googleapis.com` or any other external URL will fail silently when the game plays inside the app.
+Minit Games games run sandboxed — the game WebView has no external network access at runtime. All assets (images, audio, fonts, etc.) must ship inside the game ZIP. Any `<link>` to `fonts.googleapis.com` or any other external URL will fail silently when the game plays inside the app.
 
-If your build does reference Google Fonts links, the Minit publish pipeline will attempt to inline the font data automatically at publish time. This is a best-effort safety net — do not rely on it. The correct approach is to bundle font files (woff2) inside your project and reference them with relative-path `@font-face` rules:
+If your build does reference Google Fonts links, the Minit Games publish pipeline will attempt to inline the font data automatically at publish time. This is a best-effort safety net — do not rely on it. The correct approach is to bundle font files (woff2) inside your project and reference them with relative-path `@font-face` rules:
 
 ```css
 @font-face {
