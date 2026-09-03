@@ -141,7 +141,7 @@ function lightenColor(hex: string, percent: number): string {
  * Spawn a reward icon that animates from start → scatter → target.
  *
  * Prefer {@link Panel.flyToPanel} when the destination is a header panel — it is the
- * standard pattern across Minit drops for score and resource collection.
+ * standard pattern across Posts for score and resource collection.
  *
  * The animation sequence:
  * 1. Spawn at start position (scale 0 → 1)

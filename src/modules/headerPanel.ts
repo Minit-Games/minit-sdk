@@ -82,7 +82,7 @@ export interface Panel {
     /** Get the panel's position in viewport coordinates (for flying icons) */
     getPosition(): { x: number; y: number };
     /**
-     * Spawn the shared Minit fly-to-HUD animation for this panel.
+     * Spawn the shared Minit Games fly-to-HUD animation for this panel.
      * **Prefer this for +1 gains** when score or other header resources change due to an
      * in-world event — pass the event's `{ x, y }` as `start`, then bump the panel
      * in `onArrive` (optionally with `setValue(..., { animate: true })`).

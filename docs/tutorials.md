@@ -1,6 +1,6 @@
 # Interactive tutorials
 
-First-play onboarding for Minit drops — modal instruction pills, pointing fingers, highlight rings, and swipe demos. **No PIXI or other rendering library required** — the overlay is pure DOM.
+First-play onboarding for Posts — modal instruction pills, pointing fingers, highlight rings, and swipe demos. **No PIXI or other rendering library required** — the overlay is pure DOM.
 
 ```bash
 npm install @minit-games/sdk
@@ -72,7 +72,7 @@ reportResult(score, {
 | 3 | `getUserData()` is a non-empty string | **Hide** — host or a prior `reportResult` stored a value |
 | 4 | (default) | **Show** — new player |
 
-The drop's userData slot is configured in the [Creator Console](https://console.minit.games) at upload time. Game code does not pass a key name — the SDK reads the single slot via `getUserData()`.
+The Game's userData slot is configured in the [Creator Console](https://console.minit.games) at upload time. Game code does not pass a key name — the SDK reads the single slot via `getUserData()`.
 
 ### Persisting completion
 
@@ -216,7 +216,7 @@ All tutorial visuals (pill colors, finger emoji, ring size, fonts, timings) come
 | `createTutorialOverlay({ container?, width?, height?, zIndex? })` | Per-call color/size overrides on any primitive |
 | | **`showPill` position** — the pill is always centered by the SDK |
 
-`showPill` intentionally exposes **no** font/color/style overrides and **no position argument** — every pill appears centered in the canvas and looks identical across drops. Do not attempt to reposition or restyle it (e.g. via wrapper `div`, CSS, or DOM mutation) unless the creator explicitly asks. Finger, highlight, and swipe primitives accept some sizing overrides for edge cases, but **omit them by default**; the theme defaults cover the common case.
+`showPill` intentionally exposes **no** font/color/style overrides and **no position argument** — every pill appears centered in the canvas and looks identical across Posts. Do not attempt to reposition or restyle it (e.g. via wrapper `div`, CSS, or DOM mutation) unless the creator explicitly asks. Finger, highlight, and swipe primitives accept some sizing overrides for edge cases, but **omit them by default**; the theme defaults cover the common case.
 
 ### When text is OK
 
@@ -237,7 +237,7 @@ Use `highlight` without a finger when the element should be **noticed but not ta
 
 ## Do not use
 
-- A start menu or replay menu — the drop starts straight into gameplay and ends with `reportResult(...)` (see [README game lifecycle](./README.md#game-lifecycle)).
+- A start menu or replay menu — the Post starts straight into gameplay and ends with `reportResult(...)` (see [README game lifecycle](./README.md#game-lifecycle)).
 - Custom HTML/CSS tutorial overlays — use the SDK primitives for a consistent look and correct input blocking.
 - **A block of text or multiple pills upfront** — show one step at a time, in the moment it is needed, not all instructions before play begins.
 - **A fixed-timer script** — wire every hint to game state/events, not to `setTimeout`. If the player acts before the hint would appear, skip that step entirely.
