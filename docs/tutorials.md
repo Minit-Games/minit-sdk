@@ -72,7 +72,7 @@ reportResult(score, {
 | 3 | `getUserData()` is a non-empty string | **Hide** — host or a prior `reportResult` stored a value |
 | 4 | (default) | **Show** — new player |
 
-The Post's userData slot is configured in the [Creator Console](https://console.minit.games) at upload time. Game code does not pass a key name — the SDK reads the single slot via `getUserData()`.
+The Game's userData slot is configured in the [Creator Console](https://console.minit.games) at upload time. Game code does not pass a key name — the SDK reads the single slot via `getUserData()`.
 
 ### Persisting completion
 

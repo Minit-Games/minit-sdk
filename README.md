@@ -263,7 +263,7 @@ Google AI Studio's **Build Mode** is a popular way to prototype games for Minit 
 
 ## Game metadata (`meta.json`)
 
-Every Minit Games game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Post draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
+Every Minit Games game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Game draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
 
 ### Format
 
@@ -297,7 +297,7 @@ Unrecognised top-level keys are ignored, so extras like `$schema` are safe to le
 
 ### `resultSorting`
 
-Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Post form:
+Which result wins, and therefore how the leaderboard is ordered. It presets the Scoring choice on the new-Game form:
 
 | Value | Meaning |
 | --- | --- |
