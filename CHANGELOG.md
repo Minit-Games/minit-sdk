@@ -12,6 +12,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 - docs: terminology — Minit Games / Game / Post
 
+### Fixed
+
+- `addBackground()` image container is overscanned by 1px so WebKit's edge seam around an `object-fit` image no longer exposes the backdrop color as a hairline at the top/bottom of the game WebView (DROP-8459).
+
 ---
 
 ## [1.3.0] — 2026-05-11
