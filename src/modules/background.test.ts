@@ -88,6 +88,17 @@ describe("addBackground", () => {
             expect(img!.style.height).toBe("100%");
         });
 
+        it("overscans the image container by 1px so WebKit's edge seam stays off-screen (DROP-8459)", () => {
+            addBackground({ backgroundColor: "#000", image: { src: "pic.svg" } });
+            const img = document
+                .getElementById("game-background")!
+                .querySelector("img")!;
+            const imgContainer = img.parentElement!;
+            expect(imgContainer.style.position).toBe("absolute");
+            expect(imgContainer.style.inset).toBe("-1px");
+            expect(imgContainer.style.overflow).toBe("hidden");
+        });
+
         it("defaults objectFit to 'cover' and opacity to '1'", () => {
             addBackground({ backgroundColor: "#000", image: { src: "pic.png" } });
             const img = document

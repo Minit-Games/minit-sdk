@@ -193,7 +193,11 @@ export function addBackground(options?: Background): void {
     if (options?.image?.src) {
         const imgContainer = document.createElement('div');
         imgContainer.style.position = 'absolute';
-        imgContainer.style.inset = '0';
+        // Overscan by 1px on every side. WebKit paints an object-fit <img> about
+        // 1 CSS px short of its box at the top/bottom edge, which let the
+        // backgroundColor behind it show through as a hairline in the app's game
+        // WebView (DROP-8459). The extra pixel sits outside the viewport.
+        imgContainer.style.inset = '-1px';
         imgContainer.style.overflow = 'hidden';
         imgContainer.style.pointerEvents = 'none';
 
