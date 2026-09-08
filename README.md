@@ -303,8 +303,10 @@ Which result wins, and therefore how the leaderboard is ordered. It presets the 
 | --- | --- |
 | `"highestScore"` | Highest score wins — the default when `resultSorting` is absent or invalid. |
 | `"lowestScore"` | Lowest score wins (golf-style). |
-| `"fastestTime"` | Fastest run wins — the reported number is treated as a time, not points. |
-| `"slowestTime"` | Slowest run wins — likewise a time. |
+| `"fastestTime"` | Fastest run wins — the reported number is treated as a time **in seconds**, not points. |
+| `"slowestTime"` | Slowest run wins — likewise a time in seconds. |
+
+**Time results are seconds, not milliseconds.** With either `*Time` option, pass `reportResult(elapsedMs / 1000)` — a plain number of seconds, fractions allowed (`42.5`). The platform displays whole seconds (`42s`, `1m 23s`) and ranks on the exact value; `reportResult(42500)` would render as `11h 48m 20s`.
 
 This only sets the **initial** choice; the creator can still change it on the form before publishing. It does not change what your game passes to `reportResult(...)` — you always report a single number, and this is how the platform ranks and labels it. An unrecognised value is dropped silently and falls back to `"highestScore"`, leaving the rest of `meta.json` intact.
 

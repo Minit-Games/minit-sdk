@@ -26,7 +26,7 @@
             "type": ["string", "number"]
         },
         "resultSorting": {
-            "description": "How this game's result list is ordered.",
+            "description": "How this game's result list is ordered. With fastestTime/slowestTime the number passed to reportResult is a duration in SECONDS (fractions allowed), not milliseconds.",
             "enum": ["highestScore", "lowestScore", "fastestTime", "slowestTime"]
         },
         "config": {
