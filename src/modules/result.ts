@@ -1,6 +1,14 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 
+/**
+ * Reports the run's outcome to the host and triggers its result screen. Call once, when the run ends.
+ *
+ * @param result A number for score/time games, or a result-group string (e.g. `'WIN'`).
+ *   **For time-based games (`resultSorting: "fastestTime" | "slowestTime"`) the number is
+ *   SECONDS, not milliseconds** — fractions are allowed (`42.5`). Pass `elapsedMs / 1000`.
+ * @param options Optional `flavorText`, `userData`, `delay` (ms).
+ */
 export function reportResult(result: number|string, options?: ResultOptions): void {
 
     if(isTestEnvironment()) {
