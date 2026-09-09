@@ -1,6 +1,6 @@
 /**
- * Tests for SDK viewability (DROP-8668 — red phase, written before the
- * implementation in the paired DROP-8666 subtask).
+ * Tests for SDK viewability (DROP-8668, implemented by the paired DROP-8666
+ * subtask — see viewability.ts).
  *
  * Public facade under test (see viewability.ts):
  * - `isViewable(): boolean`
@@ -12,7 +12,9 @@
  *   `onViewableChange` registers via `window.minit.addEventListener(
  *   "viewableChange", ...)` and its unsubscribe calls
  *   `window.minit.removeEventListener("viewableChange", ...)` with the same
- *   handler reference that was registered.
+ *   handler reference that was registered. The host path is selected only
+ *   when `isViewable`/`addEventListener`/`removeEventListener` are ALL
+ *   present — `isViewable()` also seeds the dedup baseline below.
  * - Host absent → `isViewable()` mirrors
  *   `document.visibilityState === "visible"`; subscribing installs a
  *   `document.visibilitychange` listener.
@@ -24,14 +26,9 @@
  * - Duplicate subscribe with the same `fn` reference delivers only once.
  * - Calling the returned unsubscribe function more than once is a no-op.
  * - Delivery only happens on an ACTUAL value change — a same-value
- *   visibilitychange/viewableChange event must not re-deliver.
- *
- * `isViewable`/`onViewableChange` currently come from a throwing stub module
- * (src/modules/viewability.ts) — the paired implementation subtask replaces
- * the stub with the real facade. Until then, every assertion below that
- * depends on real behavior is expected to fail (most as a thrown "not
- * implemented" error surfacing as a test failure, which is the intended red
- * state for this subtask).
+ *   visibilitychange/viewableChange event must not re-deliver, including the
+ *   very first host event when it matches the `isViewable()` baseline
+ *   already read at subscribe time (DROP-8666 Copilot review finding).
  */
 
 /** Overrides document.visibilityState and fires the event real hosts fire on change. */
@@ -196,7 +193,9 @@ describe("viewability", () => {
         });
 
         it("delivers the value the host's handler is invoked with", async () => {
-            const host = createFakeHost();
+            // Baseline (isViewable()) is false so that delivering `true` is
+            // an actual change and is not suppressed by the dedup baseline.
+            const host = createFakeHost({ isViewable: jest.fn(() => false) });
             window.minit = host as never;
 
             const { onViewableChange } = await import("./viewability");
@@ -295,7 +294,9 @@ describe("viewability", () => {
         });
 
         it("delivers only once per change in host mode, even if the host is asked to fire every registered handler", async () => {
-            const host = createFakeHost();
+            // Baseline (isViewable()) is false so that firing `true` below
+            // is an actual change and is not suppressed by the dedup baseline.
+            const host = createFakeHost({ isViewable: jest.fn(() => false) });
             window.minit = host as never;
 
             const { onViewableChange } = await import("./viewability");
@@ -362,7 +363,10 @@ describe("viewability", () => {
         });
 
         it("does not re-deliver when the host fires viewableChange with the same value twice", async () => {
-            const host = createFakeHost();
+            // Baseline (isViewable()) is false so the first `true` delivery
+            // below is an actual change; the second is the same-value repeat
+            // this test is guarding against.
+            const host = createFakeHost({ isViewable: jest.fn(() => false) });
             window.minit = host as never;
 
             const { onViewableChange } = await import("./viewability");
@@ -374,6 +378,26 @@ describe("viewability", () => {
             registeredHandler(true); // same value again
 
             expect(fn).toHaveBeenCalledTimes(1);
+        });
+
+        it("does not deliver the host's first event when it matches the isViewable() baseline read at subscribe time (no actual change)", async () => {
+            // Regression guard (DROP-8666 Copilot review): the host path
+            // must seed its dedup baseline from isViewable() BEFORE
+            // registering the listener, so a host that redelivers the
+            // current value as its first event (or a subscribe racing a
+            // host-side transition) can never violate the documented
+            // "actual value change" guarantee (README § Viewability).
+            const host = createFakeHost({ isViewable: jest.fn(() => true) });
+            window.minit = host as never;
+
+            const { onViewableChange } = await import("./viewability");
+            const fn = jest.fn();
+            onViewableChange(fn);
+            const registeredHandler = host.addEventListener.mock.calls[0][1];
+
+            registeredHandler(true); // matches isViewable() baseline -> not an actual change
+
+            expect(fn).not.toHaveBeenCalled();
         });
     });
 });

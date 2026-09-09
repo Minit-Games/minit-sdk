@@ -504,7 +504,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these â
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param â€” always a string (see [`config`](#config))                                              |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
-| `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); `true` outside the host too (mirrors document visibility) (see [Viewability](#viewability)) |
+| `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); outside the host, mirrors `document.visibilityState === "visible"` instead (see [Viewability](#viewability)) |
 | `onViewableChange(fn)`            | Subscribe to viewability changes; returns an unsubscribe function. Prefer this over the audio-visibility registry for pause/resume logic (see [Viewability](#viewability)) |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |

@@ -5,11 +5,14 @@
  * Host present (with the new methods) -> thin delegation to
  * `window.minit.isViewable()` / `window.minit.addEventListener(
  * "viewableChange", ...)` / `removeEventListener(...)`.
+ * `onViewableChange` only selects the host path when ALL THREE methods are
+ * present — `isViewable()` is required not just to answer isViewable() calls,
+ * but to seed the dedup baseline (see below) before registering the listener.
  *
- * Local-dev fallback (no `window.minit`, or an older host missing these
- * methods): `isViewable()` mirrors `document.visibilityState === "visible"`;
- * `onViewableChange` is driven by `document.visibilitychange`. Never throws
- * on an older host.
+ * Local-dev fallback (no `window.minit`, or an older host missing any of
+ * these methods): `isViewable()` mirrors `document.visibilityState ===
+ * "visible"`; `onViewableChange` is driven by `document.visibilitychange`.
+ * Never throws on an older host.
  *
  * `window.minit` presence/method-availability is re-checked on every
  * `isViewable()` call — never cached — so a call made before the host
@@ -43,11 +46,18 @@ export function onViewableChange(fn: ViewableChangeHandler): () => void {
     const host = window.minit;
     let unsubscribed = false;
 
-    if (host && typeof host.addEventListener === "function" && typeof host.removeEventListener === "function") {
-        // No initial baseline read from the host here — the first
-        // 'viewableChange' event received after subscribing is always
-        // delivered; only a repeat of the SAME value is deduped.
-        let lastValue: boolean | undefined;
+    if (
+        host &&
+        typeof host.isViewable === "function" &&
+        typeof host.addEventListener === "function" &&
+        typeof host.removeEventListener === "function"
+    ) {
+        // Baseline read from the host BEFORE registering the listener, so
+        // the host's first delivered event is only forwarded when it is an
+        // ACTUAL change from what isViewable() already reports — a host
+        // that doesn't dedupe internally (or a subscribe that races a
+        // host-side transition) could otherwise redeliver the current value.
+        let lastValue: boolean = host.isViewable();
 
         const handler: ViewableChangeHandler = (viewable) => {
             if (viewable === lastValue) return;
