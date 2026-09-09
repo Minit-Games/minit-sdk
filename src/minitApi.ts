@@ -30,4 +30,10 @@ export type MinitApi = {
 
     reportResult: (result: number|string, options?: HostResultOptions) => void,
     loadingDone: () => void,
+
+    // Optional — absent on older hosts. See src/modules/viewability.ts for the
+    // local-dev / older-host fallback that covers their absence.
+    isViewable?: () => boolean,
+    addEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
+    removeEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
 }

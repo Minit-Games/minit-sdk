@@ -1,29 +1,95 @@
 /**
- * Stub for DROP-8666 — "Expose `isViewable()` and `viewableChange` in
- * `@minit-games/sdk`". The real implementation lands in the paired
- * implementation subtask; this file exists only so `viewability.test.ts`
- * (DROP-8668, written first / red-phase) resolves as a module.
+ * SDK viewability facade (DROP-8666) — mirrors the host viewability signal
+ * so Minit games can pause when covered.
  *
- * Target contract (see viewability.test.ts for the full behavioral spec):
- * - `isViewable()`: host present → delegate to `window.minit.isViewable()`;
- *   host absent/older (no `isViewable`) → mirror
- *   `document.visibilityState === "visible"`. Re-checked on every call — the
- *   presence (or absence) of `window.minit` is never cached.
- * - `onViewableChange(fn)`: host present with the new methods → register via
- *   `window.minit.addEventListener("viewableChange", ...)`, unsubscribe via
- *   `removeEventListener`; host absent/older → fall back to a
- *   `document.visibilitychange` listener. Delivers only on an actual value
- *   change, is idempotent for a duplicate `fn` registration, and unsubscribe
- *   is idempotent (safe to call more than once).
+ * Host present (with the new methods) -> thin delegation to
+ * `window.minit.isViewable()` / `window.minit.addEventListener(
+ * "viewableChange", ...)` / `removeEventListener(...)`.
  *
- * Deliberately throwing (not a silent no-op) so every red-phase test fails on
- * behavior, not on module resolution.
+ * Local-dev fallback (no `window.minit`, or an older host missing these
+ * methods): `isViewable()` mirrors `document.visibilityState === "visible"`;
+ * `onViewableChange` is driven by `document.visibilitychange`. Never throws
+ * on an older host.
+ *
+ * `window.minit` presence/method-availability is re-checked on every
+ * `isViewable()` call — never cached — so a call made before the host
+ * appears falls back, then upgrades to host delegation on a later call once
+ * the host appears. `onViewableChange` picks its delivery mechanism (host vs.
+ * document) once, at subscribe time — there's no requirement to upgrade an
+ * already-active subscription mid-flight.
  */
 
+type ViewableChangeHandler = (viewable: boolean) => void;
+
+// One subscription per user-supplied `fn` reference, so a duplicate
+// `onViewableChange(fn)` call is a no-op instead of creating a second
+// delivery path (and thus a double delivery).
+const subscriptions = new Map<ViewableChangeHandler, () => void>();
+
 export function isViewable(): boolean {
-    throw new Error("isViewable() is not implemented yet (DROP-8666)");
+    const host = window.minit;
+    if (host && typeof host.isViewable === "function") {
+        return host.isViewable();
+    }
+    return document.visibilityState === "visible";
 }
 
-export function onViewableChange(_fn: (viewable: boolean) => void): () => void {
-    throw new Error("onViewableChange() is not implemented yet (DROP-8666)");
+export function onViewableChange(fn: ViewableChangeHandler): () => void {
+    const existingUnsubscribe = subscriptions.get(fn);
+    if (existingUnsubscribe) {
+        return existingUnsubscribe;
+    }
+
+    const host = window.minit;
+    let unsubscribed = false;
+
+    if (host && typeof host.addEventListener === "function" && typeof host.removeEventListener === "function") {
+        // No initial baseline read from the host here — the first
+        // 'viewableChange' event received after subscribing is always
+        // delivered; only a repeat of the SAME value is deduped.
+        let lastValue: boolean | undefined;
+
+        const handler: ViewableChangeHandler = (viewable) => {
+            if (viewable === lastValue) return;
+            lastValue = viewable;
+            fn(viewable);
+        };
+
+        host.addEventListener("viewableChange", handler);
+
+        const unsubscribe = () => {
+            if (unsubscribed) return;
+            unsubscribed = true;
+            host.removeEventListener?.("viewableChange", handler);
+            subscriptions.delete(fn);
+        };
+
+        subscriptions.set(fn, unsubscribe);
+        return unsubscribe;
+    }
+
+    // Document fallback — baseline is the CURRENT mirrored value at
+    // subscribe time, so a visibilitychange event that leaves the mirrored
+    // value unchanged (e.g. re-focus without an actual state flip) is not
+    // redelivered.
+    let lastValue = document.visibilityState === "visible";
+
+    const handler = () => {
+        const viewable = document.visibilityState === "visible";
+        if (viewable === lastValue) return;
+        lastValue = viewable;
+        fn(viewable);
+    };
+
+    document.addEventListener("visibilitychange", handler);
+
+    const unsubscribe = () => {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        document.removeEventListener("visibilitychange", handler);
+        subscriptions.delete(fn);
+    };
+
+    subscriptions.set(fn, unsubscribe);
+    return unsubscribe;
 }
