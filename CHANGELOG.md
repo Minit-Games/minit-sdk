@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ## [Unreleased]
 
+### Added
+
+- `isViewable()` and `onViewableChange(fn)` — mirror the host's viewability signal (feed item active + focused + app foreground) so games can pause/resume when covered, with a `document.visibilitychange`-based fallback outside the host (DROP-8666).
+
 ### Changed
 
 - docs: terminology — Minit Games / Game / Post

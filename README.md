@@ -504,6 +504,8 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config))                                              |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
+| `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); `true` outside the host too (mirrors document visibility) (see [Viewability](#viewability)) |
+| `onViewableChange(fn)`            | Subscribe to viewability changes; returns an unsubscribe function. Prefer this over the audio-visibility registry for pause/resume logic (see [Viewability](#viewability)) |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
@@ -564,6 +566,42 @@ Omitting `userData` (or not passing `options`) leaves the stored value unchanged
 ### Limits
 
 - **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are rejected and the existing value is left unchanged.
+
+## Viewability
+
+Use `isViewable()` / `onViewableChange(fn)` to pause timers, music, or animation
+when the game is covered — swiped away in a feed, backgrounded, or covered by an
+overlay (e.g. an info screen) — and resume when it becomes visible again.
+
+```ts
+import { onViewableChange } from '@minit-games/sdk';
+
+let paused = false;
+
+// Subscribe once at startup.
+onViewableChange((viewable) => {
+  if (viewable) {
+    resumeGameLoop();
+  } else {
+    pauseGameLoop(); // e.g. the player opened an info screen that covers the game
+  }
+  paused = !viewable;
+});
+```
+
+- `true` means the feed item is active, focused, and the app is in the
+  foreground; `false` means it's been swiped away, backgrounded, or covered.
+- `onViewableChange` fires only on an **actual value change** — no repeat
+  delivery for the same value, and registering the same function twice is a
+  no-op (not a second subscription).
+- Both functions work outside the host too, mirroring
+  `document.visibilityState` / `visibilitychange` — safe to call
+  unconditionally, including during local `npm run dev`.
+- `initializeSDK()`'s existing visibility-audio registry
+  (`registerAudioContext`/`registerAudioElement`) is a separate, still-supported
+  mechanism for auto-suspending registered `AudioContext`s/media elements on tab
+  visibility. Prefer `onViewableChange` for your own game-logic pause/resume
+  going forward.
 
 ---
 
