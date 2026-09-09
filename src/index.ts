@@ -18,6 +18,7 @@ export type { Background, ShadowOptions, ShapeOptions, ImageOptions } from "./mo
 export { applyMetaTags } from "./modules/meta.js";
 export { getEnvironment, isApp, isTestEnvironment, callApiFunction } from "./utils.js";
 export type { Environment } from "./utils.js";
+export { isViewable, onViewableChange } from "./modules/viewability.js";
 export type { ResultOptions, MinitApi } from "./minitApi.js";
 
 // Backward-compat aliases
