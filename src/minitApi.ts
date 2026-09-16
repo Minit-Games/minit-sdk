@@ -26,13 +26,22 @@ export type HostResultOptions = Omit<ResultOptions, 'userData'> & {
 export type MinitApi = {
     environment: "app" | "web",
     dropConfig: Record<string, string>,
+    // Both spellings, deliberately: both hosts now also inject the same
+    // object under `config` (the app originally injected only `config`,
+    // while the web runtime and this type declared only `dropConfig` —
+    // DROP-8886 aligned both hosts to expose both). Optional here so an
+    // older host snapshot or a minimal test double built against just
+    // `dropConfig` still satisfies this type.
+    config?: Record<string, string>,
     userData?: string,
 
     reportResult: (result: number|string, options?: HostResultOptions) => void,
     loadingDone: () => void,
 
-    // Optional — absent on older hosts. See src/modules/viewability.ts for the
-    // local-dev / older-host fallback that covers their absence.
+    // Optional — mobile-app-host only (injected by preLoad.ts's window.minit;
+    // absent from the web runtime's window.minit, and from older mobile
+    // hosts). See src/modules/viewability.ts for the local-dev / host-absent
+    // fallback that covers their absence.
     isViewable?: () => boolean,
     addEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
     removeEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
