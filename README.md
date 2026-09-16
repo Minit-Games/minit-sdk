@@ -501,7 +501,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
-| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config))                                              |
+| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
 | `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); outside the host, mirrors `document.visibilityState === "visible"` instead (see [Viewability](#viewability)) |
@@ -511,6 +511,10 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
 | `addBackground(options?)`        | Apply a styled background to the game container                                                                                                 |
 | `applyMetaTags()`                | Inject charset + viewport meta tags. **Only for games that cannot write to `<head>`** — the viewport meta it injects does not pin the page scale, and appending it over one your page already declares breaks fixed-surface scaling (see [Screen, viewport, and scaling](#screen-viewport-and-scaling)) |
+| `getEnvironment()`                | Current runtime environment: `"app"` (mobile host), `"web"` (web host), or `"testing"` (no host — e.g. running the game standalone outside Minit Games) |
+| `isApp()`                         | Shorthand for `getEnvironment() === "app"`                                                                                                      |
+| `isTestEnvironment()`             | Shorthand for `getEnvironment() === "testing"`                                                                                                  |
+| `callApiFunction(callback, testMessage)` | SDK-internal helper (exported, but leans internal): outside a host, logs `testMessage` instead of calling `callback` — used by `reportResult`/`loadingDone` so host-only calls no-op with a console message during local testing |
 
 
 #### Legacy aliases
@@ -563,6 +567,17 @@ reportResult(score, { userData: state });
 
 Omitting `userData` (or not passing `options`) leaves the stored value unchanged. An empty string `""` is a valid value and will overwrite any previously stored data.
 
+#### Wire format (why you should use the SDK for this)
+
+The bare string above is the **SDK-level** API. Before the call reaches the host, the SDK wraps it into the wire shape the host actually validates:
+
+```jsonc
+// what window.minit.reportResult receives
+{ "userData": { "value": "tutorialDone" } }
+```
+
+A game that bypasses the SDK and calls `window.minit.reportResult` itself must pass that wrapper form. Both hosts additionally tolerate a bare string as a fallback, but the wrapper is the contract — and the SDK is the only way to get it right for free.
+
 ### Limits
 
 - **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are rejected and the existing value is left unchanged.
@@ -610,6 +625,8 @@ onViewableChange((viewable) => {
 
 | Export                                     | Description                                                                                                                                                                  |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `shouldShowTutorial()`                     | Decide whether to run the first-play tutorial: `?tutorial=1/0` force-overrides, otherwise a non-empty `getUserData()` hides it (returning player), else shows it. Call before creating any tutorial overlay |
+| `createTutorialOverlay(opts?)`             | Create a DOM overlay hosting the tutorial primitives (pointing finger, highlight ring, swipe trail, modal pill) — `{ container?, width?, height?, zIndex? }`, no PIXI required |
 | `showFeedback(text, variant?, duration?)`  | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`)                                                                                                   |
 | `showPositiveFeedback(text, duration?)`    | Convenience wrapper — green variant                                                                                                                                          |
 | `showNeutralFeedback(text, duration?)`     | Convenience wrapper — orange variant                                                                                                                                         |
