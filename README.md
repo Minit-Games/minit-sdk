@@ -501,7 +501,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
-| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — always a string (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
+| `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
 | `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); outside the host, mirrors `document.visibilityState === "visible"` instead (see [Viewability](#viewability)) |
