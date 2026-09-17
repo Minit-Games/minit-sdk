@@ -13,8 +13,9 @@
  *     truncated by the platform, not rejected
  *   - `config[].description`'s existing maxLength: 100 is unchanged
  *
- * These assertions are expected to FAIL until DROP-8993 adds the keywords —
- * this file is written test-first, before that implementation exists.
+ * DROP-8993 (the schema changes these assertions guard) ships in this same
+ * PR, so these assertions pass against the completed changeset — this file
+ * was authored test-first, ahead of that implementation.
  */
 
 import { readFileSync } from "fs";
@@ -75,7 +76,11 @@ describe("schemas/meta.schema.json", () => {
                 const description = schema.properties[field].description;
                 expect(typeof description).toBe("string");
                 expect(description!.length).toBeGreaterThan(0);
+                // Both substrings must be present: "truncat" alone also matches the
+                // opposite contract ("not truncated ... rejected"), so pin the
+                // "not rejected" half too — a reversed claim fails this guard.
                 expect(description).toEqual(expect.stringContaining("truncat"));
+                expect(description).toEqual(expect.stringContaining("not rejected"));
             },
         );
     });
