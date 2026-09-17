@@ -51,7 +51,7 @@ The host (Minit Games app or web player) wraps the game in a controlled lifecycl
 
 **No start menu, no replay menu.** A Post is one session: load → play → result. Do **not** add a title screen, "Play" / "Start" button, or tap-to-begin gate — after assets are ready, call `loadingDone()` and drop the player straight into the first interactive frame. When the run ends, call `reportResult(...)` immediately; do **not** show an in-game "Play again" / replay / game-over menu. The host owns what happens next.
 
-The `flavorText` option is a short caption rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results.
+The `flavorText` option is a short caption, capped at **64 characters**, rendered beneath the score on the host's result screen, and is also surfaced in the activity feed where friends see this player's results.
 
 Each flavor text should highlight **one interesting statistic or moment from the session** that is **not the score itself** — something that helps another reader picture how the run went: a best combo, a hilarious mistake, a close call, an odd habit, and the like. Track these stats during gameplay and pick the most memorable one at `reportResult` time.
 
@@ -290,7 +290,7 @@ All fields below — including `config` (see next section) — are optional. Mis
 | `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
 | `config` | Array of tunable values the game exposes. See [`config`](#config). |
 | `license` | SPDX identifier for the bundle's content, or `"proprietary"`. See [Licensing](#licensing). |
-| `credits` | Freeform player-facing credit line for third-party assets. See [Licensing](#licensing). |
+| `credits` | Freeform player-facing credit line for third-party assets. The `meta.json` path has no length cap; the Creator Console's Credits editor caps input at 2500 characters. See [Licensing](#licensing). |
 | `sourceUrl` | URL of the original asset/library source. Must start with `http://` or `https://`. |
 
 Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
@@ -387,7 +387,7 @@ Bounds are enforced before a config value reaches the game. They do not change t
 | Field | Description |
 | --- | --- |
 | `license` | An [SPDX identifier](https://spdx.org/licenses/) for the bundle's overall license, or `"proprietary"` if it's all your own. |
-| `credits` | A freeform credit line shown to players (app burger menu, web game details). |
+| `credits` | A freeform credit line shown to players (app burger menu, web game details). In `meta.json` it has no length cap; the Creator Console's Credits editor caps input at 2500 characters. |
 | `sourceUrl` | Where the original asset or library came from. Must start with `http://` or `https://`. |
 
 **Leaving `license` out is not a null/unknown state.** Per the Minit Games Terms of Service, an absent `license` resolves authoritatively to `"proprietary"` — the creator's own content, all rights reserved, with a non-exclusive, royalty-free, worldwide license granted to Minit Games to host and serve it. Absent and explicit `"proprietary"` now mean the same thing; declare an SPDX identifier only when it's the license you're actually granting for the bundle **as a whole** — not because the bundle happens to include third-party content under one (that detail belongs in `THIRD-PARTY-NOTICES.txt`, per above).
@@ -485,7 +485,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 - **Fire feedback on every emotionally significant moment.** Score gain, combo, life lost, penalty, time-up, level clear — each needs a matching `showPositiveFeedback` / `showNegativeFeedback` / `showNeutralFeedback` call. The flash is non-blocking and auto-dismisses; omitting it makes the game feel unresponsive. Never silently subtract health or lives.
 - **Call `loadingDone()` as soon as the first interactive frame is ready.** Until it fires, the app keeps a loading state on top of the WebView and the player is stuck on the loader. Do not wire it to a "Start" button — call it when gameplay is ready to begin.
 - **Coerce config values — they come back as strings (or `undefined`).** `getConfigValue('startScore') + 5` yields the string `'05'`, not `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` and supply a default for numeric mods.
-- `**flavorText` is rendered by the host, not in-game.** It appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
+- `**flavorText` is rendered by the host, not in-game.** It is capped at 64 characters and appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
 - **One flying reward per point, not per event.** When a scoring action awards multiple points, spawn one icon per point via `spawnRewards(pointsEarned, ...)` — do not fly a single icon and jump the score by 10. Cluster large payouts into denominations like 5 / 25 / 125 automatically through `spawnRewards`.
 - **No `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Bundle woff2 files and reference them with relative-path `@font-face` rules instead (see [Fonts and assets](#fonts-and-assets)). The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action.
 - **An unpinned viewport meta, or `metaTags: true` on top of your own.** Both make the game render roughly 2.3× too large and clipped, because the page scale is not pinned when the scaling code reads `window.innerWidth`. Check two things: that `index.html` declares `maximum-scale=1, user-scalable=no` (the ordinary `width=device-width, initial-scale=1.0` line pins nothing and is not sufficient), and that the AI has not added `metaTags: true` alongside it — `applyMetaTags()` appends a second, unpinned viewport meta before your first scale pass. The tell is the preview image on the Console draft, or a game that visibly snaps size on a cold launch. See [Screen, viewport, and scaling](#screen-viewport-and-scaling).
@@ -499,7 +499,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
-| `reportResult(result, options?)` | Submit the final game result; optional `flavorText` for a session stat/moment (not the score) shown on the host result screen and activity feed |
+| `reportResult(result, options?)` | Submit the final game result; optional `flavorText` (64-character cap) for a session stat/moment, not the score, shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
@@ -580,7 +580,9 @@ A game that bypasses the SDK and calls `window.minit.reportResult` itself must p
 
 ### Limits
 
-- **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are rejected and the existing value is left unchanged.
+- **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are silently discarded with a successful response, and the existing value is left unchanged.
+
+Before forwarding a result, the SDK logs a `console.warn` when `flavorText` exceeds its 64-character cap or `userData` exceeds its 1024-UTF-8-byte cap. These are warnings, not errors: the SDK forwards both values unchanged, leaving truncation of `flavorText` and discarding of over-limit `userData` to the platform.
 
 ## Viewability
 
