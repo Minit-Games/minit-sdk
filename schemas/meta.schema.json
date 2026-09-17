@@ -6,20 +6,24 @@
     "type": "object",
     "properties": {
         "title": {
-            "description": "Display title. Convention: <Game name> <two thematically matching emojis>.",
-            "type": "string"
+            "description": "Display title. Convention: <Game name> <two thematically matching emojis>. Text beyond 50 characters is silently truncated by the platform, not rejected, so the upload still succeeds.",
+            "type": "string",
+            "maxLength": 50
         },
         "controls": {
-            "description": "How the player controls the game. Markdown, 2-4 bullets.",
-            "type": "string"
+            "description": "How the player controls the game. Markdown, 2-4 bullets. This field's maxLength is only an upper bound: description (the body), logic, and controls share one combined 2500-character budget that JSON Schema cannot express as a cross-field sum. The platform trims the body first, then logic, then controls. Over-limit text is silently truncated by the platform, not rejected, so the upload still succeeds.",
+            "type": "string",
+            "maxLength": 2500
         },
         "logic": {
-            "description": "Core rules and loop. Markdown, 2-4 bullets.",
-            "type": "string"
+            "description": "Core rules and loop. Markdown, 2-4 bullets. This field's maxLength is only an upper bound: description (the body), logic, and controls share one combined 2500-character budget that JSON Schema cannot express as a cross-field sum. The platform trims the body first, then logic, then controls. Over-limit text is silently truncated by the platform, not rejected, so the upload still succeeds.",
+            "type": "string",
+            "maxLength": 2500
         },
         "description": {
-            "description": "Free-form Markdown body describing the game.",
-            "type": "string"
+            "description": "Free-form Markdown body describing the game. This field's maxLength is only an upper bound: description (the body), logic, and controls share one combined 2500-character budget that JSON Schema cannot express as a cross-field sum. The platform trims the body first, then logic, then controls. Over-limit text is silently truncated by the platform, not rejected, so the upload still succeeds.",
+            "type": "string",
+            "maxLength": 2500
         },
         "schemaVersion": {
             "description": "Forward-compat hook. Nothing branches on it today; unknown values stay valid.",
@@ -40,7 +44,7 @@
             "$ref": "#/$defs/licenseId"
         },
         "credits": {
-            "description": "Freeform player-facing credit line for third-party assets. Does NOT replace THIRD-PARTY-NOTICES.txt — a notice-requiring license needs both.",
+            "description": "Freeform player-facing credit line for third-party assets. Does NOT replace THIRD-PARTY-NOTICES.txt — a notice-requiring license needs both. The meta.json path is uncapped and therefore has no maxLength; only the Creator Console's Credits editor has a 2500-character cap. Text beyond that editor cap is silently truncated by the platform, not rejected, so the upload still succeeds.",
             "type": "string"
         },
         "sourceUrl": {
