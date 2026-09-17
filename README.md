@@ -282,18 +282,20 @@ All fields below — including `config` (see next section) — are optional. Mis
 
 | Field | Description |
 | --- | --- |
-| `title` | The game's display title. Format: `<Game name> <two thematically matching emojis>` — e.g. `"Fruit Drop 🍉🗡️"`. |
-| `controls` | How the player controls the game. Markdown. 2–4 bullets covering inputs and their effects. |
-| `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. |
-| `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. |
+| `title` | The game's display title. Max 50 characters. Format: `<Game name> <two thematically matching emojis>` — e.g. `"Fruit Drop 🍉🗡️"`. Over-limit text is silently truncated by the platform rather than rejected, so the upload still succeeds. |
+| `controls` | How the player controls the game. Markdown. 2–4 bullets covering inputs and their effects. The schema sets `maxLength: 2500`, an upper bound only; see the shared budget below. |
+| `logic` | The game's core rules and loop. Markdown. 2–4 bullets covering the core mechanic, scoring, and end condition. The schema sets `maxLength: 2500`, an upper bound only; see the shared budget below. |
+| `description` | Free-form Markdown body describing the game — what it feels like, scoring breakdown, tips, creator corner. The schema sets `maxLength: 2500`, an upper bound only; see the shared budget below. |
 | `resultSorting` | How results are ranked — `"highestScore"` (default), `"lowestScore"`, `"fastestTime"`, or `"slowestTime"`. See below. |
 | `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
 | `config` | Array of tunable values the game exposes. See [`config`](#config). |
 | `license` | SPDX identifier for the bundle's content, or `"proprietary"`. See [Licensing](#licensing). |
-| `credits` | Freeform player-facing credit line for third-party assets. The `meta.json` path has no length cap; the Creator Console's Credits editor caps input at 2500 characters. See [Licensing](#licensing). |
+| `credits` | Freeform player-facing credit line for third-party assets. The `meta.json` path has no `maxLength` and is genuinely uncapped; only the Creator Console's Credits editor caps input at 2500 characters. Text beyond that editor cap is silently truncated rather than rejected, so the upload still succeeds. See [Licensing](#licensing). |
 | `sourceUrl` | URL of the original asset/library source. Must start with `http://` or `https://`. |
 
 Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
+
+`description` (the body), `logic`, and `controls` share **one combined 2500-character budget**. When their total exceeds it, the platform silently truncates the body first, then `logic`, then `controls`; it does not reject the upload. JSON Schema cannot express that cross-field sum, so each field's `maxLength: 2500` is only an upper bound. A bundle can pass schema validation and still be trimmed, while a third-party validator can reject a single field over 2500 even though the platform would accept and trim it.
 
 ### `resultSorting`
 
@@ -455,7 +457,7 @@ A machine-readable JSON Schema (draft 2020-12) for the whole file ships in this 
 
 The `$schema` key is ignored by the Creator Console's parser, so it is safe to leave in the uploaded file.
 
-The schema encodes every rule described above — the per-type `value` shapes, the type restrictions on each bound pair, and the mutually-exclusive `range`/bounds rule — plus the top-level fields. Three rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, and `min ≤ max` / `minLength ≤ maxLength`.
+The schema encodes every rule described above — the per-type `value` shapes, the type restrictions on each bound pair, and the mutually-exclusive `range`/bounds rule — plus the top-level fields. Some rules it cannot express, which the console still enforces: `key` uniqueness, `value` having to be a member of `range`, `min ≤ max` / `minLength ≤ maxLength`, and the combined 2500-character budget across `description`, `logic`, and `controls`.
 
 ### ZIP placement
 
