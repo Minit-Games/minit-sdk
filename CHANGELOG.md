@@ -16,7 +16,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 ### Changed
 
 - docs: terminology — Minit Games / Game / Post
-- **`shouldShowTutorial()` now gates on `window.minit.hasPlayedGame` instead of userData.** Without a `?tutorial=` override it hides only when `hasPlayedGame === true`; any other value or its absence shows the tutorial. A non-empty userData value no longer hides it, so Games no longer need to persist `userData` for the tutorial. The tutorial therefore shows on every launch on web play, in Studio preview (append `?tutorial=0` to hide), and in older app versions that don't inject the flag (DROP-9851).
+- **`shouldShowTutorial()` now gates on `window.minit.hasPlayedGame` instead of userData.** Without a `?tutorial=` override it hides only when `hasPlayedGame === true`; any other value or its absence shows the tutorial. Games no longer need to write `userData` to hide the tutorial for returning players (DROP-9851).
+  - **Behaviour change for existing Games:** a returning player whose stored userData used to hide the tutorial now sees it again wherever the host doesn't inject `window.minit.hasPlayedGame` — on every launch on web play, in Studio preview (append `?tutorial=0` to hide), and in older app builds.
 
 ### Fixed
 
