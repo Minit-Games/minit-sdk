@@ -34,13 +34,12 @@ npm run preview:tutorial
 
 Opens **http://localhost:5173/** — rebuilds `dist/` first, then serves the example with native ESM (no bundler). It defaults to the fixed 960×560 surface; use `?minit_previewSurface=400x700` for an arbitrary fixed logical surface or `?minit_previewSurface=fluid` for a fluid canvas. The HUD also links the tutorial gating parameters.
 
-## Gating — always check userData first
+## Gating — always call `shouldShowTutorial()` first
 
-**Never show tutorial UI without calling `shouldShowTutorial()` first.** Returning players have persisted `userData` from a previous session — if you skip the check, they will see the tutorial again every launch.
+**Never show tutorial UI without calling `shouldShowTutorial()` first.** The mobile app tells the SDK whether this player has already played the Game — if you skip the check, returning players will see the tutorial again every launch.
 
 ```ts
 import { shouldShowTutorial, createTutorialOverlay } from '@minit-games/sdk/ui';
-import { reportResult } from '@minit-games/sdk';
 
 // Capture once at boot — do not re-read mid-session.
 const tutorialMode = shouldShowTutorial();
@@ -55,12 +54,6 @@ if (tutorialMode) {
   // Only add a pill when the player genuinely cannot infer the rule from gestures alone.
   // Wire each step to game events — show one step at a time, advance when the player acts.
 }
-
-// EVERY reportResult call site — persist so the next launch skips the tutorial:
-reportResult(score, {
-  flavorText: '...',
-  userData: 'true',
-});
 ```
 
 ### Resolution order
@@ -69,16 +62,12 @@ reportResult(score, {
 |----------|-----------|--------|
 | 1 | `?tutorial=1` or `?tutorial=true` | Force **show** (QA) |
 | 2 | `?tutorial=0` or `?tutorial=false` | Force **hide** |
-| 3 | `getUserData()` is a non-empty string | **Hide** — host or a prior `reportResult` stored a value |
-| 4 | (default) | **Show** — new player |
+| 3 | `window.minit.hasPlayedGame === true` | **Hide** — returning player |
+| 4 | (default) | **Show** — new player, or no host flag |
 
-The Game's userData slot is configured in the [Creator Console](https://console.minit.games) at upload time. Game code does not pass a key name — the SDK reads the single slot via `getUserData()`.
+Only the mobile app injects `hasPlayedGame`: it records the Game as played after a non-preview `reportResult`. The web play page and Studio preview never inject it, so the tutorial shows there on every launch (append `?tutorial=0` to hide it). An older app version that predates the flag also shows the tutorial on every launch.
 
-### Persisting completion
-
-Add `userData: 'true'` to **every** `reportResult(...)` call (game over, win, timeout, give-up). Do not gate on `if (tutorialMode)` — writing `'true'` idempotently is safe and self-heals if a prior session crashed before reporting.
-
-Omitting `userData` leaves the slot unchanged and the tutorial **will show again** on the next launch.
+The Game does not need to persist anything for the tutorial — `userData` plays no part in gating.
 
 ### Local testing
 
@@ -86,13 +75,12 @@ Omitting `userData` leaves the slot unchanged and the tutorial **will show again
 |-----|----------|
 | `/?tutorial=1` | Tutorial always shows |
 | `/?tutorial=0` | Tutorial never shows |
-| `/` (no userData) | Tutorial shows |
-| `/?userData=true` | Tutorial hidden (simulates returning player) |
+| `/` (no host flag) | Tutorial shows |
 
-In DevTools before reload:
+To simulate a returning player, in DevTools before reload:
 
 ```js
-window.minit = { userData: 'true' };
+window.minit = { hasPlayedGame: true };
 ```
 
 ## Primitives

@@ -629,7 +629,7 @@ onViewableChange((viewable) => {
 
 | Export                                     | Description                                                                                                                                                                  |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shouldShowTutorial()`                     | Decide whether to run the first-play tutorial: `?tutorial=1/0` force-overrides, otherwise a non-empty `getUserData()` hides it (returning player), else shows it. Call before creating any tutorial overlay |
+| `shouldShowTutorial()`                     | Decide whether to run the first-play tutorial: `?tutorial=1/0` force-overrides, otherwise the host's `window.minit.hasPlayedGame === true` hides it (returning player), else shows it. Call before creating any tutorial overlay |
 | `createTutorialOverlay(opts?)`             | Create a DOM overlay hosting the tutorial primitives (pointing finger, highlight ring, swipe trail, modal pill) — `{ container?, width?, height?, zIndex? }`, no PIXI required |
 | `showFeedback(text, variant?, duration?)`  | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`)                                                                                                   |
 | `showPositiveFeedback(text, duration?)`    | Convenience wrapper — green variant                                                                                                                                          |
