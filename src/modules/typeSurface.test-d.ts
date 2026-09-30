@@ -48,3 +48,10 @@ const _minitApiNoSdkVersion: MinitApi = {
 // and `npm run check` fails, catching the regression this test guards against.
 // @ts-expect-error sdkVersion must not be a valid MinitApi property
 const _minitApiWithSdkVersion: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, sdkVersion: "1.7.2" };
+
+// --- MinitApi.hasPlayedGame (optional; absent on older hosts) ---
+
+const _minitApiHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, hasPlayedGame: true };
+const _minitApiNoHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {} };
+// @ts-expect-error hasPlayedGame must be a boolean
+const _minitApiStringHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, hasPlayedGame: "true" };
