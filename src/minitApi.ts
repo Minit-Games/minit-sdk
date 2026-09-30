@@ -45,4 +45,6 @@ export type MinitApi = {
     isViewable?: () => boolean,
     addEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
     removeEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
+
+    hasPlayedGame?: boolean,
 }
