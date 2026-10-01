@@ -11,10 +11,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 ### Added
 
 - `isViewable()` and `onViewableChange(fn)` — mirror the host's viewability signal (feed item active + focused + app foreground) so games can pause/resume when covered, with a `document.visibilitychange`-based fallback outside the host (DROP-8666).
+- `MinitApi.hasPlayedGame?: boolean` — host flag the mobile app injects once the player has played this Game (absent on web play, Studio preview, and older app versions) (DROP-9851).
 
 ### Changed
 
 - docs: terminology — Minit Games / Game / Post
+- **`shouldShowTutorial()` now gates on `window.minit.hasPlayedGame` instead of userData.** Without a `?tutorial=` override it hides only when `hasPlayedGame === true`; any other value or its absence shows the tutorial. Games no longer need to write `userData` to hide the tutorial for returning players (DROP-9851).
+  - **Behaviour change for existing Games:** a returning player whose stored userData used to hide the tutorial now sees it again wherever the host doesn't inject `window.minit.hasPlayedGame` — on every launch on web play, in Studio preview (append `?tutorial=0` to hide), and in older app builds.
 
 ### Fixed
 

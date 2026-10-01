@@ -1,23 +1,20 @@
 import { getConfigValue } from "../config.js";
-import { getUserData } from "../userData.js";
 
 /**
  * Decide whether to run the first-play tutorial for this Post.
  *
  * **Always call this before creating a tutorial overlay.** If it returns
- * `false`, do not show any tutorial UI — the host has persisted userData for
- * this player (they have played before).
+ * `false`, do not show any tutorial UI — the host reports that this player has
+ * already played this Game.
  *
  * Resolution order (top wins):
  * 1. `?tutorial=1` or `?tutorial=true` → force **show** (QA / preview)
  * 2. `?tutorial=0` or `?tutorial=false` → force **hide**
- * 3. `getUserData()` is a non-empty string → **hide** (returning player; host or a
- *    previous `reportResult` already stored a value in the Game's userData slot)
- * 4. otherwise → **show** (default-on for new players)
+ * 3. `window.minit.hasPlayedGame === true` → **hide** (returning player; only the
+ *    mobile app injects this flag, after a non-preview `reportResult`)
+ * 4. otherwise → **show** (new players, web play, Studio preview, older app hosts)
  *
- * After any play session, persist the flag from **every** `reportResult` call:
- * `reportResult(score, { userData: 'true', ... })`. Omitting `userData` leaves
- * the slot unchanged and the tutorial will show again on the next launch.
+ * Gating needs nothing from the Game: do not persist `userData` for the tutorial.
  *
  * **Tutorial design:** prefer gestures over text. Use `highlight` to mark important
  * game elements, pair with `showFinger` / `showSwipe` to demonstrate actions, and
@@ -29,9 +26,5 @@ export function shouldShowTutorial(): boolean {
     if (override === "1" || override === "true") return true;
     if (override === "0" || override === "false") return false;
 
-    const data = getUserData();
-    // Any persisted non-empty value means this player has played before.
-    if (data !== undefined && data !== "") return false;
-
-    return true;
+    return window.minit?.hasPlayedGame !== true;
 }

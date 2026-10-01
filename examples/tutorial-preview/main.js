@@ -98,7 +98,7 @@ function finishTutorial() {
 		tutorial = null;
 	}
 	setStatus('Tutorial complete — play freely');
-	reportResult(score, { userData: 'true', flavorText: 'Finished the tutorial walkthrough.' });
+	reportResult(score, { flavorText:'Finished the tutorial walkthrough.' });
 }
 
 function runStep() {
@@ -226,7 +226,7 @@ game.addEventListener('pointerup', (e) => {
 
 document.getElementById('restart').addEventListener('click', () => {
 	if (!shouldShowTutorial()) {
-		setStatus('Tutorial gated off — use “Force tutorial” or clear ?userData');
+		setStatus('Tutorial gated off — use “Force tutorial” or clear ?tutorial=0');
 		return;
 	}
 	score = 0;
