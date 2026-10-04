@@ -2,7 +2,7 @@
 
 Official SDK for building Minit Games HTML5 mini-games. Provides the game lifecycle API, configuration helpers, UI components (feedback text, flying rewards, header bars), and background utilities.
 
-> **Building with an AI assistant?** Claude, ChatGPT, Gemini, Google AI Studio, Lovable, and similar tools can scaffold a complete game for Minit Games — but they reliably miss two things: the game must be **built into a self-contained ZIP** before upload, and a handful of lifecycle calls must be wired correctly. See [Building & uploading your game](#building--uploading-your-game) and [Common mistakes AI assistants make](#common-mistakes-ai-assistants-make).
+> **Building with an AI assistant?** Claude, ChatGPT, Gemini, Google AI Studio, Lovable, and similar tools can scaffold a complete game for Minit Games — but they reliably miss two things: the game must be **built into a self-contained ZIP** before upload, and a handful of lifecycle calls must be wired correctly. See [Building & uploading your game](#building--uploading-your-game) and [Common mistakes AI assistants make](#common-mistakes-ai-assistants-make). To give your assistant direct access to Minit Games, connect the [Minit MCP server](#building-with-ai-assistants).
 
 ## Install
 
@@ -473,6 +473,20 @@ The schema encodes every rule described above — the per-type `value` shapes, t
   "description": "## What's This? 🎮\n\nA juicy swipe-and-slice arcade game — chop fruit out of the air, dodge bombs, and rack up combos! 🍉🗡️\n\n## Scoring ⭐\n\n- **+1** per fruit sliced 🍓\n- **Combo multiplier** for multi-fruit swipes 🔥\n- Bombs end the run instantly 💣\n\n## Tips 💡\n\n- Long, sweeping swipes catch more fruit in one go ✂️\n- Watch the corners — bombs love to sneak in 👀\n- Coconuts are heavy — they need a stronger swipe 🥥\n\n## Creator Corner 🎨\n\n- Enjoy the game? Leave a cheer so we make more like this! 🎉\n- Game Version: 1"
 }
 ```
+
+---
+
+## Building with AI assistants
+
+Connect your AI assistant to the **Minit MCP server** so it can read the platform requirements and SDK docs, scaffold and validate a game, and upload and publish it to your account:
+
+```
+https://mcp.minit.games/mcp
+```
+
+- Add it as a **remote HTTP MCP server** in any MCP-capable tool (Claude Desktop, Claude Code, Cursor, and others). The URL must include the `/mcp` path.
+- No API key: the first connection opens a browser sign-in with your Minit creator account.
+- Setup steps and the full tool list: [Minit MCP Server](https://minit.studio/docs/using-minit-mcp) in the Creator Docs.
 
 ---
 
