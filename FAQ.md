@@ -28,8 +28,6 @@ Every creator-facing size and length limit, when it applies, and whether exceedi
 | Files in a game ZIP | 2,000 files | Upload processing | **Reject:** processing fails when another file entry is encountered. |
 | One uncompressed ZIP entry | 50 MiB (52,428,800 bytes) | Upload processing | **Reject:** processing fails. |
 | Total uncompressed ZIP contents | 300 MiB (314,572,800 bytes) | Upload processing | **Reject:** processing fails. |
-| Cover image file | 8 MiB (8,388,608 bytes) | Cover upload | **Reject:** the cover upload is rejected. |
-| Cover image dimensions | 780 × 1,340 pixels | Cover upload processing | **Reject:** processing fails unless both dimensions match exactly. |
 | Analysed asset path | 512 characters | Upload asset analysis and validated asset data | **Silent drop** during asset analysis; a directly validated over-limit asset entry is **rejected**. |
 | Moddable asset slot name | 100 characters | Authoring a moddable asset declaration | **Reject:** the declaration is rejected. |
 | Moddable asset slot description | 500 characters | Authoring a moddable asset declaration | **Reject:** the declaration is rejected. |
