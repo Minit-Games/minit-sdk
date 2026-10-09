@@ -44,7 +44,7 @@
             "$ref": "#/$defs/licenseId"
         },
         "credits": {
-            "description": "Freeform player-facing credit line for third-party assets. Does NOT replace THIRD-PARTY-NOTICES.txt — a notice-requiring license needs both. The meta.json path is uncapped and therefore has no maxLength; only the Creator Console's Credits editor has a 2500-character cap. Text beyond that editor cap is silently truncated by the platform, not rejected, so the upload still succeeds.",
+            "description": "Freeform player-facing credit line for third-party assets. Does NOT replace THIRD-PARTY-NOTICES.txt — a notice-requiring license needs both. The meta.json path is uncapped and therefore has no maxLength; only the Creator Console's Credits editor has a 2500-character cap. The editor rejects a longer value; it is not truncated.",
             "type": "string"
         },
         "sourceUrl": {
