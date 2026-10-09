@@ -290,7 +290,7 @@ All fields below — including `config` (see next section) — are optional. Mis
 | `schemaVersion` | String or number. A forward-compatibility hook for future `meta.json` shape changes — nothing validates or branches on it today, so most builds simply omit it. |
 | `config` | Array of tunable values the game exposes. See [`config`](#config). |
 | `license` | SPDX identifier for the bundle's content, or `"proprietary"`. See [Licensing](#licensing). |
-| `credits` | Freeform player-facing credit line for third-party assets. The `meta.json` path has no `maxLength` and is genuinely uncapped; only the Creator Console's Credits editor caps input at 2500 characters. Text beyond that editor cap is silently truncated rather than rejected, so the upload still succeeds. See [Licensing](#licensing). |
+| `credits` | Freeform player-facing credit line for third-party assets. The `meta.json` path has no `maxLength` and is genuinely uncapped; only the Creator Console's Credits editor caps input at 2500 characters. The editor rejects a longer value; it is not truncated. See [Licensing](#licensing). |
 | `sourceUrl` | URL of the original asset/library source. Must start with `http://` or `https://`. |
 
 Unrecognised top-level keys are ignored, so extras like `$schema` are safe to leave in the file.
