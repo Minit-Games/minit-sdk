@@ -77,11 +77,7 @@ The Game does not need to persist anything for the tutorial — `userData` plays
 | `/?tutorial=0` | Tutorial never shows |
 | `/` (no host flag) | Tutorial shows |
 
-To simulate a returning player, run this in DevTools on `/` (a reload clears it), then click **Restart tutorial** — it re-checks gating and reports the tutorial as gated off:
-
-```js
-window.minit.hasPlayedGame = true;
-```
+Use `/?tutorial=0` to check the returning-player outcome (tutorial skipped).
 
 ## Primitives
 
