@@ -1,7 +1,8 @@
+import { browserWindow } from "../utils.js";
 import { USER_DATA_PARAM_KEY } from "./userData.js";
 
 export function getConfig(): Record<string, string> {
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(browserWindow().location.search);
     const config: Record<string, string> = {};
     urlParams.forEach((value, key) => {
         if (key === USER_DATA_PARAM_KEY) return;
@@ -25,7 +26,7 @@ export function getConfigValue(
     return typeof defaultValue === 'function' ? defaultValue() : defaultValue;
   }
 
-  const urlParams = new URLSearchParams(window.location.search);
+  const urlParams = new URLSearchParams(browserWindow().location.search);
 
   const value = urlParams.get(key);
   if (value !== null) {

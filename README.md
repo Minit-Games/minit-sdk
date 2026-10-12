@@ -539,7 +539,7 @@ For backward compatibility with games written against earlier versions, the old 
 
 ## Persistent user data
 
-Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; the SDK reads `window.minit.userData` as a plain `string | undefined` and the string value is forwarded unchanged (no JSON parse, no normalization). Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
+Each player has a single string slot stored per creator — shared across all of your games. The host (app) owns serialisation and transport; `getUserData()` returns the stored value as a plain `string | undefined`, unchanged (no JSON parse, no normalization). Use it to persist save data, settings, high scores, or any other per-player state (encode multiple values into a single string if needed).
 
 ### Reading
 
@@ -562,7 +562,7 @@ During `npm run dev`, you can seed `getUserData` via a URL param — no app host
 
 `getUserData()` will return `'tutorialPlayed=true'`.
 
-URL-param values apply only when the host has not injected `window.minit.userData` (i.e. the property is `undefined` or `null`). Any host-injected string (including `""`) wins over the URL param — URL params are a local-dev convenience only.
+URL-param values apply only when the host provides no userData value. Any host-provided string (including `""`) wins over the URL param — URL params are a local-dev convenience only.
 
 > `userData` is a reserved URL-param key. It is stripped from `getConfig()` and `getConfigValue()`, so `getConfigValue('userData')` always returns `undefined` (or its default). Read userData exclusively via `getUserData()`.
 
@@ -583,16 +583,7 @@ reportResult(score, { userData: state });
 
 Omitting `userData` (or not passing `options`) leaves the stored value unchanged. An empty string `""` is a valid value and will overwrite any previously stored data.
 
-#### Wire format (why you should use the SDK for this)
-
-The bare string above is the **SDK-level** API. Before the call reaches the host, the SDK wraps it into the wire shape the host actually validates:
-
-```jsonc
-// what window.minit.reportResult receives
-{ "userData": { "value": "tutorialDone" } }
-```
-
-A game that bypasses the SDK and calls `window.minit.reportResult` itself must pass that wrapper form. Both hosts additionally tolerate a bare string as a fallback, but the wrapper is the contract — and the SDK is the only way to get it right for free.
+Always read and write userData through `getUserData()` and `reportResult()` — the SDK handles the host format for you.
 
 ### Limits
 
@@ -643,7 +634,7 @@ onViewableChange((viewable) => {
 
 | Export                                     | Description                                                                                                                                                                  |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shouldShowTutorial()`                     | Decide whether to run the first-play tutorial: `?tutorial=1/0` force-overrides, otherwise the host's `window.minit.hasPlayedGame === true` hides it (returning player), else shows it. Call before creating any tutorial overlay |
+| `shouldShowTutorial()`                     | Decide whether to run the first-play tutorial: `?tutorial=1/0` force-overrides, otherwise the host's returning-player flag hides it, else shows it. Call before creating any tutorial overlay |
 | `createTutorialOverlay(opts?)`             | Create a DOM overlay hosting the tutorial primitives (pointing finger, highlight ring, swipe trail, modal pill) — `{ container?, width?, height?, zIndex? }`, no PIXI required |
 | `showFeedback(text, variant?, duration?)`  | Show a temporary feedback pop-up (`"positive"`, `"neutral"`, `"negative"`)                                                                                                   |
 | `showPositiveFeedback(text, duration?)`    | Convenience wrapper — green variant                                                                                                                                          |
