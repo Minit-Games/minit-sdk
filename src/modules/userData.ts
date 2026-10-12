@@ -1,3 +1,5 @@
+import { browserWindow } from "../utils.js";
+
 /**
  * Returns the single-slot userData value for this player.
  *
@@ -48,7 +50,7 @@ export const USER_DATA_PARAM_KEY = "userData";
  * undefined — this function can therefore assume a browser environment.
  */
 function getUserDataFromUrlParam(): string | undefined {
-    const value = new URLSearchParams(window.location.search).get(USER_DATA_PARAM_KEY);
+    const value = new URLSearchParams(browserWindow().location.search).get(USER_DATA_PARAM_KEY);
     // URLSearchParams.get returns null when absent; normalise to undefined.
     return value !== null ? value : undefined;
 }
