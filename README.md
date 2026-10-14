@@ -386,7 +386,7 @@ Bounds are enforced before a config value reaches the game. They do not change t
     { "key": "playerName", "valueType": "string", "value": "Tester", "minLength": 2, "maxLength": 20 },
     { "key": "hardMode", "valueType": "boolean", "value": "false", "moddable": false },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
-    { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
+    { "key": "mode", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
   ]
 }
 ```
