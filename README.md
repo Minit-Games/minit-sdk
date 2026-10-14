@@ -26,7 +26,7 @@ initializeSDK();
 // is what lets other creators post mods of your game. Returns a string
 // (or undefined if the key is missing and no default is supplied) —
 // coerce with Number(...) / parseInt(...) for numeric mods.
-const difficulty = getConfigValue('difficulty', 'normal');
+const difficulty = Number(getConfigValue('difficulty', '2'));
 
 // Signal that assets are loaded and the game is ready to be shown.
 // Until this is called, the Minit Games app keeps a loading state on top
@@ -212,12 +212,12 @@ Feedback pops should fire on **every moment with clear emotional weight** — by
 
 #### Input conventions
 
-Minit Games games run on **mobile phones**. Touch is the only input that matters.
+Minit Games games run on **mobile phones**. Touch is the primary input: every action must work by touch.
 
 - **All interaction must work with `pointerdown` / `pointerup` / `pointermove`** (or the equivalent touch events). Pointer events fire for both touch and mouse, so they work in desktop browsers during development too.
 - **Never rely on mouse-only events:** `mouseover`, `mouseenter`, `mouseleave`, `contextmenu`, scroll wheel (`wheel`). These do not fire on touch screens.
 - **No hover states.** CSS `:hover` styles are ignored on touch — do not use them for anything functional (revealing buttons, showing tooltips, triggering state changes). Visual-only polish that degrades gracefully is acceptable, but gameplay must never depend on hover.
-- **No keyboard controls.** Arrow keys, spacebar, and keyboard shortcuts do not exist on mobile. Do not wire game actions to `keydown` / `keyup` unless the creator explicitly asks for desktop support.
+- **Keyboard is an extra, never a requirement.** Arrow keys, spacebar, and keyboard shortcuts do not exist on mobile, so every action wired to `keydown` / `keyup` also needs a touch equivalent. Keyboard controls on top of touch are fine, for example for desktop play.
 - **Tap targets must be large enough to hit with a finger** — aim for at least 44×44 CSS px. Tiny interactive areas that are easy to click with a cursor become unreachable on touch.
 - **Drag / swipe must use pointer capture.** Call `element.setPointerCapture(e.pointerId)` on `pointerdown` so the gesture keeps tracking even when the finger slides off the element.
 
@@ -265,6 +265,8 @@ Google AI Studio's **Build Mode** is a popular way to prototype games for Minit 
 
 Every Minit Games game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Game draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
 
+Declare the values a Post can tune — for example `level`, `seed`, `difficulty`, `background` — in [`config`](#config), and read them in the game with `getConfigValue(key, fallback)`. Each Post sets its own values, and declaring config is what unlocks Superposting.
+
 ### Format
 
 ```json
@@ -272,13 +274,18 @@ Every Minit Games game should ship with a `meta.json` file **at the root of the 
   "title": "Fruit Drop 🍉🗡️",
   "controls": "- **Swipe** to slice fruit\n- **Avoid** bombs — they end the run",
   "logic": "- Slice fruit flying up from the bottom\n- **Combo** multiple fruit for bonus points",
-  "description": "## What's This? 🎮\n\nA juicy swipe-and-slice arcade game..."
+  "description": "## What's This? 🎮\n\nA juicy swipe-and-slice arcade game...",
+  "config": [
+    { "key": "difficulty", "valueType": "number", "value": 2, "min": 1, "max": 3 },
+    { "key": "seed", "valueType": "number", "value": 42 },
+    { "key": "background", "valueType": "color", "value": "#1a1a2e" }
+  ]
 }
 ```
 
 ### Fields
 
-All fields below — including `config` (see next section) — are optional. Missing or empty fields are simply skipped during pre-fill. If `title` is absent, the console falls back to the ZIP filename.
+All fields below — including `config` (see next section) — are technically optional, but ship `config` whenever the game has anything worth tuning. Missing or empty fields are simply skipped during pre-fill. If `title` is absent, the console falls back to the ZIP filename.
 
 | Field | Description |
 | --- | --- |
@@ -336,14 +343,16 @@ Practical notes:
 
 - **Values always arrive as strings.** `"10"`, `"true"`, `"#f15a24"` — coerce with `Number(...)` / `=== 'true'` before use. See [Common mistakes](#common-mistakes-ai-assistants-make).
 - **Still pass a default.** Every declared key is injected at play time, but a default keeps local dev and direct-URL testing working.
-- **Test locally by appending the param yourself** — `index.html?difficulty=hard&startScore=50`.
+- **Test locally by appending the param yourself** — `index.html?difficulty=3&seed=7`.
 - **Pick knobs that change how the game feels**, and keep it to a handful. Bound them (`min`/`max`, `minLength`/`maxLength`, or `range`) so a mod can't produce an unplayable game, and set `"moddable": false` on anything other creators shouldn't touch.
 - `userData` is a reserved key and is never readable through `getConfigValue()` — see [Persistent user data](#persistent-user-data).
 - **The full walkthrough is in the Creator Docs** — [The meta.json file](https://minit.studio/docs/declaring-config-values).
 
 ```ts
-// meta.json declares: { "key": "startScore", "valueType": "number", "value": "10", "min": 0, "max": 100 }
-const startScore = Number(getConfigValue('startScore', '10'));
+// meta.json declares difficulty, seed, and background as in the Format example above
+const difficulty = Number(getConfigValue('difficulty', '2'));
+const seed = Number(getConfigValue('seed', '42'));
+const background = getConfigValue('background', '#1a1a2e');
 const hardMode = getConfigValue('hardMode', 'false') === 'true';
 ```
 
@@ -377,7 +386,7 @@ Bounds are enforced before a config value reaches the game. They do not change t
     { "key": "playerName", "valueType": "string", "value": "Tester", "minLength": 2, "maxLength": 20 },
     { "key": "hardMode", "valueType": "boolean", "value": "false", "moddable": false },
     { "key": "themeColor", "valueType": "color", "value": "#f15a24" },
-    { "key": "difficulty", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
+    { "key": "mode", "valueType": "string", "value": "normal", "range": ["easy", "normal", "hard"] }
   ]
 }
 ```
@@ -494,8 +503,8 @@ https://mcp.minit.games/mcp
 
 When an AI assistant integrates `@minit-games/sdk` for you, double-check these — they're the things assistants most often get wrong, and they all tie back to the [game lifecycle](#game-lifecycle):
 
-- **Create and maintain `meta.json` at the ZIP root.** When starting a new game, create a `meta.json` with `title`, `controls`, `logic`, and `description` fields following the [Game metadata](#game-metadata-metajson) format. Place it at the root of the uploaded ZIP alongside `index.html` — the Creator Console reads it from the ZIP root to pre-fill the draft. Update it whenever the game concept changes (new mechanic, scoring change, controls update).
-- **Touch-only input — no mouse-specific events.** Games run on mobile phones; touch is the only input that matters. Use `pointerdown` / `pointerup` / `pointermove` for all interaction. Remove any `mouseover`, `mouseenter`, `wheel` (scroll), or `:hover`-dependent logic the AI added — these do not fire on touch screens. Tap targets must be at least 44×44 px. Drag / swipe gestures must call `element.setPointerCapture(e.pointerId)` on `pointerdown`. Do not add keyboard controls unless the creator asks for desktop support.
+- **Create and maintain `meta.json` at the ZIP root.** When starting a new game, create a `meta.json` with `title`, `controls`, `logic`, and `description` fields, plus a `config` array declaring the values a Post can tune (read them with `getConfigValue(key, fallback)`), following the [Game metadata](#game-metadata-metajson) format. Place it at the root of the uploaded ZIP alongside `index.html` — the Creator Console reads it from the ZIP root to pre-fill the draft. Update it whenever the game concept changes (new mechanic, scoring change, controls update).
+- **Touch-first input — no mouse-specific events.** Games run on mobile phones; every action must work by touch. Use `pointerdown` / `pointerup` / `pointermove` for all interaction. Remove any `mouseover`, `mouseenter`, `wheel` (scroll), or `:hover`-dependent logic the AI added — these do not fire on touch screens. Tap targets must be at least 44×44 px. Drag / swipe gestures must call `element.setPointerCapture(e.pointerId)` on `pointerdown`. Keyboard controls are fine as an extra (for example for desktop play), never as the only way to do something.
 - **No in-game "result submitted" UI.** After `reportResult(...)`, the Minit Games app overlays its own result screen and the game loses focus — any check-mark, toast, or "submitted" banner the AI added will never be seen. Ask it to remove them.
 - **No start menu or replay menu.** The game should begin straight into gameplay (no title screen, "Play" button, or tap-to-begin), and end with `reportResult(...)` — not an in-game "Play again" or game-over menu. The host handles restart and the result screen.
 - **Fire feedback on every emotionally significant moment.** Score gain, combo, life lost, penalty, time-up, level clear — each needs a matching `showPositiveFeedback` / `showNegativeFeedback` / `showNeutralFeedback` call. The flash is non-blocking and auto-dismisses; omitting it makes the game feel unresponsive. Never silently subtract health or lives.
