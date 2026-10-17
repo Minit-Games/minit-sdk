@@ -11,6 +11,15 @@ function surfaceUnits(n: number): string {
     return `calc(${n} * var(${UNIT_VAR}, 1px))`;
 }
 
+// !important keeps a game's own CSS from resizing the header; explicit values use inline !important to stay on top.
+function importantSurfaceUnits(n: number): string {
+    return `${surfaceUnits(n)} !important`;
+}
+
+function setImportantPx(element: HTMLElement, property: string, px: number): void {
+    element.style.setProperty(property, `${px}px`, 'important');
+}
+
 export type PanelAlign = "left" | "right";
 
 export interface PanelStyle {
@@ -149,10 +158,11 @@ function injectStyles(): void {
     style.textContent = getLatoFontFaceCSS() + `
         .${HEADER_CONTAINER_ID} {
             position: fixed;
-            top: ${surfaceUnits(60)};
+            top: ${importantSurfaceUnits(60)};
             left: 0;
             right: 0;
-            padding: 0 ${surfaceUnits(75)};
+            padding-left: ${importantSurfaceUnits(75)};
+            padding-right: ${importantSurfaceUnits(75)};
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -216,7 +226,7 @@ function injectStyles(): void {
         }
 
         .${HEADER_PANEL_CLASS} .panel-label {
-            font-size: ${surfaceUnits(36)};
+            font-size: ${importantSurfaceUnits(36)};
             line-height: 1.2;
             text-shadow:
                 0 2px 4px rgba(0, 0, 0, 0.5),
@@ -224,13 +234,13 @@ function injectStyles(): void {
         }
 
         .${HEADER_PANEL_CLASS} .panel-icon {
-            font-size: ${surfaceUnits(48)};
+            font-size: ${importantSurfaceUnits(48)};
             line-height: 1;
             filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
         }
 
         .${HEADER_PANEL_CLASS} .panel-value {
-            font-size: ${surfaceUnits(48)};
+            font-size: ${importantSurfaceUnits(48)};
             line-height: 1.2;
             font-weight: 700;
             text-shadow:
@@ -275,20 +285,17 @@ class PanelImpl implements Panel {
         const fontFamily = style.fontFamily || 'Lato, system-ui, sans-serif';
         const labelColor = style.labelColor || '#ffffff';
         const valueColor = style.valueColor || '#ffffff';
-        const labelSize = style.labelSize ? `${style.labelSize}px` : '';
-        const valueSize = style.valueSize ? `${style.valueSize}px` : '';
-
         // Create label/icon element
         this.labelElement = document.createElement('div');
         if (config.icon) {
             this.labelElement.className = 'panel-icon';
             this.labelElement.textContent = config.icon;
-            this.labelElement.style.fontSize = valueSize;
+            if (style.valueSize) setImportantPx(this.labelElement, 'font-size', style.valueSize);
         } else {
             this.labelElement.className = 'panel-label';
             this.labelElement.textContent = config.label || '';
             this.labelElement.style.fontFamily = fontFamily;
-            this.labelElement.style.fontSize = labelSize;
+            if (style.labelSize) setImportantPx(this.labelElement, 'font-size', style.labelSize);
             this.labelElement.style.color = labelColor;
         }
         this.element.appendChild(this.labelElement);
@@ -298,7 +305,7 @@ class PanelImpl implements Panel {
         this.valueElement.className = 'panel-value';
         this.valueElement.textContent = String(config.value);
         this.valueElement.style.fontFamily = fontFamily;
-        this.valueElement.style.fontSize = valueSize;
+        if (style.valueSize) setImportantPx(this.valueElement, 'font-size', style.valueSize);
         this.valueElement.style.color = valueColor;
         this.element.appendChild(this.valueElement);
     }
@@ -467,12 +474,12 @@ class HeaderBarImpl implements HeaderBar {
         if (this.parentContainer) className += ' in-container';
         if (config.layout === 'even') className += ' layout-even';
         this.headerElement.className = className;
-        if (config.y) this.headerElement.style.top = `${config.y}px`;
+        if (config.y) setImportantPx(this.headerElement, 'top', config.y);
         this.headerElement.style.zIndex = String(config.zIndex || 9000);
 
         if (config.padding !== undefined) {
-            this.headerElement.style.paddingLeft = `${config.padding}px`;
-            this.headerElement.style.paddingRight = `${config.padding}px`;
+            setImportantPx(this.headerElement, 'padding-left', config.padding);
+            setImportantPx(this.headerElement, 'padding-right', config.padding);
         }
 
         if (config.width) {

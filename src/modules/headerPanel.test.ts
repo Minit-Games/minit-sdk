@@ -170,6 +170,16 @@ describe("headerPanel — sizing", () => {
         expect(bar.querySelector<HTMLElement>(".panel-value")!.style.fontSize).toBe("");
     });
 
+    it("marks explicit sizes important so game CSS cannot override them", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar({ y: 28, padding: 22 }).addPanel({ label: "Score", value: 0, style: { valueSize: 30 } });
+
+        const bar = document.querySelector<HTMLElement>(".drop-header-bar")!;
+        expect(bar.style.getPropertyPriority("top")).toBe("important");
+        expect(bar.style.getPropertyPriority("padding-left")).toBe("important");
+        expect(bar.querySelector<HTMLElement>(".panel-value")!.style.getPropertyPriority("font-size")).toBe("important");
+    });
+
     it("derives the header unit from the viewport only when there is no container", async () => {
         const { createHeaderBar } = await import("./headerPanel");
         createHeaderBar();
