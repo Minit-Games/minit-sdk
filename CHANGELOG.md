@@ -18,6 +18,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 - docs: terminology — Minit Games / Game / Post
 - **`shouldShowTutorial()` now gates on `window.minit.hasPlayedGame` instead of userData.** Without a `?tutorial=` override it hides only when `hasPlayedGame === true`; any other value or its absence shows the tutorial. Games no longer need to write `userData` to hide the tutorial for returning players (DROP-9851).
   - **Behaviour change for existing Games:** a returning player whose stored userData used to hide the tutorial now sees it again wherever the host doesn't inject `window.minit.hasPlayedGame` — on every launch on web play, in Studio preview (append `?tutorial=0` to hide), and in older app builds.
+- **`createHeaderBar()` without `container` now scales its defaults to the viewport.** The default font sizes, top offset, side padding, panel gap, and panel minimum width shrink with the viewport width as if laid out on a 960-px-wide surface, so a bar fixed to the viewport matches the look of one inside a scaled game wrapper instead of rendering ~2.5× too large on phones.
+  - **Unchanged:** bars created with `container`, any `y` / `padding` / `labelSize` / `valueSize` you pass (still CSS pixels), and every viewport 960 px or wider.
+  - **Behaviour change for existing Games:** a bar without `container` on a phone renders smaller, and its panel gap and minimum width shrink even when you pass explicit sizes. To keep the previous sizes, pass `y: 60`, `padding: 75`, and `defaultStyle: { labelSize: 36, valueSize: 48 }`.
 
 ### Fixed
 

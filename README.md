@@ -171,8 +171,9 @@ showNeutralFeedback('x2 Speed');    // modifiers, streak resets, neutral milesto
 // toward a two-line target. The shrink stops at half size for readability, so
 // prose-length text still wraps past two lines rather than becoming unreadable.
 
-// Header bar — positioning and alignment only (no custom styling by default)
-const header = createHeaderBar({ y: 60, padding: 40 });
+// Header bar — positioning and alignment only (no custom styling by default).
+// Pass the scaled 960 × 1480 wrapper so the bar scales with the game.
+const header = createHeaderBar({ container: wrapper });
 const turns = header.addPanel({ label: 'Turns', value: 10 });           // left (default)
 const score = header.addPanel({ label: 'Score', value: 0, align: 'right' });
 
@@ -224,6 +225,7 @@ Minit Games games run on **mobile phones**. Touch is the primary input: every ac
 The header bar is the standard HUD across Posts. Treat it as **layout only**:
 
 - **Position the bar** with `createHeaderBar({ y, padding })` — distance from the top and side inset.
+- **Pass `container: wrapper`** when the game scales a fixed design surface (see [Screen, viewport, and scaling](#screen-viewport-and-scaling)) — `y`, `padding`, and sizes are then surface pixels and the bar scales with the game. Without `container` the bar is fixed to the viewport: values you pass are CSS pixels, and the defaults shrink with the viewport width as if laid out on a 960-px-wide surface.
 - **Place panels** with `align: 'left'` (default) or `align: 'right'`. Put **Score on the right**; secondary stats (turns, moves, lives) on the left unless the creator says otherwise.
 - Use `**layout: 'even'`** when panels should be spread evenly across the bar instead of grouped left/right.
 - **Do not customize size or colors** — omit `style`, `defaultStyle`, `labelSize`, `valueSize`, and color fields unless the creator explicitly asks for a different look. The SDK ships fixed Lato styling.

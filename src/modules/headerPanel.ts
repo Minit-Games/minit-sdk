@@ -3,6 +3,13 @@ import { getLatoFontFaceCSS } from './fonts/lato.js';
 
 const HEADER_CONTAINER_ID = "drop-header-bar";
 const HEADER_PANEL_CLASS = "drop-header-panel";
+const DESIGN_SURFACE_WIDTH = 960;
+const UNIT_VAR = "--drop-header-unit";
+
+// Defaults are authored for the 960-wide design surface; outside a scaled container they shrink with the viewport.
+function surfaceUnits(n: number): string {
+    return `calc(${n} * var(${UNIT_VAR}, 1px))`;
+}
 
 export type PanelAlign = "left" | "right";
 
@@ -11,9 +18,9 @@ export interface PanelStyle {
     labelColor?: string;
     /** Color for the value text (CSS color, default: '#ffffff'). Avoid unless explicitly requested. */
     valueColor?: string;
-    /** Font size for the label (default: 36). Avoid unless explicitly requested. */
+    /** Font size for the label in pixels, used as given (default: 36, see {@link HeaderBarConfig.container}). Avoid unless explicitly requested. */
     labelSize?: number;
-    /** Font size for the value (default: 48). Avoid unless explicitly requested. */
+    /** Font size for the value in pixels, used as given (default: 48, see {@link HeaderBarConfig.container}). Avoid unless explicitly requested. */
     valueSize?: number;
     /** Font family (default: 'Lato, system-ui, sans-serif'). Avoid unless explicitly requested. */
     fontFamily?: string;
@@ -46,9 +53,9 @@ export interface PanelConfig {
 export type HeaderLayout = "split" | "even";
 
 export interface HeaderBarConfig {
-    /** Distance from top in pixels (default: 60). Primary positioning knob — adjust this, not font sizes. */
+    /** Distance from top in pixels, used as given (default: 60, see `container`). Primary positioning knob — adjust this, not font sizes. */
     y?: number;
-    /** Side padding in pixels (default: 75). Primary positioning knob. */
+    /** Side padding in pixels, used as given (default: 75, see `container`). Primary positioning knob. */
     padding?: number;
     /** Constrain width in pixels (panels align within this width, centered) */
     width?: number;
@@ -69,7 +76,8 @@ export interface HeaderBarConfig {
      * Optional container element to append the header bar to.
      * When provided, uses absolute positioning relative to the container.
      * Useful for scaled game wrappers so the header scales with the game.
-     * If not provided, appends to document.body with fixed positioning.
+     * If not provided, appends to document.body with fixed positioning, and the default
+     * sizes and insets shrink with the viewport as if laid out on a 960-px-wide surface.
      */
     container?: HTMLElement;
 }
@@ -141,8 +149,10 @@ function injectStyles(): void {
     style.textContent = getLatoFontFaceCSS() + `
         .${HEADER_CONTAINER_ID} {
             position: fixed;
+            top: ${surfaceUnits(60)};
             left: 0;
             right: 0;
+            padding: 0 ${surfaceUnits(75)};
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
@@ -152,6 +162,12 @@ function injectStyles(): void {
 
         .${HEADER_CONTAINER_ID}.in-container {
             position: absolute;
+        }
+
+        @supports (width: min(1px, 1vw)) {
+            .${HEADER_CONTAINER_ID}:not(.in-container) {
+                ${UNIT_VAR}: min(1px, 100vw / ${DESIGN_SURFACE_WIDTH});
+            }
         }
 
         .${HEADER_CONTAINER_ID}.layout-even {
@@ -166,7 +182,7 @@ function injectStyles(): void {
         .${HEADER_CONTAINER_ID} .header-left,
         .${HEADER_CONTAINER_ID} .header-right {
             display: flex;
-            gap: 12px;
+            gap: ${surfaceUnits(12)};
         }
 
         .${HEADER_CONTAINER_ID} .header-left {
@@ -184,7 +200,7 @@ function injectStyles(): void {
             text-align: center;
             pointer-events: auto;
             user-select: none;
-            min-width: 60px;
+            min-width: ${surfaceUnits(60)};
         }
 
         .${HEADER_PANEL_CLASS}.clickable {
@@ -200,6 +216,7 @@ function injectStyles(): void {
         }
 
         .${HEADER_PANEL_CLASS} .panel-label {
+            font-size: ${surfaceUnits(36)};
             line-height: 1.2;
             text-shadow:
                 0 2px 4px rgba(0, 0, 0, 0.5),
@@ -207,11 +224,13 @@ function injectStyles(): void {
         }
 
         .${HEADER_PANEL_CLASS} .panel-icon {
+            font-size: ${surfaceUnits(48)};
             line-height: 1;
             filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6));
         }
 
         .${HEADER_PANEL_CLASS} .panel-value {
+            font-size: ${surfaceUnits(48)};
             line-height: 1.2;
             font-weight: 700;
             text-shadow:
@@ -256,20 +275,20 @@ class PanelImpl implements Panel {
         const fontFamily = style.fontFamily || 'Lato, system-ui, sans-serif';
         const labelColor = style.labelColor || '#ffffff';
         const valueColor = style.valueColor || '#ffffff';
-        const labelSize = style.labelSize || 36;
-        const valueSize = style.valueSize || 48;
+        const labelSize = style.labelSize ? `${style.labelSize}px` : '';
+        const valueSize = style.valueSize ? `${style.valueSize}px` : '';
 
         // Create label/icon element
         this.labelElement = document.createElement('div');
         if (config.icon) {
             this.labelElement.className = 'panel-icon';
             this.labelElement.textContent = config.icon;
-            this.labelElement.style.fontSize = `${valueSize}px`;
+            this.labelElement.style.fontSize = valueSize;
         } else {
             this.labelElement.className = 'panel-label';
             this.labelElement.textContent = config.label || '';
             this.labelElement.style.fontFamily = fontFamily;
-            this.labelElement.style.fontSize = `${labelSize}px`;
+            this.labelElement.style.fontSize = labelSize;
             this.labelElement.style.color = labelColor;
         }
         this.element.appendChild(this.labelElement);
@@ -279,7 +298,7 @@ class PanelImpl implements Panel {
         this.valueElement.className = 'panel-value';
         this.valueElement.textContent = String(config.value);
         this.valueElement.style.fontFamily = fontFamily;
-        this.valueElement.style.fontSize = `${valueSize}px`;
+        this.valueElement.style.fontSize = valueSize;
         this.valueElement.style.color = valueColor;
         this.element.appendChild(this.valueElement);
     }
@@ -448,27 +467,22 @@ class HeaderBarImpl implements HeaderBar {
         if (this.parentContainer) className += ' in-container';
         if (config.layout === 'even') className += ' layout-even';
         this.headerElement.className = className;
-        this.headerElement.style.top = `${config.y || 60}px`;
+        if (config.y) this.headerElement.style.top = `${config.y}px`;
         this.headerElement.style.zIndex = String(config.zIndex || 9000);
 
-        // Calculate reference width for padding
-        const referenceWidth = this.parentContainer
-            ? this.parentContainer.offsetWidth || window.innerWidth
-            : window.innerWidth;
-
-        // Calculate padding (default: 75px)
-        const padding = config.padding !== undefined
-            ? config.padding
-            : 75;
+        if (config.padding !== undefined) {
+            this.headerElement.style.paddingLeft = `${config.padding}px`;
+            this.headerElement.style.paddingRight = `${config.padding}px`;
+        }
 
         if (config.width) {
             // Constrained width - center it
+            const referenceWidth = this.parentContainer
+                ? this.parentContainer.offsetWidth || window.innerWidth
+                : window.innerWidth;
             const sideMargin = Math.max(0, (referenceWidth - config.width) / 2);
-            this.headerElement.style.paddingLeft = `${sideMargin + padding}px`;
-            this.headerElement.style.paddingRight = `${sideMargin + padding}px`;
-        } else {
-            this.headerElement.style.paddingLeft = `${padding}px`;
-            this.headerElement.style.paddingRight = `${padding}px`;
+            this.headerElement.style.left = `${sideMargin}px`;
+            this.headerElement.style.right = `${sideMargin}px`;
         }
 
         // Create left and right sections
