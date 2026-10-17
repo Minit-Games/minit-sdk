@@ -136,3 +136,58 @@ describe("headerPanel — injected CSS content", () => {
         expect(css).not.toMatch(/https?:\/\/fonts\.gstatic\.com/);
     });
 });
+
+describe("headerPanel — sizing", () => {
+    beforeEach(() => {
+        jest.resetModules();
+        document.head.innerHTML = "";
+        document.body.innerHTML = "";
+    });
+
+    it("applies explicitly passed y, padding and font sizes as plain pixels", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar({ y: 28, padding: 22 }).addPanel({
+            label: "Score",
+            value: 0,
+            style: { labelSize: 20, valueSize: 30 },
+        });
+
+        const bar = document.querySelector<HTMLElement>(".drop-header-bar")!;
+        expect(bar.style.top).toBe("28px");
+        expect(bar.style.paddingLeft).toBe("22px");
+        expect(bar.querySelector<HTMLElement>(".panel-label")!.style.fontSize).toBe("20px");
+        expect(bar.querySelector<HTMLElement>(".panel-value")!.style.fontSize).toBe("30px");
+    });
+
+    it("leaves default sizes to the scalable stylesheet instead of pinning pixels inline", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar().addPanel({ label: "Score", value: 0 });
+
+        const bar = document.querySelector<HTMLElement>(".drop-header-bar")!;
+        expect(bar.style.top).toBe("");
+        expect(bar.style.paddingLeft).toBe("");
+        expect(bar.querySelector<HTMLElement>(".panel-label")!.style.fontSize).toBe("");
+        expect(bar.querySelector<HTMLElement>(".panel-value")!.style.fontSize).toBe("");
+    });
+
+    it("marks explicit sizes important so game CSS cannot override them", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar({ y: 28, padding: 22 }).addPanel({ label: "Score", value: 0, style: { valueSize: 30 } });
+
+        const bar = document.querySelector<HTMLElement>(".drop-header-bar")!;
+        expect(bar.style.getPropertyPriority("top")).toBe("important");
+        expect(bar.style.getPropertyPriority("padding-left")).toBe("important");
+        expect(bar.querySelector<HTMLElement>(".panel-value")!.style.getPropertyPriority("font-size")).toBe("important");
+    });
+
+    it("derives the header unit from the viewport only when there is no container", async () => {
+        const { createHeaderBar } = await import("./headerPanel");
+        createHeaderBar();
+        const css = document.head.querySelector("style#drop-header-bar-styles")?.textContent ?? "";
+        const unitRules = css.match(/[^{}]+\{\s*--drop-header-unit:[^}]*\}/g) ?? [];
+
+        expect(unitRules).toHaveLength(1);
+        expect(unitRules[0]).toContain(":not(.in-container)");
+        expect(unitRules[0]).toContain("100vw");
+    });
+});
