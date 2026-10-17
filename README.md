@@ -188,6 +188,7 @@ score.flyToPanel({
 spawnRewards(12, {
     start: { x: 200, y: 400 },
     target: score.getPosition(),
+    container: wrapper,
     onAllArrive: () => score.setValue(Number(score.getValue()) + 12, { animate: true })
 });
 ```
