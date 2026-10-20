@@ -34,7 +34,7 @@
             "enum": ["highestScore", "lowestScore", "fastestTime", "slowestTime"]
         },
         "config": {
-            "description": "Tunable values the game exposes to creators. At least one entry is required before Superposting can be enabled.",
+            "description": "Tunable values the game exposes to creators. At least one entry is required before Mods can be enabled.",
             "type": "array",
             "maxItems": 25,
             "items": { "$ref": "#/$defs/configEntry" }

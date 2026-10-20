@@ -268,7 +268,7 @@ Google AI Studio's **Build Mode** is a popular way to prototype games for Minit 
 
 Every Minit Games game should ship with a `meta.json` file **at the root of the uploaded ZIP** (next to `index.html`). The Creator Console parses it on upload to pre-fill the new-Game draft form — title, controls, logic, and description are all read from this file. AI assistants should create and maintain `meta.json` when a new game is started and keep it updated whenever the game concept changes.
 
-Declare the values a Post can tune — for example `level`, `seed`, `difficulty`, `background` — in [`config`](#config), and read them in the game with `getConfigValue(key, fallback)`. Each Post sets its own values, and declaring config is what unlocks Superposting.
+Declare the values a Post can tune — for example `level`, `seed`, `difficulty`, `background` — in [`config`](#config), and read them in the game with `getConfigValue(key, fallback)`. Each Post sets its own values, and declaring config is what unlocks Mods.
 
 ### Format
 
@@ -332,7 +332,7 @@ A config value is a named, typed knob your game reads at runtime via [`getConfig
 
 Why expose them:
 
-- **Superposting / mods** — other creators post their own variation of your game (same build, different values) without touching your code. A game with no declared `config` has nothing to vary, so the console renders the "Allow Superposting" toggle disabled.
+- **Mods** — other creators post their own variation of your game (same build, different values) without touching your code. A game with no declared `config` has nothing to vary, so the console renders the "Allow Mods" toggle disabled.
 - **Your own variants** — post the same build several times with different values (easy / hard, seasonal palette) instead of rebuilding and re-uploading.
 
 How a value gets from `meta.json` into the running game:
