@@ -12,6 +12,9 @@ const GAME_CALLS: Record<string, string> = {
     getConfigValue: "(window as any).__minitOut = getConfigValue(\"level\");",
     getUserData: "(window as any).__minitOut = getUserData();",
     initializeSDK: "initializeSDK();",
+    getMotionQuality: "(window as any).__minitOut = getMotionQuality();",
+    prefersReducedMotion: "(window as any).__minitOut = prefersReducedMotion();",
+    getDeviceTier: "(window as any).__minitOut = getDeviceTier();",
 };
 
 async function bundleGame(exportName: string, options: { minify: boolean; dropConsole: boolean }): Promise<string> {

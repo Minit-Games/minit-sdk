@@ -2,6 +2,8 @@
 // These are checked by tsc (npm run check) — not executed at runtime.
 import { getUserData } from "./userData.js";
 import type { ResultOptions, MinitApi } from "../minitApi.js";
+import { getMotionQuality, prefersReducedMotion, getDeviceTier } from "../index.js";
+import type { MotionQuality, DeviceTier } from "../index.js";
 
 // --- getUserData ---
 
@@ -55,3 +57,33 @@ const _minitApiHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, r
 const _minitApiNoHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {} };
 // @ts-expect-error hasPlayedGame must be a boolean
 const _minitApiStringHasPlayedGame: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, hasPlayedGame: "true" };
+
+// --- Device capability getters and their exported types ---
+
+const _motionQuality: MotionQuality = getMotionQuality();
+const _motionQualityUnion: "full" | "reduced" = _motionQuality;
+const _motionQualityFull: MotionQuality = "full";
+const _motionQualityReduced: MotionQuality = "reduced";
+// @ts-expect-error MotionQuality is only "full" | "reduced"
+const _motionQualityInvalid: MotionQuality = "low";
+
+const _prefersReducedMotion: boolean = prefersReducedMotion();
+// @ts-expect-error prefersReducedMotion returns a boolean, not a string
+const _prefersReducedMotionString: string = prefersReducedMotion();
+
+const _deviceTier: DeviceTier = getDeviceTier();
+const _deviceTierUnion: "low" | "medium" | "high" | "unknown" = _deviceTier;
+const _deviceTiers: DeviceTier[] = ["low", "medium", "high", "unknown"];
+// @ts-expect-error DeviceTier is only "low" | "medium" | "high" | "unknown"
+const _deviceTierInvalid: DeviceTier = "ultra";
+
+// --- MinitApi device capability fields (optional; absent on older hosts) ---
+
+const _minitApiDeviceCapabilities: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, deviceTier: "medium", motionQuality: "reduced", prefersReducedMotion: true };
+const _minitApiPartialDeviceCapabilities: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, deviceTier: "unknown" };
+// @ts-expect-error deviceTier must be a DeviceTier
+const _minitApiInvalidDeviceTier: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, deviceTier: "ultra" };
+// @ts-expect-error motionQuality must be a MotionQuality
+const _minitApiInvalidMotionQuality: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, motionQuality: "low" };
+// @ts-expect-error prefersReducedMotion must be a boolean
+const _minitApiStringPrefersReducedMotion: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, prefersReducedMotion: "true" };
