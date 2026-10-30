@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- `getMotionQuality()`, `prefersReducedMotion()`, and `getDeviceTier()` expose the host's resolved effects quality, OS reduced-motion preference, and RAM-based device tier, with browser fallbacks and URL overrides for local testing (DROP-12021, DROP-12023).
 - `isViewable()` and `onViewableChange(fn)` — mirror the host's viewability signal (feed item active + focused + app foreground) so games can pause/resume when covered, with a `document.visibilitychange`-based fallback outside the host (DROP-8666).
 - `MinitApi.hasPlayedGame?: boolean` — host flag the mobile app injects once the player has played this Game (absent on web play, Studio preview, and older app versions) (DROP-9851).
 
