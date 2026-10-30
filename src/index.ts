@@ -19,6 +19,8 @@ export { applyMetaTags } from "./modules/meta.js";
 export { getEnvironment, isApp, isTestEnvironment, callApiFunction } from "./utils.js";
 export type { Environment } from "./utils.js";
 export { isViewable, onViewableChange } from "./modules/viewability.js";
+export { getMotionQuality, prefersReducedMotion, getDeviceTier } from "./modules/deviceCapabilities.js";
+export type { MotionQuality, DeviceTier } from "./modules/deviceCapabilities.js";
 export type { ResultOptions, MinitApi } from "./minitApi.js";
 
 // Backward-compat aliases

@@ -534,6 +534,9 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these â
 | `registerAudioElement(element)`  | Opt in an `<audio>`/`<video>` element to auto-pause when the browser tab hides and auto-resume when it shows (only if this listener paused it) |
 | `isViewable()`                    | Whether the game is currently viewable (feed item active + focused + app foreground); outside the host, mirrors `document.visibilityState === "visible"` instead (see [Viewability](#viewability)) |
 | `onViewableChange(fn)`            | Subscribe to viewability changes; returns an unsubscribe function. Prefer this over the audio-visibility registry for pause/resume logic (see [Viewability](#viewability)) |
+| `getMotionQuality()`              | Resolved effects quality: `"full"` or `"reduced"` (see [Device-adaptive effects](#device-adaptive-effects))                                              |
+| `prefersReducedMotion()`          | Whether the player enabled the OS reduced-motion accessibility setting (see [Device-adaptive effects](#device-adaptive-effects))                            |
+| `getDeviceTier()`                 | Raw RAM tier: `"low"`, `"medium"`, `"high"`, or `"unknown"` (see [Device-adaptive effects](#device-adaptive-effects))                                |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
@@ -638,6 +641,24 @@ onViewableChange((viewable) => {
   mechanism for auto-suspending registered `AudioContext`s/media elements on tab
   visibility. Prefer `onViewableChange` for your own game-logic pause/resume
   going forward.
+
+## Device-adaptive effects
+
+Use `getMotionQuality()`, `prefersReducedMotion()`, and `getDeviceTier()` to reduce expensive or distracting effects on low-end devices, conserve battery, and respect the player's accessibility setting.
+
+```ts
+import { getDeviceTier, getMotionQuality, prefersReducedMotion } from '@minit-games/sdk';
+
+const particleCount = getDeviceTier() === 'low' ? 20 : 100;
+const useReducedEffects = getMotionQuality() === 'reduced';
+const screenShakeEnabled = !prefersReducedMotion();
+```
+
+- `getMotionQuality()` is the host's resolved `"full"` / `"reduced"` verdict. Use it as the default switch for effects quality. Outside the app or on older app builds, it returns `"reduced"` when the browser prefers reduced motion and `"full"` otherwise.
+- `prefersReducedMotion()` reports the OS accessibility flag separately, so accessibility-sensitive effects such as screen shake can be disabled even when the resolved motion quality is `"full"`. Outside the app, it follows `prefers-reduced-motion`.
+- `getDeviceTier()` exposes the raw RAM tier: up to 3 GiB is `"low"`, up to 6 GiB is `"medium"`, and more is `"high"`; unreadable or unavailable capability data returns `"unknown"`.
+- The app's default motion-quality setting is `"full"`, so a low-tier device can still report full motion quality unless the player enabled reduced motion. Use `getDeviceTier()` when you need finer performance tuning.
+- Test without an app host by adding `?motionQuality=full|reduced`, `?deviceTier=low|medium|high|unknown`, or `?reducedMotion=1|true|0|false` to the Game URL. These overrides take precedence over host values; invalid values are ignored.
 
 ---
 

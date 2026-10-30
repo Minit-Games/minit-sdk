@@ -1,4 +1,6 @@
 
+import type { DeviceTier, MotionQuality } from "./modules/deviceCapabilities.js";
+
 export type ResultOptions = {
     /**
      * Short session caption for the host result screen and activity feed.
@@ -47,4 +49,7 @@ export type MinitApi = {
     removeEventListener?: (event: "viewableChange", fn: (viewable: boolean) => void) => void,
 
     hasPlayedGame?: boolean,
+    deviceTier?: DeviceTier,
+    motionQuality?: MotionQuality,
+    prefersReducedMotion?: boolean,
 }
