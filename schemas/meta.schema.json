@@ -159,7 +159,7 @@
                     "type": ["string", "number", "boolean"]
                 },
                 "range": {
-                    "description": "Fixed list of allowed values. Mutually exclusive with min/max and minLength/maxLength; value must be one of the members.",
+                    "description": "Fixed list of allowed values. Mutually exclusive with min/max, step, and minLength/maxLength; value must be one of the members.",
                     "type": "array",
                     "items": { "type": ["string", "number", "boolean"] }
                 },
@@ -170,6 +170,11 @@
                 "max": {
                     "description": "Upper bound. Only valid when valueType is number.",
                     "type": "number"
+                },
+                "step": {
+                    "description": "UI step hint. Only valid when valueType is number; not enforced on the value.",
+                    "type": "number",
+                    "exclusiveMinimum": 0
                 },
                 "minLength": {
                     "description": "Minimum length. Only valid when valueType is string.",
@@ -195,6 +200,7 @@
                         "properties": {
                             "min": false,
                             "max": false,
+                            "step": false,
                             "minLength": false,
                             "maxLength": false
                         }
@@ -202,7 +208,7 @@
                 },
                 {
                     "if": { "properties": { "valueType": { "not": { "const": "number" } } } },
-                    "then": { "properties": { "min": false, "max": false } }
+                    "then": { "properties": { "min": false, "max": false, "step": false } }
                 },
                 {
                     "if": { "properties": { "valueType": { "not": { "const": "string" } } } },
