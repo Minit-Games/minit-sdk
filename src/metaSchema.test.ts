@@ -28,6 +28,13 @@ interface JsonSchemaNode {
     [key: string]: unknown;
 }
 
+type PropertyCondition = { const?: unknown; not?: { const?: unknown } };
+
+interface ConditionalBranch {
+    if: { required?: string[]; properties?: Record<string, PropertyCondition> };
+    then: { properties?: Record<string, unknown> };
+}
+
 interface MetaSchema {
     $schema: string;
     $id: string;
@@ -36,6 +43,8 @@ interface MetaSchema {
     $defs: {
         configEntry: {
             properties: Record<string, JsonSchemaNode>;
+            additionalProperties: boolean;
+            allOf: ConditionalBranch[];
         };
     };
 }
@@ -88,6 +97,78 @@ describe("schemas/meta.schema.json", () => {
     describe("config[].description (existing precedent, unchanged)", () => {
         it("still caps at 100 characters", () => {
             expect(schema.$defs.configEntry.properties.description.maxLength).toBe(100);
+        });
+    });
+
+    describe("config[].step", () => {
+        const configEntry = schema.$defs.configEntry;
+
+        // The SDK ships no JSON Schema validator, so this evaluates only the
+        // keywords configEntry's allOf branches use (required, const, not.const).
+        function branchApplies(branch: ConditionalBranch, entry: Record<string, unknown>): boolean {
+            const required = branch.if.required ?? [];
+            if (!required.every((key) => key in entry)) return false;
+            return Object.entries(branch.if.properties ?? {}).every(([key, condition]) => {
+                if (!(key in entry)) return true;
+                if ("const" in condition) return entry[key] === condition.const;
+                if (condition.not && "const" in condition.not) return entry[key] !== condition.not.const;
+                return true;
+            });
+        }
+
+        function stepRejectionReason(entry: Record<string, unknown>): string | null {
+            const stepSchema = configEntry.properties.step;
+            if (!stepSchema) return "configEntry has no step property (additionalProperties: false)";
+            if (stepSchema.type !== "number" || typeof entry.step !== "number") return "step is not a number";
+            if (typeof stepSchema.exclusiveMinimum === "number" && entry.step <= stepSchema.exclusiveMinimum) {
+                return "step violates exclusiveMinimum";
+            }
+            const forbidding = configEntry.allOf.find(
+                (branch) => branchApplies(branch, entry) && branch.then.properties?.step === false,
+            );
+            return forbidding ? "step forbidden by an allOf branch" : null;
+        }
+
+        it("declares step as a number with exclusiveMinimum 0", () => {
+            const step = configEntry.properties.step;
+            expect(step).toBeDefined();
+            expect(step.type).toBe("number");
+            expect(step.exclusiveMinimum).toBe(0);
+        });
+
+        it.each([
+            ["without min/max", { key: "speed", valueType: "number", value: 1, step: 0.5 }],
+            ["with min/max", { key: "speed", valueType: "number", value: 1, min: 0, max: 10, step: 0.5 }],
+        ])("accepts a positive step on a number entry %s", (_label, entry) => {
+            expect(stepRejectionReason(entry)).toBeNull();
+        });
+
+        it.each([0, -1])("rejects step %p", (step) => {
+            const entry = { key: "speed", valueType: "number", value: 1, step };
+            expect(configEntry.properties.step).toBeDefined();
+            expect(stepRejectionReason(entry)).toBe("step violates exclusiveMinimum");
+        });
+
+        it("rejects step together with range", () => {
+            const entry = { key: "speed", valueType: "number", value: 1, range: [1, 2, 3], step: 1 };
+            expect(configEntry.properties.step).toBeDefined();
+            expect(stepRejectionReason(entry)).toBe("step forbidden by an allOf branch");
+        });
+
+        it.each([
+            ["string", "hello"],
+            ["boolean", true],
+            ["color", "#ff0000"],
+        ])("rejects step on a %s entry", (valueType, value) => {
+            const entry = { key: "k", valueType, value, step: 1 };
+            expect(configEntry.properties.step).toBeDefined();
+            expect(stepRejectionReason(entry)).toBe("step forbidden by an allOf branch");
+        });
+
+        it("accepts an off-grid value: step is a UI hint, not a value constraint", () => {
+            const entry = { key: "speed", valueType: "number", value: 0.35, step: 0.1 };
+            expect(stepRejectionReason(entry)).toBeNull();
+            expect(JSON.stringify(configEntry)).not.toContain("multipleOf");
         });
     });
 });

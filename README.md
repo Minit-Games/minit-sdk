@@ -372,10 +372,11 @@ Max **25** entries. Each entry:
 | `description` | No | Max 100 characters. An over-long description is dropped silently — the entry (and the rest of `config`) is still accepted. |
 | `range` | No | Discrete allow-list of values, each matching `valueType`, displayed as a dropdown. `value` must be one of them. Mutually exclusive with the bound pairs below. |
 | `min` / `max` | No | Inclusive value bounds for `number` entries — integers or floats, written as JSON numbers (not strings, unlike `value`). `min` must be ≤ `max`. |
+| `step` | No | Positive UI step hint for `number` entries, written as a JSON number. It does not require `value` to be on the step grid. Mutually exclusive with `range`. |
 | `minLength` / `maxLength` | No | Inclusive length bounds for `string` entries, written as non-negative JSON integers. `minLength` must be ≤ `maxLength`. |
 | `moddable` | No | `true` = other creators may change this value in their mods, `false` = locked to your declared value, omitted = unmarked (treated as open, for back-compat). Locks only apply to other creators — you always have full access to your own game's values. |
 
-Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min` and `max` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `boolean` and `color` configs accept neither kind of bound.
+Use `range` for a discrete set of allowed choices (a dropdown), or bounds for a continuous span. `min`, `max`, and `step` apply only to `valueType: "number"`; `minLength` and `maxLength` apply only to `valueType: "string"`. `step` is mutually exclusive with `range`. `boolean` and `color` configs accept neither kind of bound.
 
 Anything the rules above reject — a duplicate key, a `range` alongside a bound, a `min` on a `string`, a `value` outside its own `range`, a 26th entry — invalidates the **whole** `config` block, not just the offending entry. Like any other malformed `config`, it is skipped at upload while the rest of `meta.json` still prefills.
 
