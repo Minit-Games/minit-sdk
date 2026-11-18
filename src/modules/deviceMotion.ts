@@ -19,16 +19,20 @@ export async function requestDeviceMotionPermission(): Promise<DeviceMotionPermi
     if (!motionEvent) return "unsupported";
     if (typeof motionEvent.requestPermission !== "function") return "granted";
 
-    try {
-        const requests = [motionEvent.requestPermission()];
-        const orientationEvent = sdkWindow.DeviceOrientationEvent;
-        if (typeof orientationEvent?.requestPermission === "function") {
-            requests.push(orientationEvent.requestPermission());
-        }
+    const requests = [isGranted(motionEvent)];
+    const orientationEvent = sdkWindow.DeviceOrientationEvent;
+    if (typeof orientationEvent?.requestPermission === "function") {
+        requests.push(isGranted(orientationEvent));
+    }
 
-        const permissions = await Promise.all(requests);
-        return permissions.every((permission) => permission === "granted") ? "granted" : "denied";
+    const grants = await Promise.all(requests);
+    return grants.every(Boolean) ? "granted" : "denied";
+}
+
+async function isGranted(event: PermissionEventConstructor): Promise<boolean> {
+    try {
+        return (await event.requestPermission?.()) === "granted";
     } catch {
-        return "denied";
+        return false;
     }
 }

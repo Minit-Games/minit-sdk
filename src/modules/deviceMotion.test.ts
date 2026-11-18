@@ -93,6 +93,23 @@ describe("requestDeviceMotionPermission", () => {
         await expect(requestDeviceMotionPermission()).resolves.toBe("denied");
     });
 
+    it("leaves no unhandled rejection when the motion request rejects and the orientation request throws", async () => {
+        const unhandled = jest.fn();
+        process.on("unhandledRejection", unhandled);
+        installEvent("DeviceMotionEvent", jest.fn(() => Promise.reject(new Error("NotAllowedError"))));
+        installEvent("DeviceOrientationEvent", jest.fn(() => {
+            throw new Error("must be called from a user gesture");
+        }));
+
+        try {
+            await expect(requestDeviceMotionPermission()).resolves.toBe("denied");
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(unhandled).not.toHaveBeenCalled();
+        } finally {
+            process.off("unhandledRejection", unhandled);
+        }
+    });
+
     describe("only DeviceMotionEvent has requestPermission", () => {
         it.each(["granted", "denied"])("resolves '%s' from the motion request alone when DeviceOrientationEvent has no requestPermission", async (answer) => {
             const motion = resolvesWith(answer);
