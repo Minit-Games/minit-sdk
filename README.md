@@ -676,13 +676,15 @@ Tilt controls work in the Minit Games app on iOS and Android. `requestDeviceMoti
 ```ts
 import { requestDeviceMotionPermission } from '@minit-games/sdk';
 
-let tilt = { x: 0, y: 0 };
-let tiltActive = false;       // touch steering stays live until this flips
+let tilt = { x: 0, y: 0 };     // added to touch steering, never a replacement
+let tiltActive = false;        // true once the sensor has reported
+let neutralBeta: number | null = null;
 
 function onOrientation(e: DeviceOrientationEvent) {
   if (e.beta === null || e.gamma === null) return;
-  tiltActive = true;          // a real reading: tilt works on this device
-  tilt = { x: e.gamma / 25, y: e.beta / 25 };
+  tiltActive = true;           // a real reading: tilt works on this device
+  neutralBeta ??= e.beta;      // the angle the phone is held at counts as level
+  tilt = { x: e.gamma / 25, y: (e.beta - neutralBeta) / 25 };
 }
 
 // pointerup, not pointerdown: iOS only prompts when the finger lifts.
@@ -696,6 +698,8 @@ canvas.addEventListener('pointerup', async () => {
   }, 2500);
 }, { once: true });
 ```
+
+`beta` is an absolute angle: a phone held comfortably upright reads 40–90°, not 0. Measure tilt from a neutral angle (the first reading, or a recenter step) or the game drifts in one direction at rest. Touch input stays live alongside `tilt`; `tiltActive` only tells you which control to show the player.
 
 The game does not need a start screen for this: begin straight into play with touch controls, and request motion access on the player's first tap.
 
