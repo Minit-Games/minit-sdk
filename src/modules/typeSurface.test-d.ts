@@ -2,8 +2,8 @@
 // These are checked by tsc (npm run check) — not executed at runtime.
 import { getUserData } from "./userData.js";
 import type { ResultOptions, MinitApi } from "../minitApi.js";
-import { getMotionQuality, prefersReducedMotion, getDeviceTier } from "../index.js";
-import type { MotionQuality, DeviceTier } from "../index.js";
+import { getMotionQuality, prefersReducedMotion, getDeviceTier, requestDeviceMotionPermission } from "../index.js";
+import type { MotionQuality, DeviceTier, DeviceMotionPermission } from "../index.js";
 
 // --- getUserData ---
 
@@ -87,3 +87,15 @@ const _minitApiInvalidDeviceTier: MinitApi = { environment: "app", dropConfig: {
 const _minitApiInvalidMotionQuality: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, motionQuality: "low" };
 // @ts-expect-error prefersReducedMotion must be a boolean
 const _minitApiStringPrefersReducedMotion: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, prefersReducedMotion: "true" };
+
+// --- requestDeviceMotionPermission and DeviceMotionPermission ---
+
+const _deviceMotionPermission: Promise<DeviceMotionPermission> = requestDeviceMotionPermission();
+const _deviceMotionPermissionUnion: Promise<"granted" | "denied" | "unsupported"> = requestDeviceMotionPermission();
+const _deviceMotionPermissions: DeviceMotionPermission[] = ["granted", "denied", "unsupported"];
+// @ts-expect-error DeviceMotionPermission is only "granted" | "denied" | "unsupported"
+const _deviceMotionPermissionInvalid: DeviceMotionPermission = "prompt";
+// @ts-expect-error requestDeviceMotionPermission returns a Promise, not a bare permission
+const _deviceMotionPermissionSync: DeviceMotionPermission = requestDeviceMotionPermission();
+// @ts-expect-error requestDeviceMotionPermission takes no arguments
+requestDeviceMotionPermission("motion");

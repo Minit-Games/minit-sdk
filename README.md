@@ -538,6 +538,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these â
 | `getMotionQuality()`              | Resolved effects quality: `"full"` or `"reduced"` (see [Device-adaptive effects](#device-adaptive-effects))                                              |
 | `prefersReducedMotion()`          | Whether the player enabled the OS reduced-motion accessibility setting (see [Device-adaptive effects](#device-adaptive-effects))                            |
 | `getDeviceTier()`                 | Raw RAM tier: `"low"`, `"medium"`, `"high"`, or `"unknown"` (see [Device-adaptive effects](#device-adaptive-effects))                                |
+| `requestDeviceMotionPermission()` | Request access to device motion and orientation sensors; resolves to `"granted"`, `"denied"`, or `"unsupported"` (see [Device motion](#device-motion)) |
 | `getConfig()`                    | Get all URL-param config values as a plain object                                                                                               |
 | `seededRandom()`                 | Deterministic random number (seeded from `?seed=` param)                                                                                        |
 | `patchSeed(seed)`                | Override the random seed at runtime                                                                                                             |
@@ -660,6 +661,26 @@ const screenShakeEnabled = !prefersReducedMotion();
 - `getDeviceTier()` exposes the raw RAM tier: up to 3 GiB is `"low"`, up to 6 GiB is `"medium"`, and more is `"high"`; unreadable or unavailable capability data returns `"unknown"`.
 - The app's default motion-quality setting is `"full"`, so a low-tier device can still report full motion quality unless the player enabled reduced motion. Use `getDeviceTier()` when you need finer performance tuning.
 - Test without an app host by adding `?motionQuality=full|reduced`, `?deviceTier=low|medium|high|unknown`, or `?reducedMotion=1|true|0|false` to the Game URL. These overrides take precedence over host values; invalid values are ignored.
+
+## Device motion
+
+Call `requestDeviceMotionPermission()` directly from a tap or click handler. iOS only allows the permission prompt during a user gesture.
+
+```ts
+import { requestDeviceMotionPermission } from '@minit-games/sdk';
+
+startButton.addEventListener('click', async () => {
+  const permission = await requestDeviceMotionPermission();
+
+  if (permission === 'granted') {
+    startMotionControls();
+  } else {
+    startTouchControls();
+  }
+});
+```
+
+The helper resolves to `"unsupported"` when device-motion events are unavailable, and to `"denied"` when the permission request is rejected, throws, or is declined. It never rejects. Use the same non-motion fallback for both results.
 
 ---
 
