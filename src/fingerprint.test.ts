@@ -15,6 +15,7 @@ const GAME_CALLS: Record<string, string> = {
     getMotionQuality: "(window as any).__minitOut = getMotionQuality();",
     prefersReducedMotion: "(window as any).__minitOut = prefersReducedMotion();",
     getDeviceTier: "(window as any).__minitOut = getDeviceTier();",
+    requestDeviceMotionPermission: "requestDeviceMotionPermission().then((p) => { (window as any).__minitOut = p; });",
 };
 
 async function bundleGame(exportName: string, options: { minify: boolean; dropConsole: boolean }): Promise<string> {
