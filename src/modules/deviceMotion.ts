@@ -11,6 +11,17 @@ type PermissionWindow = Window & {
     DeviceOrientationEvent?: PermissionEventConstructor;
 };
 
+/**
+ * Request access to the device motion and orientation sensors. Never rejects.
+ *
+ * Call it synchronously from a `click`, `pointerup`, or `touchend` handler —
+ * not `pointerdown`/`touchstart`, which iOS does not treat as a user
+ * activation: there it resolves `"denied"` without ever showing a prompt.
+ *
+ * `"granted"` only means the browser allows listening (desktop browsers grant
+ * with no sensor). Switch to tilt once a real `deviceorientation` event
+ * arrives, and keep a touch fallback for every result.
+ */
 export async function requestDeviceMotionPermission(): Promise<DeviceMotionPermission> {
     if (typeof window === "undefined") return "unsupported";
 

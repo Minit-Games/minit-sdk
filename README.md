@@ -516,6 +516,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 - **Coerce config values — they come back as strings (or `undefined`).** `getConfigValue('startScore') + 5` yields the string `'05'`, not `15`, and a missing key returns `undefined`. Wrap with `Number(...)` / `parseInt(...)` and supply a default for numeric mods.
 - **`flavorText` is rendered by the host, not in-game.** It is capped at 64 characters and appears beneath the score on the result screen and in the activity feed — use it for a session stat or moment, never for confirmation copy, and never render it inside the game.
 - **One flying reward per point, not per event.** When a scoring action awards multiple points, spawn one icon per point via `spawnRewards(pointsEarned, ...)` — do not fly a single icon and jump the score by 10. Cluster large payouts into denominations like 5 / 25 / 125 automatically through `spawnRewards`.
+- **Ask for motion access on `pointerup` or `click`, never `pointerdown`.** Assistants wire `requestDeviceMotionPermission()` into the same `pointerdown` handler as the rest of the input. iOS only prompts when the finger lifts, so there the request is rejected without a prompt and the helper resolves `"denied"` — tilt works on Android and silently never on iOS. Keep touch controls as a fallback. See [Device motion](#device-motion).
 - **No `<link>` tags to Google Fonts.** AIs commonly add `<link rel="stylesheet" href="https://fonts.googleapis.com/...">` for styling. Those requests are blocked at runtime — the game runs sandboxed with no external network access. Bundle woff2 files and reference them with relative-path `@font-face` rules instead (see [Fonts and assets](#fonts-and-assets)). The SDK's own UI fonts — Lato and Bowlby One SC — are already inlined and need no action.
 - **An unpinned viewport meta, or `metaTags: true` on top of your own.** Both make the game render roughly 2.3× too large and clipped, because the page scale is not pinned when the scaling code reads `window.innerWidth`. Check two things: that `index.html` declares `maximum-scale=1, user-scalable=no` (the ordinary `width=device-width, initial-scale=1.0` line pins nothing and is not sufficient), and that the AI has not added `metaTags: true` alongside it — `applyMetaTags()` appends a second, unpinned viewport meta before your first scale pass. The tell is the preview image on the Console draft, or a game that visibly snaps size on a cold launch. See [Screen, viewport, and scaling](#screen-viewport-and-scaling).
 
@@ -664,23 +665,48 @@ const screenShakeEnabled = !prefersReducedMotion();
 
 ## Device motion
 
-Call `requestDeviceMotionPermission()` directly from a tap or click handler. iOS only allows the permission prompt during a user gesture.
+Tilt controls work in the Minit Games app on iOS and Android. `requestDeviceMotionPermission()` asks for access to the motion and orientation sensors and resolves to `"granted"`, `"denied"`, or `"unsupported"`. It never rejects.
+
+**Call it from a `click`, `pointerup`, or `touchend` handler — never from `pointerdown` or `touchstart`.** iOS only shows the permission prompt during a user activation, and a finger touching down is not one; only lifting it is. Called from `pointerdown`, the request is rejected on iOS without a prompt and the helper resolves `"denied"` immediately. Android never prompts, so a game that asks on `pointerdown` works on Android and fails silently on iOS. Call the helper synchronously in the handler — no `await` before it.
+
+**`"granted"` does not guarantee that events arrive.** Desktop browsers resolve `"granted"` with no sensor behind it, and a device can still deliver nothing. Switch to tilt only once a real `deviceorientation` event arrives, and fall back to touch if none comes within a couple of seconds.
+
+**Always keep a non-tilt control.** Players can decline the prompt, and `"denied"` and `"unsupported"` need the same fallback as a sensor that never reports. Keep touch steering live the whole time, and tell the player which control they got.
 
 ```ts
 import { requestDeviceMotionPermission } from '@minit-games/sdk';
 
-startButton.addEventListener('click', async () => {
-  const permission = await requestDeviceMotionPermission();
+let tilt = { x: 0, y: 0 };     // added to touch steering, never a replacement
+let tiltActive = false;        // true once the sensor has reported
+let neutralBeta: number | null = null;
 
-  if (permission === 'granted') {
-    startMotionControls();
-  } else {
-    startTouchControls();
-  }
-});
+function onOrientation(e: DeviceOrientationEvent) {
+  if (e.beta === null || e.gamma === null) return;
+  tiltActive = true;           // a real reading: tilt works on this device
+  neutralBeta ??= e.beta;      // the angle the phone is held at counts as level
+  tilt = { x: e.gamma / 25, y: (e.beta - neutralBeta) / 25 };
+}
+
+// pointerup, not pointerdown: iOS only prompts when the finger lifts.
+canvas.addEventListener('pointerup', async () => {
+  const permission = await requestDeviceMotionPermission();
+  if (permission !== 'granted') return;   // stay on touch controls
+
+  window.addEventListener('deviceorientation', onOrientation);
+  setTimeout(() => {
+    if (!tiltActive) window.removeEventListener('deviceorientation', onOrientation);
+  }, 2500);
+}, { once: true });
 ```
 
-The helper resolves to `"unsupported"` when device-motion events are unavailable, and to `"denied"` when the permission request is rejected, throws, or is declined. It never rejects. Use the same non-motion fallback for both results.
+`beta` is an absolute angle: a phone held comfortably upright reads 40–90°, not 0. Measure tilt from a neutral angle (the first reading, or a recenter step) or the game drifts in one direction at rest. Touch input stays live alongside `tilt`; `tiltActive` only tells you which control to show the player.
+
+The game does not need a start screen for this: begin straight into play with touch controls, and request motion access on the player's first tap.
+
+- `"unsupported"`: `DeviceMotionEvent` does not exist in this browser.
+- `"denied"`: the player declined, or the request was rejected or threw — including when it was not called during a user activation.
+- `"granted"`: the browser allows listening. On Android and desktop, this is returned without a prompt.
+- Test tilt on a real phone through a preview link; a desktop browser has no sensor. iOS Safari remembers a denial until the page reloads.
 
 ---
 
