@@ -1,6 +1,6 @@
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { recordTrackedEvent } from "./trackDevBuffer.js";
-import { showTrackDevPanel } from "./trackDevPanel.js";
+import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 
 let _loadingDonePosted = false;
 

@@ -31,6 +31,7 @@ const GAP = 8;
 const DRAG_THRESHOLD = 6;
 const Z_INDEX = "9999";
 const PANEL_MAX_HEIGHT = "min(420px, 60vh)";
+const DETAIL_HIDE_DELAY_MS = 150;
 
 const LOGO_VIEWBOX = "0 0 610.4 800";
 const LOGO_SHAPES: ReadonlyArray<[string, Record<string, string>]> = [
@@ -151,13 +152,13 @@ function injectStyles(): void {
     outline-offset: 2px;
 }
 #${PANEL_ID} [data-kind]:hover { background: ${COLORS.hoverRow}; }
-#${PANEL_ID} [data-kind]:focus-visible {
+#${PANEL_ID} [data-kind]:focus-visible, #${DETAIL_ID}:focus-visible {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: -2px;
 }
 #${TOOLS_ID} [data-close]:hover { color: ${COLORS.ink}; background: ${COLORS.hoverRow}; }
 #${TOOLS_ID} [aria-pressed="false"]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
-#${PANEL_ID} { scrollbar-width: thin; scrollbar-color: ${COLORS.border} transparent; }
+#${PANEL_ID}, #${DETAIL_ID} { scrollbar-width: thin; scrollbar-color: ${COLORS.border} transparent; }
 `;
     document.head.append(style);
 }
@@ -412,8 +413,9 @@ function anchorTools(panel: HTMLElement, launcher: HTMLElement): void {
     const below = rect.top + rect.height / 2 < window.innerHeight / 2;
     const room = below ? window.innerHeight - rect.bottom - GAP - EDGE : rect.top - GAP - EDGE;
     panel.style.maxHeight = `min(${PANEL_MAX_HEIGHT}, ${Math.max(0, room)}px)`;
-    panel.style.left = onRight ? "" : `${Math.max(EDGE, rect.left)}px`;
-    panel.style.right = onRight ? `${Math.max(EDGE, window.innerWidth - rect.right)}px` : "";
+    const width = panel.getBoundingClientRect().width;
+    const left = onRight ? rect.right - width : rect.left;
+    panel.style.left = `${clamp(left, EDGE, Math.max(EDGE, window.innerWidth - width - EDGE))}px`;
     panel.style.top = below ? `${rect.bottom + GAP}px` : "";
     panel.style.bottom = below ? "" : `${window.innerHeight - rect.top + GAP}px`;
 }
@@ -480,16 +482,51 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     const groups = new Map<string, { row: HTMLElement; count: number; latest: TrackedEntry }>();
     let grouped = false;
 
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const hideDetail = () => {
+        clearTimeout(hideTimer);
+        detail.style.display = "none";
+    };
+    const hideDetailSoon = () => {
+        clearTimeout(hideTimer);
+        hideTimer = setTimeout(() => {
+            if (document.activeElement !== detail) {
+                hideDetail();
+            }
+        }, DETAIL_HIDE_DELAY_MS);
+    };
+    detail.onmouseenter = () => clearTimeout(hideTimer);
+    detail.onmouseleave = hideDetailSoon;
+    detail.onblur = hideDetail;
+
     const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
         const row = renderRow(entry, count);
-        const hideDetail = () => {
-            detail.style.display = "none";
+        const reveal = () => {
+            clearTimeout(hideTimer);
+            showDetail(detail, row, entry);
         };
-        row.onmouseenter = () => showDetail(detail, row, entry);
-        row.onmouseleave = hideDetail;
-        row.onfocus = () => showDetail(detail, row, entry);
-        row.onblur = hideDetail;
+        row.onmouseenter = reveal;
+        row.onmouseleave = hideDetailSoon;
+        row.onfocus = reveal;
+        row.onblur = (event) => {
+            if (event.relatedTarget !== detail) {
+                hideDetail();
+            }
+        };
+        row.onkeydown = (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                reveal();
+                detail.focus({ preventScroll: true });
+            }
+        };
         return row;
+    };
+
+    const replaceFocusedRow = (previous: HTMLElement, next: HTMLElement) => {
+        if (document.activeElement === previous) {
+            next.focus({ preventScroll: true });
+        }
     };
 
     const groupId = (entry: TrackedEntry) => `${entry.kind}:${entry.key}`;
@@ -501,10 +538,13 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
         }
         const id = groupId(entry);
         const group = groups.get(id);
-        group?.row.remove();
         const count = (group?.count ?? 0) + 1;
         const row = createRow(entry, count);
         list.insertBefore(row, list.firstChild);
+        if (group) {
+            replaceFocusedRow(group.row, row);
+            group.row.remove();
+        }
         groups.set(id, { row, count, latest: entry });
     };
 
@@ -524,7 +564,9 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
             return;
         }
         const row = createRow(group.latest, group.count - 1);
-        group.row.replaceWith(row);
+        group.row.after(row);
+        replaceFocusedRow(group.row, row);
+        group.row.remove();
         groups.set(id, { row, count: group.count - 1, latest: group.latest });
     };
 
@@ -650,9 +692,13 @@ function createDetailPanel(): HTMLElement {
         fontSize: "12px",
         lineHeight: "1.7",
         wordBreak: "break-all",
-        pointerEvents: "none",
+        maxHeight: `calc(100vh - ${EDGE * 2}px)`,
+        overflowY: "auto",
+        overscrollBehavior: "contain",
         zIndex: Z_INDEX,
     });
+    detail.tabIndex = 0;
+    isolate(detail);
     return detail;
 }
 

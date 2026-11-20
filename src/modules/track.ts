@@ -1,7 +1,7 @@
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { recordTrackedDrop, recordTrackedEvent } from "./trackDevBuffer.js";
 import type { TrackDropReason } from "./trackDevBuffer.js";
-import { showTrackDevPanel } from "./trackDevPanel.js";
+import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 import {
     KEY_MAX_LENGTH,
     KEY_PATTERN,
@@ -146,7 +146,18 @@ function drop(key: unknown, reason: TrackDropReason): void {
         console.warn(`[Minit] track dropped: ${reason}`);
     }
     if (isTestEnvironment()) {
-        recordTrackedDrop(typeof key === "string" ? key : String(key), reason);
+        recordTrackedDrop(keyLabel(key), reason);
         showTrackDevPanel();
+    }
+}
+
+function keyLabel(key: unknown): string {
+    if (typeof key === "string") {
+        return key;
+    }
+    try {
+        return String(key);
+    } catch {
+        return "(unprintable key)";
     }
 }

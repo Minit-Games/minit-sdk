@@ -27,6 +27,11 @@ async function loadSdk() {
     return { track, loadingDone, recordTrackedEvent, recordTrackedDrop, getTrackedEntries, showTrackDevPanel };
 }
 
+// The SDK imports the panel lazily, so a mount triggered by track() lands a few microtasks later.
+function flushPanelLoad(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function panels(): Element[] {
     return Array.from(document.querySelectorAll(PANEL_SELECTOR));
 }
@@ -122,6 +127,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+    jest.useRealTimers();
     delete window.minit;
     document.body.innerHTML = "";
     jest.restoreAllMocks();
@@ -136,6 +142,7 @@ describe("track dev panel", () => {
         track("minit.reserved");
         loadingDone();
         showTrackDevPanel();
+        await flushPanelLoad();
 
         expect(panels()).toHaveLength(0);
     });
@@ -149,6 +156,7 @@ describe("track dev panel", () => {
         track("coin_pickup", { value: "gold" });
         now = 3333;
         track("boss_defeated", { flawless: true });
+        await flushPanelLoad();
 
         expect(panels()).toHaveLength(1);
         const eventRows = rows("event");
@@ -175,6 +183,7 @@ describe("track dev panel", () => {
         track("minit.sneaky");
         now = 2000;
         track("bad key!");
+        await flushPanelLoad();
 
         const dropRows = rows("drop");
         expect(dropRows).toHaveLength(2);
@@ -390,6 +399,7 @@ describe("dev tools panel", () => {
         const { recordTrackedEvent, track } = await loadSdk();
         recordTrackedEvent("early_event", {});
         track("level_start");
+        await flushPanelLoad();
         expect(countBadge()).toBe("2");
 
         track("bad key!");
@@ -403,6 +413,7 @@ describe("dev tools panel", () => {
         track("level_start");
         now = 12345;
         track("bad key!");
+        await flushPanelLoad();
 
         expect(rows().map(rowParts)).toEqual([
             ["⚠ dropped bad key!", "12.35s"],
@@ -418,6 +429,7 @@ describe("dev tools panel", () => {
         for (let i = 0; i < 7; i++) {
             track(`e${i}`);
         }
+        await flushPanelLoad();
 
         expect(rows("event")).toHaveLength(5);
         expect(rows("drop").map((row) => row.firstChild?.textContent)).toEqual(["⚠ dropped e6", "⚠ dropped e5"]);
@@ -493,6 +505,51 @@ describe("dev tools panel", () => {
         expect(tools().style.maxHeight).toBe(`min(min(420px, 60vh), ${window.innerHeight - 348 - 8 - 12}px)`);
         expect(tools().style.top).toBe(`${348 + 8}px`);
     });
+
+    describe("horizontal anchoring on a narrow viewport", () => {
+        const originalWidth = window.innerWidth;
+
+        beforeEach(() => {
+            Object.defineProperty(window, "innerWidth", { configurable: true, value: 375 });
+        });
+
+        afterEach(() => {
+            Object.defineProperty(window, "innerWidth", { configurable: true, value: originalWidth });
+        });
+
+        async function openWithLauncherAt(left: number) {
+            await mountPanel();
+            jest.spyOn(tools(), "getBoundingClientRect").mockReturnValue({ width: 300 } as DOMRect);
+            jest.spyOn(launcher(), "getBoundingClientRect").mockReturnValue({
+                left,
+                right: left + 48,
+                top: 600,
+                bottom: 648,
+                width: 48,
+                height: 48,
+            } as DOMRect);
+            launcher().click();
+        }
+
+        it("keeps a left-anchored panel inside the viewport", async () => {
+            await openWithLauncherAt(130);
+
+            expect(tools().style.left).toBe(`${375 - 300 - 12}px`);
+            expect(tools().style.right).toBe("");
+        });
+
+        it("aligns a right-anchored panel with the launcher's right edge", async () => {
+            await openWithLauncherAt(300);
+
+            expect(tools().style.left).toBe(`${300 + 48 - 300}px`);
+        });
+
+        it("keeps a right-anchored panel off the left edge", async () => {
+            await openWithLauncherAt(200);
+
+            expect(tools().style.left).toBe("12px");
+        });
+    });
 });
 
 describe("dev tools panel grouping", () => {
@@ -557,6 +614,90 @@ describe("dev tools panel grouping", () => {
             ["coin", "1.00s"],
         ]);
     });
+
+    it("keeps focus on a group's row when a new entry replaces it", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("coin", { value: 1 });
+        recordTrackedEvent("jump", {});
+        toolButton("Group by key").click();
+        (rows()[1] as HTMLElement).focus();
+
+        recordTrackedEvent("coin", { value: 2 });
+
+        const focused = document.activeElement as HTMLElement;
+        expect(focused).toBe(rows()[0]);
+        expect(rowParts(focused)).toEqual(["coin", "1.00s", "2"]);
+        expect(detail().style.display).toBe("block");
+        expect(detail().textContent).toContain("value: 2");
+    });
+
+    it("keeps focus on a group's row when eviction decrements it", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
+        recordTrackedEvent("coin", {});
+        recordTrackedEvent("coin", {});
+        for (let i = 0; i < MAX_DEV_ENTRIES - 2; i++) {
+            recordTrackedEvent("jump", {});
+        }
+        toolButton("Group by key").click();
+        const coinRow = () => rows().find((row) => rowParts(row)[0] === "coin") as HTMLElement;
+        coinRow().focus();
+
+        recordTrackedEvent("other", {});
+
+        expect(rowParts(coinRow())[2]).toBe("1");
+        expect(document.activeElement).toBe(coinRow());
+    });
+});
+
+describe("dev tools panel lazy loading", () => {
+    afterEach(() => {
+        jest.dontMock("./trackDevPanel");
+    });
+
+    async function loadWithPanelSpy() {
+        jest.resetModules();
+        const factory = jest.fn(() => ({ showTrackDevPanel: jest.fn() }));
+        jest.doMock("./trackDevPanel", factory);
+        const { track } = await import("./track");
+        const { loadingDone } = await import("./loadingDone");
+        const { reportResult } = await import("./result");
+        return { factory, track, loadingDone, reportResult };
+    }
+
+    it("never loads the panel module while a host is present", async () => {
+        installHost();
+        const { factory, track, loadingDone, reportResult } = await loadWithPanelSpy();
+
+        track("level_start", { level: 1 });
+        track("bad key!");
+        loadingDone();
+        reportResult(10);
+        await flushPanelLoad();
+
+        expect(factory).not.toHaveBeenCalled();
+    });
+
+    it("loads the panel module only once dev mode needs it", async () => {
+        const { factory, track } = await loadWithPanelSpy();
+        expect(factory).not.toHaveBeenCalled();
+
+        track("level_start");
+        await flushPanelLoad();
+
+        expect(factory).toHaveBeenCalledTimes(1);
+    });
+
+    it("mounts the panel after the lazy load from loadingDone()", async () => {
+        const { loadingDone } = await loadSdk();
+
+        loadingDone();
+        expect(panels()).toHaveLength(0);
+        await flushPanelLoad();
+
+        expect(panels()).toHaveLength(1);
+        expect(rows("event").map((row) => row.firstChild?.textContent)).toEqual(["minit.loading_done"]);
+    });
 });
 
 describe("dev tools panel clear", () => {
@@ -593,6 +734,7 @@ describe("dev tools panel clear", () => {
         for (let i = 0; i < 5; i++) {
             track(`e${i}`);
         }
+        await flushPanelLoad();
         toolButton("Clear").click();
 
         track("after_clear");
@@ -640,6 +782,7 @@ describe("dev tools detail popup", () => {
         const { track } = await loadSdk();
         now = 2500;
         track("minit.sneaky");
+        await flushPanelLoad();
 
         hoverDetail(rows()[0]);
 
@@ -669,15 +812,63 @@ describe("dev tools detail popup", () => {
         expect(lines.slice(1)).toEqual([`reason: ${text}`, "source: minit"]);
     });
 
-    it("hides on mouse leave", async () => {
+    it("hides shortly after the mouse leaves the row", async () => {
         const { recordTrackedEvent } = await mountPanel();
         recordTrackedEvent("level_start", {});
         const row = rows()[0];
+        jest.useFakeTimers({ doNotFake: ["performance"] });
 
         hoverDetail(row);
         expect(detail().style.display).toBe("block");
         row.dispatchEvent(new MouseEvent("mouseleave"));
+        expect(detail().style.display).toBe("block");
 
+        jest.advanceTimersByTime(150);
+        expect(detail().style.display).toBe("none");
+    });
+
+    it("stays open while the pointer is over it and hides after it leaves", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("level_start", {});
+        const row = rows()[0];
+        jest.useFakeTimers({ doNotFake: ["performance"] });
+
+        hoverDetail(row);
+        row.dispatchEvent(new MouseEvent("mouseleave"));
+        detail().dispatchEvent(new MouseEvent("mouseenter"));
+        jest.advanceTimersByTime(1000);
+        expect(detail().style.display).toBe("block");
+
+        detail().dispatchEvent(new MouseEvent("mouseleave"));
+        jest.advanceTimersByTime(150);
+        expect(detail().style.display).toBe("none");
+    });
+
+    it("is bounded to the viewport, scrollable and accepts pointer input", async () => {
+        await mountPanel();
+
+        expect(detail().style.maxHeight).toBe("calc(100vh - 24px)");
+        expect(detail().style.overflowY).toBe("auto");
+        expect(detail().style.pointerEvents).toBe("");
+    });
+
+    it("takes keyboard focus from its row on Enter and stays open while focused", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("level_end", { level: 2 });
+        const row = rows()[0] as HTMLElement;
+        jest.useFakeTimers({ doNotFake: ["performance"] });
+
+        row.focus();
+        row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+        expect(detail().tabIndex).toBe(0);
+        expect(document.activeElement).toBe(detail());
+        expect(detail().style.display).toBe("block");
+        row.dispatchEvent(new MouseEvent("mouseleave"));
+        jest.advanceTimersByTime(1000);
+        expect(detail().style.display).toBe("block");
+
+        detail().blur();
         expect(detail().style.display).toBe("none");
     });
 

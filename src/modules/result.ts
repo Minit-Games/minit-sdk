@@ -1,7 +1,7 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { recordTrackedEvent } from "./trackDevBuffer.js";
-import { showTrackDevPanel } from "./trackDevPanel.js";
+import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 
 // Hand-copied from packages/shared/src/creatorLimits.ts in the minit-root monorepo;
 // minit-sdk cannot import across repositories.

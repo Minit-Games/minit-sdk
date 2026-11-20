@@ -365,6 +365,18 @@ describe("track — robustness", () => {
         const host = await loadSdk();
         expect(() => callTrack(host.track as (...a: unknown[]) => void)).not.toThrow();
     });
+
+    it.each([
+        ["a null-prototype object", Object.create(null)],
+        ["a throwing Symbol.toPrimitive", { [Symbol.toPrimitive]: () => { throw new Error("nope"); } }],
+    ])("drops a key that cannot be stringified (%s) as invalid-key in dev mode", async (_label, key) => {
+        const { track, getTrackedEntries } = await loadSdk();
+
+        expect(() => track(key as unknown as string)).not.toThrow();
+
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid-key")]]);
+        expect(getTrackedEntries()).toEqual([{ kind: "drop", key: "(unprintable key)", reason: "invalid-key", t: 1000 }]);
+    });
 });
 
 describe("track — dev buffer", () => {

@@ -792,6 +792,8 @@ The font data is tree-shaken per module — games pay only for what they import:
 
 Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
 
+The dev tools panel (dev mode only, outside the Minit app) also uses Lato. It is loaded with a dynamic `import()`, so bundlers split it into a separate chunk that hosted games never load.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
