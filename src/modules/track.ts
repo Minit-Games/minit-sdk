@@ -2,21 +2,20 @@ import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { recordTrackedDrop, recordTrackedEvent } from "./trackDevBuffer.js";
 import type { TrackDropReason } from "./trackDevBuffer.js";
 import { showTrackDevPanel } from "./trackDevPanel.js";
+import {
+    KEY_MAX_LENGTH,
+    KEY_PATTERN,
+    MAX_EVENTS_PER_LOAD,
+    MAX_PAYLOAD_BYTES,
+    MAX_PROPS,
+    PROP_KEY_MAX_LENGTH,
+    RATE_BURST,
+    RATE_REFILL_PER_SECOND,
+    RESERVED_KEY_PREFIX,
+    STRING_VALUE_MAX_LENGTH,
+} from "./trackLimits.js";
 
 export type TrackProperties = Record<string, boolean | number | string>;
-
-// Hand-copied until packages/shared/src/trackEvents.ts in the minit-root monorepo
-// becomes the shared source; minit-sdk cannot import across repositories.
-const KEY_PATTERN = /^[A-Za-z0-9_.-]+$/;
-const KEY_MAX_LENGTH = 64;
-export const RESERVED_KEY_PREFIX = "minit.";
-export const MAX_PROPS = 20;
-const PROP_KEY_MAX_LENGTH = 40;
-const STRING_VALUE_MAX_LENGTH = 256;
-const MAX_PAYLOAD_BYTES = 2048;
-const RATE_BURST = 5;
-export const RATE_REFILL_PER_SECOND = 5;
-export const MAX_EVENTS_PER_LOAD = 100;
 
 const TOKEN_COST_MS = 1000 / RATE_REFILL_PER_SECOND;
 const BUCKET_CAPACITY_MS = RATE_BURST * TOKEN_COST_MS;
@@ -51,13 +50,18 @@ export function track(key: string, properties?: TrackProperties): void {
         showTrackDevPanel();
     }
 
+    const message = () => `track => ${key}\nProps: ${JSON.stringify(props)}`;
     callApiFunction(() => {
+        if (typeof window.minit?.track !== "function") {
+            console.log("[MinitSDK]", message());
+            return;
+        }
         try {
-            window.minit?.track?.(key, props);
+            window.minit.track(key, props);
         } catch {
             // A host failure must never break the game.
         }
-    }, () => `track => ${key}\nProps: ${JSON.stringify(props)}`);
+    }, message);
 }
 
 function validate(key: unknown, properties: unknown): TrackDropReason | undefined {

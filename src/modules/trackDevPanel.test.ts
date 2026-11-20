@@ -99,7 +99,7 @@ function dragLauncher(dx: number, dy: number): void {
     target.dispatchEvent(pointer("pointerdown", 100, 100));
     target.dispatchEvent(pointer("pointermove", 100 + dx, 100 + dy));
     target.dispatchEvent(pointer("pointerup", 100 + dx, 100 + dy));
-    target.click();
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
 }
 
 function launcherPosition(): { left: string; top: string } {
@@ -315,6 +315,30 @@ describe("dev tools launcher drag", () => {
         expect(isOpen()).toBe(true);
     });
 
+    it("toggles on the next click after a drag cancelled without a click", async () => {
+        await mountPanel();
+        followInlinePosition(launcher());
+
+        launcher().dispatchEvent(pointer("pointerdown", 100, 100));
+        launcher().dispatchEvent(pointer("pointermove", 50, 50));
+        launcher().dispatchEvent(pointer("pointercancel", 50, 50));
+        launcher().click();
+
+        expect(isOpen()).toBe(true);
+    });
+
+    it("toggles on keyboard activation after a drag that ended without a click", async () => {
+        await mountPanel();
+        followInlinePosition(launcher());
+
+        launcher().dispatchEvent(pointer("pointerdown", 100, 100));
+        launcher().dispatchEvent(pointer("pointermove", 50, 50));
+        launcher().dispatchEvent(pointer("pointerup", 50, 50));
+        launcher().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+
+        expect(isOpen()).toBe(true);
+    });
+
     it("ignores moves of another pointer", async () => {
         await mountPanel();
         followInlinePosition(launcher());
@@ -398,6 +422,42 @@ describe("dev tools panel", () => {
         expect(rows("event")).toHaveLength(5);
         expect(rows("drop").map((row) => row.firstChild?.textContent)).toEqual(["⚠ dropped e6", "⚠ dropped e5"]);
         expect(console.warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows at most MAX_DEV_ENTRIES rows, dropping the oldest", async () => {
+        const { recordTrackedDrop } = await mountPanel();
+        const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
+
+        for (let i = 0; i < MAX_DEV_ENTRIES + 2; i++) {
+            recordTrackedDrop(`e${i}`, "rate");
+        }
+
+        const all = rows();
+        expect(all).toHaveLength(MAX_DEV_ENTRIES);
+        expect(all[0].firstChild?.textContent).toBe(`⚠ dropped e${MAX_DEV_ENTRIES + 1}`);
+        expect(all[all.length - 1].firstChild?.textContent).toBe("⚠ dropped e2");
+        expect(countBadge()).toBe(String(MAX_DEV_ENTRIES));
+    });
+
+    it("decrements and removes evicted groups in grouped mode", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
+        recordTrackedEvent("first", {});
+        recordTrackedEvent("coin", {});
+        toolButton("Group by key").click();
+
+        for (let i = 0; i < MAX_DEV_ENTRIES - 1; i++) {
+            recordTrackedEvent("coin", {});
+        }
+
+        expect(rows().map((row) => rowParts(row)[0])).toEqual(["coin"]);
+        expect(rowParts(rows()[0])[2]).toBe(String(MAX_DEV_ENTRIES));
+
+        recordTrackedEvent("jump", {});
+        expect(rows().map((row) => [rowParts(row)[0], rowParts(row)[2]])).toEqual([
+            ["jump", "1"],
+            ["coin", String(MAX_DEV_ENTRIES - 1)],
+        ]);
     });
 
     it("caps its height by the room above a launcher in the lower half", async () => {

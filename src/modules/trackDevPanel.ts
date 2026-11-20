@@ -1,7 +1,7 @@
 import { isTestEnvironment } from "../utils.js";
 import { getLatoFontFaceCSS } from "./fonts/lato.js";
-import { MAX_EVENTS_PER_LOAD, MAX_PROPS, RATE_REFILL_PER_SECOND, RESERVED_KEY_PREFIX } from "./track.js";
-import { getTrackedEntries, subscribeTrackedEntries } from "./trackDevBuffer.js";
+import { MAX_DEV_ENTRIES, getTrackedEntries, subscribeTrackedEntries } from "./trackDevBuffer.js";
+import { MAX_EVENTS_PER_LOAD, MAX_PROPS, RATE_REFILL_PER_SECOND, RESERVED_KEY_PREFIX } from "./trackLimits.js";
 import type { TrackDropReason, TrackedEntry } from "./trackDevBuffer.js";
 
 const LAUNCHER_ID = "minit-dev-launcher";
@@ -252,9 +252,15 @@ function makeDraggable(launcher: HTMLButtonElement, handlers: { onTap: () => voi
         launcher.releasePointerCapture?.(event.pointerId);
     };
     launcher.addEventListener("pointerup", end);
-    launcher.addEventListener("pointercancel", end);
-    launcher.addEventListener("click", () => {
-        if (dragged) {
+    launcher.addEventListener("pointercancel", (event) => {
+        if (start?.id === event.pointerId) {
+            dragged = false;
+        }
+        end(event);
+    });
+    launcher.addEventListener("click", (event) => {
+        // Keyboard activation has detail 0 and must never be eaten by a drag that ended without a click.
+        if (dragged && event.detail !== 0) {
             dragged = false;
             return;
         }
@@ -467,29 +473,52 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
 
     const tool: DevTool = { label: "Tracking", badge: countBadge, content };
     const entries: TrackedEntry[] = [];
-    const groups = new Map<string, { row: HTMLElement; count: number }>();
+    const groups = new Map<string, { row: HTMLElement; count: number; latest: TrackedEntry }>();
     let grouped = false;
 
-    const prepend = (entry: TrackedEntry, count?: number): HTMLElement => {
+    const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
         const row = renderRow(entry, count);
         row.onmouseenter = () => showDetail(detail, row, entry);
         row.onmouseleave = () => {
             detail.style.display = "none";
         };
-        list.insertBefore(row, list.firstChild);
         return row;
     };
 
+    const groupId = (entry: TrackedEntry) => `${entry.kind}:${entry.key}`;
+
     const show = (entry: TrackedEntry) => {
         if (!grouped) {
-            prepend(entry);
+            list.insertBefore(createRow(entry), list.firstChild);
             return;
         }
-        const id = `${entry.kind}:${entry.key}`;
+        const id = groupId(entry);
         const group = groups.get(id);
         group?.row.remove();
         const count = (group?.count ?? 0) + 1;
-        groups.set(id, { row: prepend(entry, count), count });
+        const row = createRow(entry, count);
+        list.insertBefore(row, list.firstChild);
+        groups.set(id, { row, count, latest: entry });
+    };
+
+    const evict = (entry: TrackedEntry) => {
+        if (!grouped) {
+            list.lastElementChild?.remove();
+            return;
+        }
+        const id = groupId(entry);
+        const group = groups.get(id);
+        if (!group) {
+            return;
+        }
+        if (group.count === 1) {
+            group.row.remove();
+            groups.delete(id);
+            return;
+        }
+        const row = createRow(group.latest, group.count - 1);
+        group.row.replaceWith(row);
+        groups.set(id, { row, count: group.count - 1, latest: group.latest });
     };
 
     const setGrouped = (next: boolean) => {
@@ -511,6 +540,9 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
         entries.push(entry);
         empty.remove();
         show(entry);
+        if (entries.length > MAX_DEV_ENTRIES) {
+            evict(entries.shift()!);
+        }
         countBadge.textContent = String(entries.length);
     };
 

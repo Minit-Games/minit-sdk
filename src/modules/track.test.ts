@@ -294,12 +294,22 @@ describe("track — host forwarding", () => {
         ]);
     });
 
-    it("does not throw when the host has no track function", async () => {
+    it("logs the call and does not throw when the host has no track function", async () => {
         installHost("app");
         const { track, getTrackedEntries } = await loadSdk();
 
         expect(() => track("level.start", { level: 1 })).not.toThrow();
+        expect(console.log).toHaveBeenCalledWith("[MinitSDK]", 'track => level.start\nProps: {"level":1}');
         expect(getTrackedEntries()).toEqual([]);
+    });
+
+    it("does not log when it forwards to the host", async () => {
+        installHost("app", jest.fn());
+        const { track } = await loadSdk();
+
+        track("level.start");
+
+        expect(console.log).not.toHaveBeenCalled();
     });
 
     it("does not throw when the host track function throws", async () => {
@@ -394,6 +404,33 @@ describe("track — dev buffer", () => {
             [{ kind: "event", key: "during", props: { n: 1 }, t: 1000 }],
             [{ kind: "drop", key: "", reason: "invalid-key", t: 1000 }],
         ]);
+    });
+
+    it("keeps calling the other subscribers and never throws when one subscriber throws", async () => {
+        const { track, subscribeTrackedEntries, getTrackedEntries } = await loadSdk();
+        subscribeTrackedEntries(() => {
+            throw new Error("listener failure");
+        });
+        const listener = jest.fn();
+        subscribeTrackedEntries(listener);
+
+        expect(() => track("level.start")).not.toThrow();
+        expect(listener).toHaveBeenCalledTimes(1);
+        expect(getTrackedEntries()).toHaveLength(1);
+    });
+
+    it("keeps only the newest MAX_DEV_ENTRIES entries", async () => {
+        jest.resetModules();
+        const { MAX_DEV_ENTRIES, recordTrackedDrop, getTrackedEntries } = await import("./trackDevBuffer");
+
+        for (let i = 0; i < MAX_DEV_ENTRIES + 3; i++) {
+            recordTrackedDrop(`e${i}`, "rate");
+        }
+
+        const entries = getTrackedEntries();
+        expect(entries).toHaveLength(MAX_DEV_ENTRIES);
+        expect(entries[0].key).toBe("e3");
+        expect(entries[MAX_DEV_ENTRIES - 1].key).toBe(`e${MAX_DEV_ENTRIES + 2}`);
     });
 });
 

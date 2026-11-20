@@ -15,6 +15,8 @@ export type TrackedEntry =
 
 type Listener = (entry: TrackedEntry) => void;
 
+export const MAX_DEV_ENTRIES = 500;
+
 const entries: TrackedEntry[] = [];
 const listeners = new Set<Listener>();
 
@@ -39,7 +41,14 @@ export function recordTrackedDrop(key: string, reason: TrackDropReason): void {
 
 function append(entry: TrackedEntry): void {
     entries.push(entry);
+    if (entries.length > MAX_DEV_ENTRIES) {
+        entries.shift();
+    }
     for (const listener of listeners) {
-        listener(entry);
+        try {
+            listener(entry);
+        } catch {
+            // A broken listener must not make track() throw.
+        }
     }
 }
