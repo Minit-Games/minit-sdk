@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Added
 
+- `track(key, properties?)` records a gameplay event for the Game's analytics and forwards it to the host's optional `window.minit.track`. Invalid or excess calls drop the whole event with one `[Minit] track dropped: <reason>` warning per reason per load; it never throws. Outside a host it also applies the burst-5, 5-per-second and 100-per-load limits. Exports the `TrackProperties` type; `MinitApi` gains an optional `track`.
 - `requestDeviceMotionPermission()` requests iOS motion and orientation sensor access from a user gesture, reports `"granted"`, `"denied"`, or `"unsupported"`, and never rejects. Call it from `click`/`pointerup`/`touchend`, not `pointerdown`: iOS denies a request made on touch-down without prompting.
 - `getMotionQuality()`, `prefersReducedMotion()`, and `getDeviceTier()` expose the host's resolved effects quality, OS reduced-motion preference, and RAM-based device tier, with browser fallbacks and URL overrides for local testing (DROP-12021, DROP-12023).
 - `isViewable()` and `onViewableChange(fn)` — mirror the host's viewability signal (feed item active + focused + app foreground) so games can pause/resume when covered, with a `document.visibilitychange`-based fallback outside the host (DROP-8666).
