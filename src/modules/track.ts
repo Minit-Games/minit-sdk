@@ -33,12 +33,12 @@ let acceptedEvents = 0;
  * @param properties Up to 20 properties of boolean, finite number or string (≤ 256 chars).
  */
 export function track(key: string, properties?: TrackProperties): void {
-    const reason = validate(key, properties);
-    if (reason) {
-        drop(key, reason);
+    const result = validate(key, properties);
+    if ("reason" in result) {
+        drop(key, result.reason);
         return;
     }
-    const props = properties ?? {};
+    const { props } = result;
 
     if (isTestEnvironment()) {
         const limitReason = consumeDevLimits();
@@ -64,35 +64,51 @@ export function track(key: string, properties?: TrackProperties): void {
     }, message);
 }
 
-function validate(key: unknown, properties: unknown): TrackDropReason | undefined {
+function validate(key: unknown, properties: unknown): { props: TrackProperties } | { reason: TrackDropReason } {
     if (typeof key !== "string" || key.length > KEY_MAX_LENGTH || !KEY_PATTERN.test(key)) {
-        return "invalid-key";
+        return { reason: "invalid-key" };
     }
     if (key.startsWith(RESERVED_KEY_PREFIX)) {
-        return "reserved-key";
+        return { reason: "reserved-key" };
     }
     if (properties === undefined) {
-        return undefined;
+        return { props: {} };
     }
-    if (typeof properties !== "object" || properties === null || Array.isArray(properties)) {
-        return "invalid-props";
+    const entries = snapshotEntries(properties);
+    if (!entries) {
+        return { reason: "invalid-props" };
     }
-    const entries = Object.entries(properties);
     if (entries.length > MAX_PROPS) {
-        return "too-many-props";
+        return { reason: "too-many-props" };
     }
     for (const [propKey, value] of entries) {
         if (propKey.length > PROP_KEY_MAX_LENGTH || !KEY_PATTERN.test(propKey)) {
-            return "invalid-prop-key";
+            return { reason: "invalid-prop-key" };
         }
         if (!isValidValue(value)) {
-            return "invalid-prop-value";
+            return { reason: "invalid-prop-value" };
         }
     }
-    if (new TextEncoder().encode(JSON.stringify({ key, props: properties })).length > MAX_PAYLOAD_BYTES) {
-        return "too-large";
+    const props = Object.fromEntries(entries) as TrackProperties;
+    if (new TextEncoder().encode(JSON.stringify({ key, props })).length > MAX_PAYLOAD_BYTES) {
+        return { reason: "too-large" };
     }
-    return undefined;
+    return { props };
+}
+
+function snapshotEntries(properties: unknown): [string, unknown][] | undefined {
+    try {
+        if (typeof properties !== "object" || properties === null) {
+            return undefined;
+        }
+        const prototype = Object.getPrototypeOf(properties);
+        if (prototype !== Object.prototype && prototype !== null) {
+            return undefined;
+        }
+        return Object.entries(properties);
+    } catch {
+        return undefined;
+    }
 }
 
 function isValidValue(value: unknown): boolean {

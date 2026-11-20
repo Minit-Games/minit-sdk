@@ -73,6 +73,15 @@ const invalidCases: InvalidCase[] = [
     { label: "array properties", key: "ok", props: ["a"], reason: "invalid-props" },
     { label: "string properties", key: "ok", props: "a=1", reason: "invalid-props" },
     { label: "number properties", key: "ok", props: 7, reason: "invalid-props" },
+    { label: "Map properties", key: "ok", props: new Map([["a", 1]]), reason: "invalid-props" },
+    { label: "Date properties", key: "ok", props: new Date(0), reason: "invalid-props" },
+    { label: "class-instance properties", key: "ok", props: new (class Props { a = 1; })(), reason: "invalid-props" },
+    {
+        label: "properties with a throwing getter",
+        key: "ok",
+        props: { get level(): number { throw new Error("unavailable"); } },
+        reason: "invalid-props",
+    },
     { label: "21 properties", key: "ok", props: propsWithCount(21), reason: "too-many-props" },
     { label: "an empty property name", key: "ok", props: { "": 1 }, reason: "invalid-prop-key" },
     { label: "a 41-char property name", key: "ok", props: { ["p".repeat(41)]: 1 }, reason: "invalid-prop-key" },
@@ -108,6 +117,7 @@ const validCases: ValidCase[] = [
     { label: "a 256-char string value", key: "ok", props: { v: "x".repeat(256) } },
     { label: "an exactly 2048-byte ASCII payload", key: "ok", props: fillToBytes("ok", "a", MAX_BYTES) },
     { label: "an exactly 2048-byte payload with multi-byte values", key: "ok", props: fillToBytes("ok", "é", MAX_BYTES) },
+    { label: "a null-prototype properties object", key: "ok", props: Object.assign(Object.create(null), { a: 1 }) },
 ];
 
 function dropMessage(reason: TrackDropReason): string {
@@ -370,6 +380,33 @@ describe("track — dev buffer", () => {
             { kind: "event", key: "first", props: { a: 1 }, t: 1235 },
             { kind: "event", key: "second", props: {}, t: 1500 },
         ]);
+    });
+
+    it("keeps the buffered props unchanged when the caller mutates its object afterwards", async () => {
+        const { track, getTrackedEntries } = await loadSdk();
+        const props: TrackProperties = { level: 1 };
+
+        track("level.start", props);
+        props.level = 2;
+        props.extra = "x";
+
+        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, t: 1000 }]);
+    });
+
+    it("reads each property getter once and records that value", async () => {
+        const { track, getTrackedEntries } = await loadSdk();
+        let reads = 0;
+        const props = {
+            get level() {
+                reads++;
+                return reads;
+            },
+        };
+
+        track("level.start", props);
+
+        expect(reads).toBe(1);
+        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, t: 1000 }]);
     });
 
     it("lists entries oldest first across events and drops", async () => {

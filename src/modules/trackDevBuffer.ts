@@ -32,7 +32,7 @@ export function subscribeTrackedEntries(listener: Listener): () => void {
 }
 
 export function recordTrackedEvent(key: string, props: Record<string, boolean | number | string>): void {
-    append({ kind: "event", key, props, t: Math.round(performance.now()) });
+    append({ kind: "event", key, props: { ...props }, t:Math.round(performance.now()) });
 }
 
 export function recordTrackedDrop(key: string, reason: TrackDropReason): void {

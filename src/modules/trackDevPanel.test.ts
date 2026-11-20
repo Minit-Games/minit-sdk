@@ -680,4 +680,22 @@ describe("dev tools detail popup", () => {
 
         expect(detail().style.display).toBe("none");
     });
+
+    it("shows on keyboard focus of a row and hides on blur", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("level_end", { level: 2 });
+        const row = rows()[0] as HTMLElement;
+
+        expect(row.tabIndex).toBe(0);
+        expect(row.getAttribute("aria-describedby")).toBe(detail().id);
+        expect(detail().getAttribute("role")).toBe("tooltip");
+
+        row.focus();
+        expect(document.activeElement).toBe(row);
+        expect(detail().style.display).toBe("block");
+        expect(detail().textContent).toContain("level: 2");
+
+        row.blur();
+        expect(detail().style.display).toBe("none");
+    });
 });

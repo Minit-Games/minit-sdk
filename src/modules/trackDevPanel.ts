@@ -151,6 +151,10 @@ function injectStyles(): void {
     outline-offset: 2px;
 }
 #${PANEL_ID} [data-kind]:hover { background: ${COLORS.hoverRow}; }
+#${PANEL_ID} [data-kind]:focus-visible {
+    outline: 2px solid ${COLORS.brandOrange};
+    outline-offset: -2px;
+}
 #${TOOLS_ID} [data-close]:hover { color: ${COLORS.ink}; background: ${COLORS.hoverRow}; }
 #${TOOLS_ID} [aria-pressed="false"]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
 #${PANEL_ID} { scrollbar-width: thin; scrollbar-color: ${COLORS.border} transparent; }
@@ -478,10 +482,13 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
 
     const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
         const row = renderRow(entry, count);
-        row.onmouseenter = () => showDetail(detail, row, entry);
-        row.onmouseleave = () => {
+        const hideDetail = () => {
             detail.style.display = "none";
         };
+        row.onmouseenter = () => showDetail(detail, row, entry);
+        row.onmouseleave = hideDetail;
+        row.onfocus = () => showDetail(detail, row, entry);
+        row.onblur = hideDetail;
         return row;
     };
 
@@ -566,6 +573,8 @@ function formatSeconds(ms: number): string {
 function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
     const row = document.createElement("div");
     row.dataset.kind = entry.kind;
+    row.tabIndex = 0;
+    row.setAttribute("aria-describedby", DETAIL_ID);
     Object.assign(row.style, {
         display: "flex",
         alignItems: "center",
@@ -623,6 +632,7 @@ function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
 function createDetailPanel(): HTMLElement {
     const detail = document.createElement("div");
     detail.id = DETAIL_ID;
+    detail.setAttribute("role", "tooltip");
     Object.assign(detail.style, {
         display: "none",
         position: "fixed",
