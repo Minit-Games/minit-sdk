@@ -1,7 +1,8 @@
 import { isTestEnvironment } from "../utils.js";
 import { getLatoFontFaceCSS } from "./fonts/lato.js";
+import { MAX_EVENTS_PER_LOAD, MAX_PROPS, RATE_REFILL_PER_SECOND, RESERVED_KEY_PREFIX } from "./track.js";
 import { getTrackedEntries, subscribeTrackedEntries } from "./trackDevBuffer.js";
-import type { TrackedEntry } from "./trackDevBuffer.js";
+import type { TrackDropReason, TrackedEntry } from "./trackDevBuffer.js";
 
 const LAUNCHER_ID = "minit-dev-launcher";
 const TOOLS_ID = "minit-dev-tools";
@@ -29,6 +30,7 @@ const EDGE = 12;
 const GAP = 8;
 const DRAG_THRESHOLD = 6;
 const Z_INDEX = "9999";
+const PANEL_MAX_HEIGHT = "min(420px, 60vh)";
 
 const LOGO_VIEWBOX = "0 0 610.4 800";
 const LOGO_SHAPES: ReadonlyArray<[string, Record<string, string>]> = [
@@ -62,6 +64,7 @@ const ISOLATED_EVENTS = [
 
 interface DevTool {
     label: string;
+    badge?: HTMLElement;
     content: HTMLElement;
     tab?: HTMLButtonElement;
 }
@@ -129,7 +132,20 @@ function injectStyles(): void {
     style.textContent =
         getLatoFontFaceCSS() +
         `
-#${LAUNCHER_ID} { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; }
+#${LAUNCHER_ID} {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+}
+@media (hover: hover) {
+    #${LAUNCHER_ID}:hover {
+        transform: scale(1.06);
+        filter: brightness(1.12);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45) !important;
+    }
+}
+#${LAUNCHER_ID}:active { transform: scale(1); }
+#${TOOLS_ID} [data-clear]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
 #${LAUNCHER_ID}:focus-visible, #${TOOLS_ID} button:focus-visible {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: 2px;
@@ -269,7 +285,7 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
         position: "fixed",
         width: "300px",
         maxWidth: `calc(100vw - ${EDGE * 2}px)`,
-        maxHeight: "60vh",
+        maxHeight: PANEL_MAX_HEIGHT,
         background: COLORS.surface,
         color: COLORS.ink,
         border: `1px solid ${COLORS.border}`,
@@ -288,6 +304,7 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
         alignItems: "center",
         gap: "8px",
         padding: "10px 8px 8px 12px",
+        flexShrink: "0",
     });
     const badge = document.createElement("span");
     Object.assign(badge.style, {
@@ -330,6 +347,7 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
         gap: "4px",
         padding: "0 12px",
         borderBottom: `1px solid ${COLORS.border}`,
+        flexShrink: "0",
     });
 
     const body = document.createElement("div");
@@ -351,8 +369,14 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
         const tab = document.createElement("button");
         tab.type = "button";
         tab.setAttribute("role", "tab");
-        tab.textContent = tool.label;
+        tab.append(tool.label);
+        if (tool.badge) {
+            tab.append(tool.badge);
+        }
         Object.assign(tab.style, {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
             padding: "6px 2px 8px",
             marginBottom: "-1px",
             border: "none",
@@ -376,6 +400,8 @@ function anchorTools(panel: HTMLElement, launcher: HTMLElement): void {
     const rect = launcher.getBoundingClientRect();
     const onRight = rect.left + rect.width / 2 > window.innerWidth / 2;
     const below = rect.top + rect.height / 2 < window.innerHeight / 2;
+    const room = below ? window.innerHeight - rect.bottom - GAP - EDGE : rect.top - GAP - EDGE;
+    panel.style.maxHeight = `min(${PANEL_MAX_HEIGHT}, ${Math.max(0, room)}px)`;
     panel.style.left = onRight ? "" : `${Math.max(EDGE, rect.left)}px`;
     panel.style.right = onRight ? `${Math.max(EDGE, window.innerWidth - rect.right)}px` : "";
     panel.style.top = below ? `${rect.bottom + GAP}px` : "";
@@ -391,19 +417,27 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     Object.assign(toolbar.style, {
         display: "flex",
         justifyContent: "flex-end",
+        gap: "6px",
         padding: "8px 12px 4px",
+        flexShrink: "0",
     });
-    const groupToggle = document.createElement("button");
-    groupToggle.type = "button";
-    groupToggle.textContent = "Group by key";
-    Object.assign(groupToggle.style, {
+    const pillStyle = {
         padding: "3px 10px",
         borderRadius: "999px",
         border: `1px solid ${COLORS.border}`,
         font: `700 11px/1.4 ${FONT}`,
         cursor: "pointer",
-    });
-    toolbar.append(groupToggle);
+    };
+    const clearButton = document.createElement("button");
+    clearButton.type = "button";
+    clearButton.dataset.clear = "";
+    clearButton.textContent = "Clear";
+    Object.assign(clearButton.style, pillStyle, { background: "transparent", color: COLORS.inkSecondary });
+    const groupToggle = document.createElement("button");
+    groupToggle.type = "button";
+    groupToggle.textContent = "Group by key";
+    Object.assign(groupToggle.style, pillStyle);
+    toolbar.append(clearButton, groupToggle);
 
     const list = document.createElement("div");
     list.id = PANEL_ID;
@@ -419,7 +453,19 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     Object.assign(empty.style, { padding: "12px", color: COLORS.inkMuted, textAlign: "center" });
     content.append(toolbar, list);
 
-    const tool: DevTool = { label: "Tracked events", content };
+    const countBadge = document.createElement("span");
+    Object.assign(countBadge.style, {
+        minWidth: "18px",
+        padding: "0 6px",
+        boxSizing: "border-box",
+        borderRadius: "999px",
+        background: COLORS.border,
+        color: COLORS.ink,
+        font: `700 10px/16px ${FONT}`,
+        textAlign: "center",
+    });
+
+    const tool: DevTool = { label: "Tracking", badge: countBadge, content };
     const entries: TrackedEntry[] = [];
     const groups = new Map<string, { row: HTMLElement; count: number }>();
     let grouped = false;
@@ -465,15 +511,19 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
         entries.push(entry);
         empty.remove();
         show(entry);
-        if (tool.tab) {
-            tool.tab.textContent = `Tracked events (${entries.length})`;
-        }
+        countBadge.textContent = String(entries.length);
+    };
+
+    clearButton.onclick = () => {
+        entries.length = 0;
+        countBadge.textContent = "0";
+        setGrouped(grouped);
     };
 
     setGrouped(false);
+    countBadge.textContent = "0";
     getTrackedEntries().forEach(add);
     subscribeTrackedEntries(add);
-    tool.label = entries.length > 0 ? `Tracked events (${entries.length})` : "Tracked events";
     return tool;
 }
 
@@ -589,14 +639,45 @@ function renderDetailHeader(entry: TrackedEntry): HTMLElement {
     return header;
 }
 
+function describeDropReason(reason: TrackDropReason): string {
+    switch (reason) {
+        case "invalid-key":
+            return "invalid key";
+        case "reserved-key":
+            return `reserved ${RESERVED_KEY_PREFIX} prefix`;
+        case "invalid-props":
+            return "properties are not an object";
+        case "too-many-props":
+            return `too many properties (more than ${MAX_PROPS})`;
+        case "invalid-prop-key":
+            return "invalid property key";
+        case "invalid-prop-value":
+            return "invalid property value";
+        case "too-large":
+            return "event too large";
+        case "rate":
+            return `rate limit exceeded (${RATE_REFILL_PER_SECOND} per second)`;
+        case "load-cap":
+            return `more than ${MAX_EVENTS_PER_LOAD} events this load`;
+    }
+}
+
 function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry): void {
     const lines =
         entry.kind === "event"
             ? Object.entries(entry.props).map(([name, value]) => `${name}: ${JSON.stringify(value)}`)
-            : [`reason: ${entry.reason}`];
+            : [`reason: ${describeDropReason(entry.reason)}`];
     if (lines.length === 0) {
         lines.push("no properties");
     }
+    const source = document.createElement("div");
+    source.textContent = `source: ${entry.kind === "event" && entry.key.startsWith(RESERVED_KEY_PREFIX) ? "built in" : "minit"}`;
+    Object.assign(source.style, {
+        paddingTop: "8px",
+        marginTop: "8px",
+        borderTop: `1px solid ${COLORS.border}`,
+        color: COLORS.inkMuted,
+    });
     detail.replaceChildren(
         renderDetailHeader(entry),
         ...lines.map((text) => {
@@ -604,6 +685,7 @@ function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry):
             line.textContent = text;
             return line;
         }),
+        source,
     );
     detail.style.color = entry.kind === "event" ? COLORS.inkSecondary : COLORS.neg;
     detail.style.display = "block";

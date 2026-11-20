@@ -112,9 +112,9 @@ describe("track dev panel", () => {
         const dropRows = rows("drop");
         expect(dropRows).toHaveLength(2);
         expect(dropRows[0].textContent).toContain("bad key!");
-        expect(hoverDetail(dropRows[0])).toContain("invalid-key");
+        expect(hoverDetail(dropRows[0])).toContain("reason: invalid key");
         expect(dropRows[1].textContent).toContain("minit.sneaky");
-        expect(hoverDetail(dropRows[1])).toContain("reserved-key");
+        expect(hoverDetail(dropRows[1])).toContain("reason: reserved minit. prefix");
     });
 
     it("is idempotent and renders entries buffered before it was shown", async () => {

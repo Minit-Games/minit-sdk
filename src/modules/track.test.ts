@@ -249,7 +249,7 @@ describe("track — drop warnings", () => {
         expect(warnSpy).toHaveBeenCalledTimes(2);
     });
 
-    it("buffers a drop entry only when the warning fires, stamped at that moment", async () => {
+    it("buffers a drop entry for every dropped call, stamped at that moment, while warning once per reason", async () => {
         const { track, getTrackedEntries } = await loadSdk();
 
         now = 1000;
@@ -261,9 +261,11 @@ describe("track — drop warnings", () => {
 
         expect(getTrackedEntries()).toEqual([
             { kind: "drop", key: "", reason: "invalid-key", t: 1000 },
+            { kind: "drop", key: "bad key", reason: "invalid-key", t: 1100 },
             { kind: "drop", key: "minit.custom", reason: "reserved-key", t: 1201 },
         ]);
         expect(events(getTrackedEntries())).toEqual([]);
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid-key")], [dropMessage("reserved-key")]]);
     });
 
     it("never buffers an invalid call as an event", async () => {

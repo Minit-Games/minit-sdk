@@ -9,14 +9,14 @@ export type TrackProperties = Record<string, boolean | number | string>;
 // becomes the shared source; minit-sdk cannot import across repositories.
 const KEY_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const KEY_MAX_LENGTH = 64;
-const RESERVED_KEY_PREFIX = "minit.";
-const MAX_PROPS = 20;
+export const RESERVED_KEY_PREFIX = "minit.";
+export const MAX_PROPS = 20;
 const PROP_KEY_MAX_LENGTH = 40;
 const STRING_VALUE_MAX_LENGTH = 256;
 const MAX_PAYLOAD_BYTES = 2048;
 const RATE_BURST = 5;
-const RATE_REFILL_PER_SECOND = 5;
-const MAX_EVENTS_PER_LOAD = 100;
+export const RATE_REFILL_PER_SECOND = 5;
+export const MAX_EVENTS_PER_LOAD = 100;
 
 const TOKEN_COST_MS = 1000 / RATE_REFILL_PER_SECOND;
 const BUCKET_CAPACITY_MS = RATE_BURST * TOKEN_COST_MS;
@@ -121,11 +121,10 @@ function consumeDevLimits(): TrackDropReason | undefined {
 }
 
 function drop(key: unknown, reason: TrackDropReason): void {
-    if (warnedReasons.has(reason)) {
-        return;
+    if (!warnedReasons.has(reason)) {
+        warnedReasons.add(reason);
+        console.warn(`[Minit] track dropped: ${reason}`);
     }
-    warnedReasons.add(reason);
-    console.warn(`[Minit] track dropped: ${reason}`);
     if (isTestEnvironment()) {
         recordTrackedDrop(typeof key === "string" ? key : String(key), reason);
         showTrackDevPanel();
