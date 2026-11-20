@@ -11,6 +11,8 @@ export { reportResult } from "./modules/result.js";
 export { registerAudioContext, registerAudioElement } from "./modules/audioVisibility.js";
 export { getUserData } from "./modules/userData.js";
 export { loadingDone } from "./modules/loadingDone.js";
+export { track } from "./modules/track.js";
+export type { TrackProperties } from "./modules/track.js";
 export { seededRandom, patchSeed } from "./modules/random.js";
 export type { RandomModule } from "./modules/random.js";
 export { addBackground } from "./modules/background.js";

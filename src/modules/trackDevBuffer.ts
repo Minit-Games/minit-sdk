@@ -13,11 +13,33 @@ export type TrackedEntry =
     | { kind: "event"; key: string; props: Record<string, boolean | number | string>; t: number }
     | { kind: "drop"; key: string; reason: TrackDropReason; t: number };
 
+type Listener = (entry: TrackedEntry) => void;
+
+const entries: TrackedEntry[] = [];
+const listeners = new Set<Listener>();
+
 export function getTrackedEntries(): readonly TrackedEntry[] {
-    return [];
+    return entries;
 }
 
-export function subscribeTrackedEntries(listener: (entry: TrackedEntry) => void): () => void {
-    void listener;
-    return () => {};
+export function subscribeTrackedEntries(listener: Listener): () => void {
+    listeners.add(listener);
+    return () => {
+        listeners.delete(listener);
+    };
+}
+
+export function recordTrackedEvent(key: string, props: Record<string, boolean | number | string>): void {
+    append({ kind: "event", key, props, t: Math.round(performance.now()) });
+}
+
+export function recordTrackedDrop(key: string, reason: TrackDropReason): void {
+    append({ kind: "drop", key, reason, t: Math.round(performance.now()) });
+}
+
+function append(entry: TrackedEntry): void {
+    entries.push(entry);
+    for (const listener of listeners) {
+        listener(entry);
+    }
 }
