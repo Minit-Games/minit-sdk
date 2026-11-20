@@ -3,6 +3,7 @@ import { getTrackedEntries, subscribeTrackedEntries } from "./trackDevBuffer.js"
 import type { TrackedEntry } from "./trackDevBuffer.js";
 
 const PANEL_ID = "minit-track-dev-panel";
+const DETAIL_ID = "minit-track-dev-detail";
 
 let mounted = false;
 
@@ -72,9 +73,16 @@ function mount(body: HTMLElement): void {
         renderHeader();
     };
 
+    const detail = createDetailPanel();
+
     const add = (entry: TrackedEntry) => {
         count++;
-        list.insertBefore(renderRow(entry), list.firstChild);
+        const row = renderRow(entry);
+        row.onmouseenter = () => showDetail(detail, panel, row, entry);
+        row.onmouseleave = () => {
+            detail.style.display = "none";
+        };
+        list.insertBefore(row, list.firstChild);
         renderHeader();
     };
 
@@ -83,7 +91,7 @@ function mount(body: HTMLElement): void {
     renderHeader();
 
     panel.append(header, list);
-    body.appendChild(panel);
+    body.append(panel, detail);
 }
 
 function renderRow(entry: TrackedEntry): HTMLElement {
@@ -92,32 +100,71 @@ function renderRow(entry: TrackedEntry): HTMLElement {
     Object.assign(row.style, {
         padding: "3px 0",
         borderTop: "1px solid rgba(255, 255, 255, 0.05)",
-        wordBreak: "break-all",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        cursor: "default",
     });
 
-    const head = document.createElement("div");
     const key = document.createElement("span");
     key.style.fontWeight = "700";
     const time = document.createElement("span");
     time.style.color = "#7f849c";
     time.textContent = ` t=${entry.t}`;
-    head.append(key, time);
-    row.appendChild(head);
 
-    const detail = document.createElement("div");
     if (entry.kind === "event") {
         key.textContent = entry.key;
-        detail.style.color = "#a6adc8";
-        detail.textContent = Object.entries(entry.props)
-            .map(([name, value]) => `${name}=${JSON.stringify(value)}`)
-            .join(" ");
     } else {
         row.style.color = "#f38ba8";
         key.textContent = `⚠ dropped ${entry.key}`;
-        detail.textContent = entry.reason;
     }
-    if (detail.textContent) {
-        row.appendChild(detail);
-    }
+    row.append(key, time);
     return row;
+}
+
+function createDetailPanel(): HTMLElement {
+    const detail = document.createElement("div");
+    detail.id = DETAIL_ID;
+    Object.assign(detail.style, {
+        display: "none",
+        position: "fixed",
+        maxWidth: "260px",
+        padding: "6px 10px",
+        background: "rgba(24, 24, 37, 0.96)",
+        color: "#a6adc8",
+        border: "1px solid rgba(255, 255, 255, 0.1)",
+        borderRadius: "8px",
+        boxShadow: "0 8px 20px rgba(0, 0, 0, 0.4)",
+        fontFamily: "'Courier New', monospace",
+        fontSize: "11px",
+        lineHeight: "1.4",
+        wordBreak: "break-all",
+        pointerEvents: "none",
+        zIndex: "9999",
+    });
+    return detail;
+}
+
+function showDetail(detail: HTMLElement, panel: HTMLElement, row: HTMLElement, entry: TrackedEntry): void {
+    const lines =
+        entry.kind === "event"
+            ? Object.entries(entry.props).map(([name, value]) => `${name}: ${JSON.stringify(value)}`)
+            : [`reason: ${entry.reason}`];
+    if (lines.length === 0) {
+        lines.push("no properties");
+    }
+    detail.replaceChildren(
+        ...lines.map((text) => {
+            const line = document.createElement("div");
+            line.textContent = text;
+            return line;
+        }),
+    );
+    detail.style.color = entry.kind === "event" ? "#a6adc8" : "#f38ba8";
+
+    const panelRect = panel.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    detail.style.right = `${window.innerWidth - panelRect.left + 8}px`;
+    detail.style.bottom = `${Math.max(8, window.innerHeight - rowRect.bottom)}px`;
+    detail.style.display = "block";
 }

@@ -40,6 +40,11 @@ function rows(kind?: "event" | "drop"): Element[] {
     return Array.from(panel.querySelectorAll(selector));
 }
 
+function hoverDetail(row: Element): string {
+    row.dispatchEvent(new MouseEvent("mouseenter"));
+    return document.querySelector("#minit-track-dev-detail")?.textContent ?? "";
+}
+
 let now = 1000;
 
 beforeEach(() => {
@@ -85,18 +90,15 @@ describe("track dev panel", () => {
 
         expect(texts[0]).toContain("boss_defeated");
         expect(texts[0]).toContain("3333");
-        expect(texts[0]).toContain("flawless");
-        expect(texts[0]).toContain("true");
+        expect(hoverDetail(eventRows[0])).toContain("flawless: true");
 
         expect(texts[1]).toContain("coin_pickup");
         expect(texts[1]).toContain("2222");
-        expect(texts[1]).toContain("value");
-        expect(texts[1]).toContain("gold");
+        expect(hoverDetail(eventRows[1])).toContain('value: "gold"');
 
         expect(texts[2]).toContain("level_start");
         expect(texts[2]).toContain("1111");
-        expect(texts[2]).toContain("level");
-        expect(texts[2]).toContain("3");
+        expect(hoverDetail(eventRows[2])).toContain("level: 3");
     });
 
     it("shows drop warnings with their reason", async () => {
@@ -110,9 +112,9 @@ describe("track dev panel", () => {
         const dropRows = rows("drop");
         expect(dropRows).toHaveLength(2);
         expect(dropRows[0].textContent).toContain("bad key!");
-        expect(dropRows[0].textContent).toContain("invalid-key");
+        expect(hoverDetail(dropRows[0])).toContain("invalid-key");
         expect(dropRows[1].textContent).toContain("minit.sneaky");
-        expect(dropRows[1].textContent).toContain("reserved-key");
+        expect(hoverDetail(dropRows[1])).toContain("reserved-key");
     });
 
     it("is idempotent and renders entries buffered before it was shown", async () => {
