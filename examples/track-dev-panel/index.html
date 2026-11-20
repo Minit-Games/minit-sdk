@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track dev panel preview — @minit-games/sdk</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 16px;
+    }
+    h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    .hud { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 720px; }
+    .hud button {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #444;
+      background: #2a2a4a;
+      color: #cce;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.85rem;
+    }
+    .hud button:hover { background: #3a3a6a; }
+    .hint { max-width: 720px; font-size: 0.8rem; color: #888; text-align: center; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>Track dev panel preview</h1>
+  <div class="hud">
+    <button type="button" id="valid">Valid event</button>
+    <button type="button" id="burst">Burst (hits rate limit)</button>
+    <button type="button" id="reserved">Reserved key</button>
+    <button type="button" id="invalid">Invalid key</button>
+    <button type="button" id="loading-done">loadingDone()</button>
+    <button type="button" id="report-result">reportResult()</button>
+  </div>
+  <p class="hint">
+    Dev mode (no <code>window.minit</code>). Each drop reason warns once per page load — reload to see it again.
+  </p>
+  <script type="module" src="/examples/track-dev-panel/main.js"></script>
+</body>
+</html>

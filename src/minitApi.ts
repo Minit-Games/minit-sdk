@@ -39,6 +39,7 @@ export type MinitApi = {
 
     reportResult: (result: number|string, options?: HostResultOptions) => void,
     loadingDone: () => void,
+    track?: (key: string, props: Record<string, boolean | number | string>) => void,
 
     // Optional — mobile-app-host only (injected by preLoad.ts's window.minit;
     // absent from the web runtime's window.minit, and from older mobile

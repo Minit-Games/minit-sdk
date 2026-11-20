@@ -1,5 +1,7 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
+import { recordTrackedEvent } from "./trackDevBuffer.js";
+import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 
 // Hand-copied from packages/shared/src/creatorLimits.ts in the minit-root monorepo;
 // minit-sdk cannot import across repositories.
@@ -17,6 +19,9 @@ const USER_DATA_MAX_BYTES = 1024;
 export function reportResult(result: number|string, options?: ResultOptions): void {
 
     if(isTestEnvironment()) {
+
+        recordTrackedEvent("minit.result", {});
+        showTrackDevPanel();
 
         if(options?.delay) {
             console.log(`[MinitSDK] Delaying drop result display by ${options.delay}ms`);

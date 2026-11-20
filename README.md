@@ -530,6 +530,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` (64-character cap) for a session stat/moment, not the score, shown on the host result screen and activity feed |
+| `track(key, properties?)`        | Record a gameplay event for analytics; invalid or excess calls warn and drop, never throw (see [Event tracking](#event-tracking)) |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
@@ -608,6 +609,24 @@ Always read and write userData through `getUserData()` and `reportResult()` — 
 - **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are silently discarded with a successful response, and the existing value is left unchanged.
 
 Before forwarding a result, the SDK logs a `console.warn` when `flavorText` exceeds its 64-character cap or `userData` exceeds its 1024-UTF-8-byte cap. These are warnings, not errors: the SDK forwards both values unchanged, leaving truncation of `flavorText` and discarding of over-limit `userData` to the platform.
+
+## Event tracking
+
+Call `track(key, properties?)` to record gameplay moments for your Game's analytics:
+
+```ts
+import { track } from '@minit-games/sdk';
+
+track('level.start');
+track('level.complete', { level: 3, perfect: true, boss: 'slime' });
+```
+
+`track()` never throws. An invalid or excess call drops the whole event and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per game load.
+
+- **Key:** 1–64 characters of `A-Z a-z 0-9 _ . -`. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
+- **Properties:** optional plain object, at most 20 entries. Property names use the same characters, 1–40 long. Values are a boolean, a finite number, or a string of at most 256 characters — no `null`, nested objects, or arrays.
+- **Size:** the serialized `{ key, props }` must fit in 2048 UTF-8 bytes.
+- **Rate:** a burst of 5 events, refilling at 5 per second, and at most 100 events per game load (`rate`, `load-cap`). Outside a host (`isTestEnvironment()`) the SDK enforces these itself, so a Game that exceeds them shows the warning during local testing.
 
 ## Viewability
 
@@ -772,6 +791,8 @@ The font data is tree-shaken per module — games pay only for what they import:
 
 
 Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
+
+The dev tools panel (dev mode only, outside the Minit app) also uses Lato. It is loaded with a dynamic `import()`, so bundlers split it into a separate chunk that hosted games never load.
 
 ## License
 
