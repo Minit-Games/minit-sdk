@@ -1,6 +1,7 @@
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { recordTrackedDrop, recordTrackedEvent } from "./trackDevBuffer.js";
 import type { TrackDropReason } from "./trackDevBuffer.js";
+import { showTrackDevPanel } from "./trackDevPanel.js";
 
 export type TrackProperties = Record<string, boolean | number | string>;
 
@@ -47,6 +48,7 @@ export function track(key: string, properties?: TrackProperties): void {
             return;
         }
         recordTrackedEvent(key, props);
+        showTrackDevPanel();
     }
 
     callApiFunction(() => {
@@ -126,5 +128,6 @@ function drop(key: unknown, reason: TrackDropReason): void {
     console.warn(`[Minit] track dropped: ${reason}`);
     if (isTestEnvironment()) {
         recordTrackedDrop(typeof key === "string" ? key : String(key), reason);
+        showTrackDevPanel();
     }
 }
