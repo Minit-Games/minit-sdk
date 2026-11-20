@@ -322,7 +322,7 @@ describe("dev tools launcher drag", () => {
         launcher().dispatchEvent(pointer("pointerdown", 100, 100));
         launcher().dispatchEvent(pointer("pointermove", 50, 50));
         launcher().dispatchEvent(pointer("pointercancel", 50, 50));
-        launcher().click();
+        launcher().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
 
         expect(isOpen()).toBe(true);
     });
