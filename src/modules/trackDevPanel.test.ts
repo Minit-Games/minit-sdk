@@ -89,15 +89,15 @@ describe("track dev panel", () => {
         const texts = eventRows.map((row) => row.textContent ?? "");
 
         expect(texts[0]).toContain("boss_defeated");
-        expect(texts[0]).toContain("3333");
+        expect(texts[0]).toContain("3.33s");
         expect(hoverDetail(eventRows[0])).toContain("flawless: true");
 
         expect(texts[1]).toContain("coin_pickup");
-        expect(texts[1]).toContain("2222");
+        expect(texts[1]).toContain("2.22s");
         expect(hoverDetail(eventRows[1])).toContain('value: "gold"');
 
         expect(texts[2]).toContain("level_start");
-        expect(texts[2]).toContain("1111");
+        expect(texts[2]).toContain("1.11s");
         expect(hoverDetail(eventRows[2])).toContain("level: 3");
     });
 

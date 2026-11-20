@@ -136,6 +136,7 @@ function injectStyles(): void {
 }
 #${PANEL_ID} [data-kind]:hover { background: ${COLORS.hoverRow}; }
 #${TOOLS_ID} [data-close]:hover { color: ${COLORS.ink}; background: ${COLORS.hoverRow}; }
+#${TOOLS_ID} [aria-pressed="false"]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
 #${PANEL_ID} { scrollbar-width: thin; scrollbar-color: ${COLORS.border} transparent; }
 `;
     document.head.append(style);
@@ -337,7 +338,7 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
     const select = (active: DevTool) => {
         for (const tool of toolList) {
             const selected = tool === active;
-            tool.content.style.display = selected ? "block" : "none";
+            tool.content.style.display = selected ? "flex" : "none";
             tool.tab?.setAttribute("aria-selected", String(selected));
             if (tool.tab) {
                 tool.tab.style.color = selected ? COLORS.ink : COLORS.inkSecondary;
@@ -382,54 +383,114 @@ function anchorTools(panel: HTMLElement, launcher: HTMLElement): void {
 }
 
 function createTrackedEventsTool(detail: HTMLElement): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
+
+    const toolbar = document.createElement("div");
+    Object.assign(toolbar.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        padding: "8px 12px 4px",
+    });
+    const groupToggle = document.createElement("button");
+    groupToggle.type = "button";
+    groupToggle.textContent = "Group by key";
+    Object.assign(groupToggle.style, {
+        padding: "3px 10px",
+        borderRadius: "999px",
+        border: `1px solid ${COLORS.border}`,
+        font: `700 11px/1.4 ${FONT}`,
+        cursor: "pointer",
+    });
+    toolbar.append(groupToggle);
+
     const list = document.createElement("div");
     list.id = PANEL_ID;
-    list.setAttribute("role", "tabpanel");
     Object.assign(list.style, {
         overflowY: "auto",
         overscrollBehavior: "contain",
-        padding: "4px 0 6px",
+        padding: "0 0 6px",
         minHeight: "48px",
     });
 
     const empty = document.createElement("div");
     empty.textContent = "No events tracked yet.";
     Object.assign(empty.style, { padding: "12px", color: COLORS.inkMuted, textAlign: "center" });
-    list.append(empty);
+    content.append(toolbar, list);
 
-    const tool: DevTool = { label: "Tracked events", content: list };
-    let count = 0;
+    const tool: DevTool = { label: "Tracked events", content };
+    const entries: TrackedEntry[] = [];
+    const groups = new Map<string, { row: HTMLElement; count: number }>();
+    let grouped = false;
 
-    const add = (entry: TrackedEntry) => {
-        count++;
-        empty.remove();
-        const row = renderRow(entry);
+    const prepend = (entry: TrackedEntry, count?: number): HTMLElement => {
+        const row = renderRow(entry, count);
         row.onmouseenter = () => showDetail(detail, row, entry);
         row.onmouseleave = () => {
             detail.style.display = "none";
         };
         list.insertBefore(row, list.firstChild);
+        return row;
+    };
+
+    const show = (entry: TrackedEntry) => {
+        if (!grouped) {
+            prepend(entry);
+            return;
+        }
+        const id = `${entry.kind}:${entry.key}`;
+        const group = groups.get(id);
+        group?.row.remove();
+        const count = (group?.count ?? 0) + 1;
+        groups.set(id, { row: prepend(entry, count), count });
+    };
+
+    const setGrouped = (next: boolean) => {
+        grouped = next;
+        groupToggle.setAttribute("aria-pressed", String(grouped));
+        Object.assign(groupToggle.style, {
+            background: grouped ? COLORS.brandOrange : "transparent",
+            borderColor: grouped ? COLORS.brandOrange : COLORS.border,
+            color: grouped ? COLORS.onAccent : COLORS.inkSecondary,
+        });
+        detail.style.display = "none";
+        groups.clear();
+        list.replaceChildren(...(entries.length === 0 ? [empty] : []));
+        entries.forEach(show);
+    };
+    groupToggle.onclick = () => setGrouped(!grouped);
+
+    const add = (entry: TrackedEntry) => {
+        entries.push(entry);
+        empty.remove();
+        show(entry);
         if (tool.tab) {
-            tool.tab.textContent = `Tracked events (${count})`;
+            tool.tab.textContent = `Tracked events (${entries.length})`;
         }
     };
 
+    setGrouped(false);
     getTrackedEntries().forEach(add);
     subscribeTrackedEntries(add);
-    tool.label = count > 0 ? `Tracked events (${count})` : "Tracked events";
+    tool.label = entries.length > 0 ? `Tracked events (${entries.length})` : "Tracked events";
     return tool;
 }
 
-function renderRow(entry: TrackedEntry): HTMLElement {
+function formatSeconds(ms: number): string {
+    return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
     const row = document.createElement("div");
     row.dataset.kind = entry.kind;
     Object.assign(row.style, {
         display: "flex",
-        alignItems: "baseline",
+        alignItems: "center",
         gap: "8px",
         padding: "5px 12px",
         borderLeft: `3px solid ${entry.kind === "drop" ? COLORS.neg : "transparent"}`,
-        cursor: "default",
+        cursor: "pointer",
     });
 
     const key = document.createElement("span");
@@ -448,7 +509,7 @@ function renderRow(entry: TrackedEntry): HTMLElement {
         fontFamily: MONO,
         fontSize: "11px",
     });
-    time.textContent = `t=${entry.t}`;
+    time.textContent = formatSeconds(entry.t);
 
     if (entry.kind === "event") {
         key.textContent = entry.key;
@@ -457,6 +518,23 @@ function renderRow(entry: TrackedEntry): HTMLElement {
         key.textContent = `⚠ dropped ${entry.key}`;
     }
     row.append(key, time);
+
+    if (count !== undefined) {
+        const badge = document.createElement("span");
+        badge.textContent = String(count);
+        Object.assign(badge.style, {
+            flexShrink: "0",
+            minWidth: "22px",
+            padding: "1px 7px",
+            boxSizing: "border-box",
+            borderRadius: "999px",
+            background: entry.kind === "drop" ? COLORS.neg : COLORS.border,
+            color: entry.kind === "drop" ? COLORS.onAccent : COLORS.ink,
+            font: `700 11px/1.4 ${FONT}`,
+            textAlign: "center",
+        });
+        row.append(badge);
+    }
     return row;
 }
 
@@ -467,21 +545,48 @@ function createDetailPanel(): HTMLElement {
         display: "none",
         position: "fixed",
         width: "max-content",
-        maxWidth: `min(260px, calc(100vw - ${EDGE * 2}px))`,
-        padding: "8px 10px",
+        minWidth: `min(240px, calc(100vw - ${EDGE * 2}px))`,
+        maxWidth: `min(360px, calc(100vw - ${EDGE * 2}px))`,
+        padding: "12px 16px 14px",
+        boxSizing: "border-box",
         background: COLORS.surfaceSunk,
         color: COLORS.inkSecondary,
         border: `1px solid ${COLORS.border}`,
-        borderRadius: "10px",
+        borderRadius: "12px",
         boxShadow: "0 12px 32px rgba(0, 0, 0, 0.45)",
         fontFamily: MONO,
-        fontSize: "11px",
-        lineHeight: "1.5",
+        fontSize: "12px",
+        lineHeight: "1.7",
         wordBreak: "break-all",
         pointerEvents: "none",
         zIndex: Z_INDEX,
     });
     return detail;
+}
+
+function renderDetailHeader(entry: TrackedEntry): HTMLElement {
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+        display: "flex",
+        alignItems: "baseline",
+        gap: "12px",
+        paddingBottom: "8px",
+        marginBottom: "8px",
+        borderBottom: `1px solid ${COLORS.border}`,
+    });
+    const key = document.createElement("span");
+    key.textContent = entry.kind === "event" ? entry.key : `⚠ dropped ${entry.key}`;
+    Object.assign(key.style, {
+        flex: "1",
+        minWidth: "0",
+        color: entry.kind === "event" ? COLORS.ink : COLORS.neg,
+        font: `700 13px/1.4 ${FONT}`,
+    });
+    const time = document.createElement("span");
+    time.textContent = formatSeconds(entry.t);
+    Object.assign(time.style, { flexShrink: "0", color: COLORS.inkMuted, fontSize: "11px" });
+    header.append(key, time);
+    return header;
 }
 
 function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry): void {
@@ -493,6 +598,7 @@ function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry):
         lines.push("no properties");
     }
     detail.replaceChildren(
+        renderDetailHeader(entry),
         ...lines.map((text) => {
             const line = document.createElement("div");
             line.textContent = text;
