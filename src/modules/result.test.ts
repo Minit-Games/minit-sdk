@@ -389,3 +389,173 @@ describe("reportResult — over-limit constraint warnings (DROP-8991)", () => {
         });
     });
 });
+
+describe("reportResult — invalid result runtime guard", () => {
+    const invalidResults: Array<[string, unknown]> = [
+        ["object", { score: 10 }],
+        ["array", [1, 2]],
+        ["null", null],
+        ["undefined", undefined],
+        ["boolean true", true],
+        ["boolean false", false],
+    ];
+
+    function overlay(): Element | null {
+        return document.getElementById("dashboard-overlay");
+    }
+
+    beforeEach(() => {
+        document.body.innerHTML = "";
+    });
+
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
+        document.body.innerHTML = "";
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+    });
+
+    describe("in a host", () => {
+        it.each(invalidResults)("rejects %s with one [MinitSDK] warning naming its type and does not call the host", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            expect(() => reportResult(value as any)).not.toThrow();
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            const message = warnSpy.mock.calls[0].join(" ");
+            expect(message).toMatch(/^\[MinitSDK\]/);
+            expect(message).toContain(typeof value);
+            expect(message).toMatch(/ignored/i);
+        });
+
+        it("rejects an invalid result through the reportDropResult alias", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportDropResult({} as any);
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it("rejects an invalid result even when options are provided", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult({} as any, { flavorText: "Nice!", userData: "state" });
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(warnSpy.mock.calls[0].join(" ")).toContain("object");
+        });
+
+        it("forwards a valid number reported right after a rejected call", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult({} as any);
+            reportResult(100, { flavorText: "Nice!" });
+
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(calls).toEqual([{ result: 100, options: { flavorText: "Nice!" } }]);
+        });
+
+        it("forwards a valid string reported right after a rejected call", () => {
+            setupMinit();
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(null as any);
+            reportResult("WIN");
+
+            expect(calls).toEqual([{ result: "WIN", options: undefined }]);
+        });
+
+        it.each([
+            ["number", 42.5],
+            ["zero", 0],
+            ["string", "WIN"],
+            ["empty string", ""],
+        ])("forwards a valid %s result without warning", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(value);
+
+            expect(warnSpy).not.toHaveBeenCalled();
+            expect(calls).toEqual([{ result: value, options: undefined }]);
+        });
+
+        it.each([
+            ["NaN", NaN],
+            ["Infinity", Infinity],
+        ])("keeps forwarding a non-finite %s number as before", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(value);
+
+            expect(warnSpy).not.toHaveBeenCalled();
+            expect(calls).toHaveLength(1);
+            expect(calls[0].result).toBe(value);
+        });
+    });
+
+    describe("in local testing (no host)", () => {
+        it.each(invalidResults)("rejects %s with one [MinitSDK] warning and renders no result overlay", (_label, value) => {
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+
+            expect(() => reportResult(value as any)).not.toThrow();
+
+            expect(overlay()).toBeNull();
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            const message = warnSpy.mock.calls[0].join(" ");
+            expect(message).toMatch(/^\[MinitSDK\]/);
+            expect(message).toContain(typeof value);
+        });
+
+        it("schedules no delayed overlay for an invalid result reported with a delay", () => {
+            jest.useFakeTimers();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+
+            reportResult({} as any, { delay: 500 });
+            jest.advanceTimersByTime(1000);
+
+            expect(overlay()).toBeNull();
+            expect(jest.getTimerCount()).toBe(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it("renders the overlay for a valid number reported right after a rejected call", () => {
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+
+            reportResult(undefined as any);
+            expect(overlay()).toBeNull();
+
+            reportResult(123);
+
+            expect(overlay()).not.toBeNull();
+            expect(overlay()?.textContent).toContain("123");
+        });
+
+        it("renders the delayed overlay for a valid string reported right after a rejected call", () => {
+            jest.useFakeTimers();
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+
+            reportResult(true as any, { delay: 500 });
+            reportResult("WIN", { delay: 500 });
+
+            expect(overlay()).toBeNull();
+            jest.advanceTimersByTime(500);
+
+            expect(overlay()).not.toBeNull();
+            expect(overlay()?.textContent).toContain("WIN");
+        });
+    });
+});
