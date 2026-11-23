@@ -529,7 +529,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these â
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
-| `reportResult(result, options?)` | Submit the final game result; optional `flavorText` (64-character cap) for a session stat/moment, not the score, shown on the host result screen and activity feed |
+| `reportResult(result, options?)` | Submit the final game result as a number or string; anything else is ignored with a warning. Optional `flavorText` (64-character cap) is for a session stat/moment, not the score, shown on the host result screen and activity feed |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param â€” a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |

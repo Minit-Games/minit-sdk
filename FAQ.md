@@ -17,6 +17,7 @@ Every creator-facing size and length limit, when it applies, and whether exceedi
 
 | Subject | Value | When it applies | Failure mode |
 |---|---:|---|---|
+| Result type | Number or string | Runtime, when a play result is reported | **Warning and ignore:** the result is not reported and no result screen is shown. |
 | Result `flavorText` | 64 characters | Runtime, when a play result is reported | **Silent truncation:** the result succeeds and only the first 64 characters are stored. |
 | Result `userData` value | 1,024 UTF-8 bytes | Runtime, when a play result writes user data | **Silent drop:** the play report still succeeds, but the oversized value is discarded. |
 | Project title | 50 characters | Authoring in Studio or seeding from `meta.json` on the founding upload | **Reject** for an over-limit Studio/API edit; **silent truncation** when seeded from `meta.json`. |
