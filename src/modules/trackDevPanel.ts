@@ -160,7 +160,7 @@ function mount(body: HTMLElement): void {
             tab: selectedTab,
         });
 
-    const replay = createReplayButton();
+    const { element: replay, replay: replayButton, replayWithNewUserData } = createReplayButtons();
 
     let open = false;
     let closing: Animation[] = [];
@@ -194,12 +194,40 @@ function mount(body: HTMLElement): void {
             }
         }
     };
-    replay.onclick = () => {
+    replayButton.onclick = () => {
         if (settings.closeOnReplay) {
             setOpen(false);
         }
         location.reload();
     };
+    replayWithNewUserData.onclick = () => {
+        const userData = getReportedResult()?.userData;
+        if (settings.closeOnReplay) {
+            setOpen(false);
+        }
+        reloadWithParams({ [USER_DATA_PARAM_KEY]: userData === "" ? undefined : userData });
+    };
+    const onReportedUserData = (reported: ReportedResult) => {
+        if (reported.userData === undefined || reported.userData === getUserData()) {
+            return;
+        }
+        replayWithNewUserData.style.display = "flex";
+        placeLauncher(launcher, launcher.offsetLeft, launcher.offsetTop);
+        if (canAnimate(replayWithNewUserData)) {
+            replayWithNewUserData.animate(
+                [
+                    { opacity: 0, transform: "translateY(8px) scale(0.85)" },
+                    { opacity: 1, transform: "none" },
+                ],
+                { duration: 260, easing: "cubic-bezier(0.2, 0.9, 0.3, 1.2)" },
+            );
+        }
+    };
+    const reportedAtMount = getReportedResult();
+    if (reportedAtMount) {
+        onReportedUserData(reportedAtMount);
+    }
+    subscribeReportedResult(onReportedUserData);
     window.addEventListener("keydown", (event) => {
         if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key.toLowerCase() === "m") {
             event.preventDefault();
@@ -565,6 +593,8 @@ function injectStyles(): void {
     }
 }
 #${LAUNCHER_ID}:active { transform: scale(1); }
+[data-grip="bottom-right"] [data-panel-footer]:last-child { padding-right: ${GRIP_SIZE + 14}px !important; }
+[data-grip="bottom-left"] [data-panel-footer]:last-child { padding-left: ${GRIP_SIZE + 14}px !important; }
 #${LAUNCHER_ID}:focus-visible, #${TOOLS_ID} button:focus-visible {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: 2px;
@@ -724,14 +754,28 @@ function placeLauncher(launcher: HTMLElement, left: number, top: number): void {
     }
 }
 
-function createReplayButton(): HTMLButtonElement {
+function createReplayButtons(): { element: HTMLElement; replay: HTMLButtonElement; replayWithNewUserData: HTMLButtonElement } {
+    const element = document.createElement("div");
+    element.id = REPLAY_ID;
+    Object.assign(element.style, { position: "fixed", display: "none", gap: "8px", zIndex: Z_INDEX });
+    const replay = createReplayButton("Replay", "Reload the game");
+    const replayWithNewUserData = createReplayButton(
+        "Replay with new user data",
+        "Reload the game with the user data reported by reportResult()",
+    );
+    replayWithNewUserData.style.display = "none";
+    element.append(replay, replayWithNewUserData);
+    isolate(element);
+    return { element, replay, replayWithNewUserData };
+}
+
+function createReplayButton(label: string, title: string): HTMLButtonElement {
     const replay = document.createElement("button");
-    replay.id = REPLAY_ID;
     replay.type = "button";
-    replay.title = "Reload the game";
+    replay.title = title;
     Object.assign(replay.style, {
-        position: "fixed",
-        display: "none",
+        display: "flex",
+        flexShrink: "0",
         alignItems: "center",
         gap: "6px",
         height: "32px",
@@ -742,8 +786,8 @@ function createReplayButton(): HTMLButtonElement {
         color: COLORS.ink,
         boxShadow: "0 6px 16px rgba(0, 0, 0, 0.35)",
         font: `700 12px/1 ${FONT}`,
+        whiteSpace: "nowrap",
         cursor: "pointer",
-        zIndex: Z_INDEX,
     });
     const icon = document.createElementNS(SVG_NS, "svg");
     icon.setAttribute("viewBox", "0 0 24 24");
@@ -760,8 +804,7 @@ function createReplayButton(): HTMLButtonElement {
         path.setAttribute("d", d);
         icon.append(path);
     }
-    replay.append(icon, "Replay");
-    isolate(replay);
+    replay.append(icon, label);
     return replay;
 }
 
@@ -964,6 +1007,7 @@ function anchorTools(panel: HTMLElement, grip: HTMLElement, launcher: HTMLElemen
 function placeGrip(grip: HTMLElement, horizontal: "left" | "right", vertical: "top" | "bottom"): void {
     grip.dataset.h = horizontal;
     grip.dataset.v = vertical;
+    grip.parentElement?.setAttribute("data-grip", `${vertical}-${horizontal}`);
     Object.assign(grip.style, {
         left: horizontal === "left" ? "3px" : "",
         right: horizontal === "right" ? "3px" : "",
@@ -1135,20 +1179,32 @@ function createAlerts(): Alerts {
     };
 }
 
-function createNotice(tone: "info" | "error"): HTMLElement {
+type NoticeTone = "info" | "error" | "success";
+
+const NOTICE_TONES: Record<NoticeTone, { border: string; background: string }> = {
+    info: { border: COLORS.info, background: "rgba(91, 141, 239, 0.12)" },
+    error: { border: COLORS.neg, background: "rgba(224, 108, 108, 0.14)" },
+    success: { border: COLORS.pos, background: "rgba(79, 191, 134, 0.14)" },
+};
+
+function createNotice(tone: NoticeTone): HTMLElement {
     const notice = document.createElement("div");
-    notice.dataset.notice = tone;
     Object.assign(notice.style, {
         margin: "8px 12px 6px",
         padding: "6px 10px",
         borderRadius: "8px",
-        border: `1px solid ${tone === "info" ? COLORS.info : COLORS.neg}`,
-        background: tone === "info" ? "rgba(91, 141, 239, 0.12)" : "rgba(224, 108, 108, 0.14)",
         color: COLORS.ink,
         font: `11px/1.5 ${FONT}`,
         flexShrink: "0",
     });
+    setNoticeTone(notice, tone);
     return notice;
+}
+
+function setNoticeTone(notice: HTMLElement, tone: NoticeTone): void {
+    notice.dataset.notice = tone;
+    notice.style.border = `1px solid ${NOTICE_TONES[tone].border}`;
+    notice.style.background = NOTICE_TONES[tone].background;
 }
 
 function setNoticeLines(notice: HTMLElement, title: string, lines: string[]): void {
@@ -1219,6 +1275,7 @@ function createUsageFooter(label: string): UsageFooter {
     row.append(track, indicator);
 
     const element = document.createElement("div");
+    element.dataset.panelFooter = "";
     Object.assign(element.style, {
         padding: "8px 12px",
         borderTop: `1px solid ${COLORS.border}`,
@@ -1334,24 +1391,45 @@ function createUserDataTool(alerts: Alerts): DevTool {
     content.setAttribute("role", "tabpanel");
     Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
 
-    const errorNotice = createNotice("error");
-    errorNotice.style.display = "none";
+    const notice = createNotice("error");
+    notice.style.display = "none";
 
     const value = document.createElement("div");
     value.dataset.userDataValue = "";
     Object.assign(value.style, {
         flex: "1",
-        minHeight: "48px",
+        minHeight: "96px",
         display: "flex",
         flexDirection: "column",
-        padding: "16px",
+        gap: "6px",
+        padding: "12px",
         boxSizing: "border-box",
-        overflowY: "auto",
-        overscrollBehavior: "contain",
     });
+    const editor = document.createElement("textarea");
+    editor.dataset.userDataInput = "";
+    editor.spellcheck = false;
+    editor.placeholder = "No user data yet. Type or paste it here.";
+    styleDialogInput(editor);
+    Object.assign(editor.style, {
+        flex: "1",
+        minHeight: "0",
+        resize: "none",
+        padding: "8px 10px",
+        borderRadius: "10px",
+        font: `12px/1.6 ${MONO}`,
+    });
+    const validation = document.createElement("div");
+    validation.dataset.userDataValidation = "";
+    Object.assign(validation.style, { minHeight: "16px", fontSize: "11px", overflowWrap: "anywhere" });
+    value.append(editor, validation);
 
     const usage = createUsageFooter("Remaining user data size");
-    content.append(errorNotice, value, usage.element);
+    const actions = createUserDataActions(
+        () => editor.value,
+        () => reloadWithParams({ [USER_DATA_PARAM_KEY]: editor.value === "" ? undefined : editor.value }),
+        () => reloadWithParams({ [USER_DATA_PARAM_KEY]: undefined }),
+    );
+    content.append(notice, value, actions.element, usage.element);
 
     const badge = document.createElement("span");
     badge.textContent = "!";
@@ -1367,69 +1445,57 @@ function createUserDataTool(alerts: Alerts): DevTool {
         font: `900 10px/1 ${FONT}`,
     });
 
-    const render = (userData: string | undefined, label: string, reported: boolean) => {
-        const bytes = userData === undefined ? 0 : utf8Bytes(userData);
-        const tooBig = reported && bytes > USER_DATA_MAX_BYTES;
-        usage.update(bytes, USER_DATA_MAX_BYTES, tooBig);
-
-        if (userData === undefined) {
-            const empty = document.createElement("div");
-            empty.textContent = "No user data yet.";
-            Object.assign(empty.style, {
-                margin: "auto",
-                color: COLORS.inkMuted,
-                font: `700 15px/1.4 ${FONT}`,
-                textAlign: "center",
-            });
-            value.replaceChildren(empty);
+    let loaded = "";
+    let reportedTooBig = false;
+    const validate = () => {
+        const bytes = utf8Bytes(editor.value);
+        const overCap = bytes > USER_DATA_MAX_BYTES;
+        usage.update(bytes, USER_DATA_MAX_BYTES, reportedTooBig || overCap);
+        if (overCap) {
+            validation.textContent = `Over the ${formatBytes(USER_DATA_MAX_BYTES)} cap: the platform would discard it.`;
+            validation.style.color = COLORS.warn;
         } else {
-            const card = document.createElement("div");
-            card.dataset.result = "";
-            Object.assign(card.style, {
-                margin: "auto 0",
-                alignSelf: "stretch",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "6px",
-                boxSizing: "border-box",
-                padding: "10px 16px 12px",
-                borderRadius: "12px",
-                border: `1px solid ${tooBig ? COLORS.neg : COLORS.border}`,
-                background: COLORS.surfaceSunk,
-            });
-            const pre = document.createElement("pre");
-            pre.textContent = userData === "" ? '""' : formatUserData(userData);
-            Object.assign(pre.style, {
-                margin: "0",
-                alignSelf: "stretch",
-                color: COLORS.ink,
-                font: `12px/1.6 ${MONO}`,
-                textAlign: "left",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-            });
-            card.append(badgeHeader(label, COLORS.inkMuted), pre);
-            value.replaceChildren(card);
+            validation.textContent = editor.value === "" && loaded !== "" ? "Empty: applying removes the user data." : "";
+            validation.style.color = COLORS.inkMuted;
         }
+        actions.update({
+            hasValue: editor.value !== "",
+            canApply: editor.value !== loaded,
+            canClear: new URLSearchParams(window.location.search).has(USER_DATA_PARAM_KEY),
+        });
+    };
+    editor.addEventListener("input", validate);
 
-        errorNotice.style.display = tooBig ? "block" : "none";
-        if (tooBig) {
-            setNoticeLines(errorNotice, "User data too big", [
-                `reportResult() passed ${formatBytes(bytes)} of userData, over the ${formatBytes(USER_DATA_MAX_BYTES)} cap. ` +
+    const show = (userData: string | undefined) => {
+        loaded = userData ?? "";
+        editor.value = loaded;
+        validate();
+    };
+
+    const onResult = (reported: ReportedResult) => {
+        if (reported.userData === undefined) {
+            return;
+        }
+        const reportedBytes = utf8Bytes(reported.userData);
+        reportedTooBig = reportedBytes > USER_DATA_MAX_BYTES;
+        setNoticeTone(notice, reportedTooBig ? "error" : "success");
+        notice.style.display = "block";
+        if (reportedTooBig) {
+            setNoticeLines(notice, "User data too big", [
+                `reportResult() passed ${formatBytes(reportedBytes)} of userData, over the ${formatBytes(USER_DATA_MAX_BYTES)} cap. ` +
                     "The platform will discard it, so it is not saved for this player.",
             ]);
+        } else {
+            setNoticeLines(notice, "User data updated", [
+                `reportResult() saved ${formatBytes(reportedBytes)} of userData for this player.`,
+            ]);
         }
-        badge.style.display = tooBig ? "flex" : "none";
-        alerts.set("userData", tooBig);
+        badge.style.display = reportedTooBig ? "flex" : "none";
+        alerts.set("userData", reportedTooBig);
+        show(reported.userData);
     };
 
-    render(getUserData(), "Loaded at start", false);
-    const onResult = (reported: ReportedResult) => {
-        if (reported.userData !== undefined) {
-            render(reported.userData, "Reported with reportResult()", true);
-        }
-    };
+    show(getUserData());
     const existing = getReportedResult();
     if (existing) {
         onResult(existing);
@@ -1580,7 +1646,16 @@ function createSuggestionsTool(): DevTool {
     const render = () => {
         const checks = collectChecks(meta);
         const done = checks.filter((check) => check.status === "pass").length;
-        badge.textContent = `${done}/${checks.length}`;
+        const allDone = checks.length > 0 && done === checks.length;
+        badge.textContent = allDone ? "✓" : `${done}/${checks.length}`;
+        badge.toggleAttribute("data-all-done", allDone);
+        badge.title = allDone ? "All suggestions done" : `${done} of ${checks.length} suggestions done`;
+        Object.assign(
+            badge.style,
+            allDone
+                ? { minWidth: "14px", width: "14px", padding: "0", background: COLORS.pos, color: COLORS.onAccent, font: `900 9px/14px ${FONT}` }
+                : { minWidth: "18px", width: "", padding: "0 6px", background: COLORS.border, color: COLORS.ink, font: `700 10px/16px ${FONT}` },
+        );
 
         const header = document.createElement("div");
         Object.assign(header.style, {
@@ -1848,6 +1923,7 @@ function createConfigFooter(): HTMLElement {
     reset.onclick = () => reloadWithParams(Object.fromEntries(injectedKeys.map((key) => [key, undefined])));
 
     const footer = document.createElement("div");
+    footer.dataset.panelFooter = "";
     Object.assign(footer.style, {
         display: "flex",
         justifyContent: "flex-end",
@@ -1945,10 +2021,66 @@ function showTutorialDetail(detail: HTMLElement, anchor: HTMLElement): void {
 }
 
 function openConfigEditor(body: HTMLElement, requests: readonly ConfigRequest[], focusKey: string): void {
+    const fields = document.createElement("div");
+    Object.assign(fields.style, { display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", minHeight: "0" });
+    const inputs = new Map<string, HTMLInputElement>();
+    for (const request of requests) {
+        const field = document.createElement("label");
+        Object.assign(field.style, { display: "flex", flexDirection: "column", gap: "4px" });
+        const name = document.createElement("span");
+        name.textContent = request.key;
+        Object.assign(name.style, { fontWeight: "700", overflowWrap: "anywhere" });
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = request.source === "injected" ? (request.value ?? "") : "";
+        input.placeholder = request.source === "default" ? `default: ${request.value}` : "not set";
+        styleDialogInput(input);
+        field.append(name, input);
+        fields.append(field);
+        inputs.set(request.key, input);
+    }
+
+    openFormDialog(
+        body,
+        "Edit config",
+        "Applying sets these as query params and reloads the game. Leave a field empty to use the default.",
+        fields,
+        () => {
+            const params: Record<string, string | undefined> = {};
+            for (const [key, input] of inputs) {
+                params[key] = input.value === "" ? undefined : input.value;
+            }
+            reloadWithParams(params);
+        },
+    );
+    inputs.get(focusKey)?.focus();
+}
+
+function styleDialogInput(input: HTMLInputElement | HTMLTextAreaElement): void {
+    Object.assign(input.style, {
+        padding: "6px 8px",
+        borderRadius: "8px",
+        border: `1px solid ${COLORS.border}`,
+        background: COLORS.surfaceSunk,
+        color: COLORS.ink,
+        font: `12px/1.4 ${MONO}`,
+        outline: "none",
+    });
+    input.onfocus = () => (input.style.borderColor = COLORS.brandOrange);
+    input.onblur = () => (input.style.borderColor = COLORS.border);
+}
+
+function openFormDialog(
+    body: HTMLElement,
+    titleText: string,
+    hintText: string,
+    fields: HTMLElement,
+    onApply: () => void,
+): void {
     const backdrop = document.createElement("div");
     backdrop.setAttribute("role", "dialog");
     backdrop.setAttribute("aria-modal", "true");
-    backdrop.setAttribute("aria-label", "Edit config");
+    backdrop.setAttribute("aria-label", titleText);
     Object.assign(backdrop.style, {
         position: "fixed",
         inset: "0",
@@ -1980,40 +2112,11 @@ function openConfigEditor(body: HTMLElement, requests: readonly ConfigRequest[],
     });
 
     const title = document.createElement("div");
-    title.textContent = "Edit config";
+    title.textContent = titleText;
     title.style.font = `800 15px/1.3 ${FONT}`;
     const hint = document.createElement("div");
-    hint.textContent = "Applying sets these as query params and reloads the game. Leave a field empty to use the default.";
+    hint.textContent = hintText;
     Object.assign(hint.style, { color: COLORS.inkSecondary, fontSize: "12px" });
-
-    const fields = document.createElement("div");
-    Object.assign(fields.style, { display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", minHeight: "0" });
-    const inputs = new Map<string, HTMLInputElement>();
-    for (const request of requests) {
-        const field = document.createElement("label");
-        Object.assign(field.style, { display: "flex", flexDirection: "column", gap: "4px" });
-        const name = document.createElement("span");
-        name.textContent = request.key;
-        Object.assign(name.style, { fontWeight: "700", overflowWrap: "anywhere" });
-        const input = document.createElement("input");
-        input.type = "text";
-        input.value = request.source === "injected" ? (request.value ?? "") : "";
-        input.placeholder = request.source === "default" ? `default: ${request.value}` : "not set";
-        Object.assign(input.style, {
-            padding: "6px 8px",
-            borderRadius: "8px",
-            border: `1px solid ${COLORS.border}`,
-            background: COLORS.surfaceSunk,
-            color: COLORS.ink,
-            font: `12px/1.4 ${MONO}`,
-            outline: "none",
-        });
-        input.onfocus = () => (input.style.borderColor = COLORS.brandOrange);
-        input.onblur = () => (input.style.borderColor = COLORS.border);
-        field.append(name, input);
-        fields.append(field);
-        inputs.set(request.key, input);
-    }
 
     const actions = document.createElement("div");
     Object.assign(actions.style, { display: "flex", justifyContent: "flex-end", gap: "8px" });
@@ -2065,17 +2168,12 @@ function openConfigEditor(body: HTMLElement, requests: readonly ConfigRequest[],
     };
     dialog.onsubmit = (event) => {
         event.preventDefault();
-        const params: Record<string, string | undefined> = {};
-        for (const [key, input] of inputs) {
-            params[key] = input.value === "" ? undefined : input.value;
-        }
-        reloadWithParams(params);
+        onApply();
     };
 
     dialog.append(title, hint, fields, actions);
     backdrop.append(dialog);
     body.append(backdrop);
-    inputs.get(focusKey)?.focus();
 }
 
 function renderConfigRow(request: ConfigRequest, openEditor: (focusKey: string) => void): HTMLElement {
@@ -2152,6 +2250,122 @@ function badgeValue(text: string, style: Partial<CSSStyleDeclaration>): HTMLElem
     return value;
 }
 
+function createUserDataActions(
+    getText: () => string,
+    onApply: () => void,
+    onClear: () => void,
+): { element: HTMLElement; update: (state: { hasValue: boolean; canApply: boolean; canClear: boolean }) => void } {
+    const element = document.createElement("div");
+    element.dataset.panelFooter = "";
+    Object.assign(element.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        gap: "8px",
+        padding: "8px 12px",
+        borderTop: `1px solid ${COLORS.border}`,
+        flexShrink: "0",
+    });
+    const button = (label: string, action: string, onClick: (button: HTMLButtonElement) => void) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.dataset.userDataAction = action;
+        Object.assign(button.style, {
+            padding: "4px 12px",
+            borderRadius: "999px",
+            border: `1px solid ${COLORS.border}`,
+            background: "transparent",
+            color: COLORS.inkSecondary,
+            font: `700 11px/1.4 ${FONT}`,
+            cursor: "pointer",
+        });
+        button.onclick = () => onClick(button);
+        return button;
+    };
+    const copy = button("Copy", "copy", (copy) => {
+        void copyText(getText()).then((copied) => {
+            copy.textContent = copied ? "Copied" : "Copy failed";
+            setTimeout(() => (copy.textContent = "Copy"), 1500);
+        });
+    });
+    const exportButton = button("Export", "export", () => void downloadUserData(getText()));
+    const clear = button("Clear", "clear", onClear);
+    clear.title = "Remove the user data and reload";
+    const apply = button("Apply & reload", "apply", onApply);
+    element.append(copy, exportButton, clear, apply);
+
+    const setEnabled = (target: HTMLButtonElement, enabled: boolean, accent = false) => {
+        target.disabled = !enabled;
+        target.style.cursor = enabled ? "pointer" : "default";
+        const highlighted = accent && enabled;
+        target.style.background = highlighted ? COLORS.brandOrange : "transparent";
+        target.style.borderColor = highlighted ? COLORS.brandOrange : COLORS.border;
+        target.style.color = highlighted ? COLORS.onAccent : enabled ? COLORS.inkSecondary : COLORS.inkMuted;
+    };
+    const update = ({ hasValue, canApply, canClear }: { hasValue: boolean; canApply: boolean; canClear: boolean }) => {
+        setEnabled(copy, hasValue);
+        setEnabled(exportButton, hasValue);
+        setEnabled(clear, canClear);
+        setEnabled(apply, canApply, true);
+    };
+    return { element, update };
+}
+
+async function copyText(text: string): Promise<boolean> {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        Object.assign(area.style, { position: "fixed", opacity: "0" });
+        document.body.append(area);
+        area.select();
+        const copied = document.execCommand("copy");
+        area.remove();
+        return copied;
+    }
+}
+
+type SaveFilePicker = (options: {
+    suggestedName: string;
+    types: { description: string; accept: Record<string, string[]> }[];
+}) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+
+async function downloadUserData(userData: string): Promise<void> {
+    let isJson = true;
+    try {
+        JSON.parse(userData);
+    } catch {
+        isJson = false;
+    }
+    const type = isJson ? "application/json" : "text/plain";
+    const extension = isJson ? ".json" : ".txt";
+    const blob = new Blob([userData], { type });
+    const showSaveFilePicker = (window as unknown as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+    if (showSaveFilePicker) {
+        try {
+            const handle = await showSaveFilePicker({
+                suggestedName: `user-data${extension}`,
+                types: [{ description: isJson ? "JSON" : "Text", accept: { [type]: [extension] } }],
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return;
+        } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+                return;
+            }
+        }
+    }
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = isJson ? "user-data.json" : "user-data.txt";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
 function renderUserDataButton(reported: ReportedResult, openTab: (label: string) => void): HTMLElement {
     const received = reported.userData !== undefined;
     const tooBig = received && utf8Bytes(reported.userData!) > USER_DATA_MAX_BYTES;
@@ -2182,18 +2396,6 @@ function renderUserDataButton(reported: ReportedResult, openTab: (label: string)
 
 function utf8Bytes(text: string): number {
     return typeof TextEncoder === "undefined" ? text.length : new TextEncoder().encode(text).length;
-}
-
-function formatUserData(userData: string): string {
-    try {
-        const parsed: unknown = JSON.parse(userData);
-        if (parsed !== null && typeof parsed === "object") {
-            return JSON.stringify(parsed, null, 2);
-        }
-    } catch {
-        // Not JSON: show the raw string.
-    }
-    return userData;
 }
 
 function createResultTool(openTab: (label: string) => void): DevTool {
@@ -2408,6 +2610,14 @@ function renderRow(entry: TrackedEntry): HTMLElement {
     } else {
         row.style.color = COLORS.neg;
         key.textContent = `⚠ dropped ${entry.key}`;
+    }
+    if (entry.key.startsWith(RESERVED_KEY_PREFIX)) {
+        if (entry.kind === "event") {
+            row.style.color = COLORS.brandOrange;
+        }
+        const logo = createLogoMark(12);
+        logo.style.flexShrink = "0";
+        row.append(logo);
     }
     row.append(key, time);
     return row;
