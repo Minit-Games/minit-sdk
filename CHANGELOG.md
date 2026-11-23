@@ -27,6 +27,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Fixed
 
+- `reportResult()` now warns and ignores values that are not numbers or strings instead of forwarding or displaying them.
 - The `[MinitSDK]` bundle fingerprint now survives minified, console-stripped production builds (terser `drop_console`, esbuild `drop: ['console']`), so Studio detects the SDK in them (DROP-10839).
 - `addBackground()` image container is overscanned by 1px so WebKit's edge seam around an `object-fit` image no longer exposes the backdrop color as a hairline at the top/bottom of the game WebView (DROP-8459).
 
