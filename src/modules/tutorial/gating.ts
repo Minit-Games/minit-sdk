@@ -1,4 +1,5 @@
-import { getConfigValue } from "../config.js";
+import { isTestEnvironment } from "../../utils.js";
+import { HAS_PLAYED_GAME_PARAM_KEY, getConfigValue } from "../config.js";
 
 /**
  * Decide whether to run the first-play tutorial for this Post.
@@ -11,7 +12,8 @@ import { getConfigValue } from "../config.js";
  * 1. `?tutorial=1` or `?tutorial=true` → force **show** (QA / preview)
  * 2. `?tutorial=0` or `?tutorial=false` → force **hide**
  * 3. `window.minit.hasPlayedGame === true` → **hide** (returning player; only the
- *    mobile app injects this flag, after a non-preview `reportResult`)
+ *    mobile app injects this flag, after a non-preview `reportResult`; in local
+ *    testing without a host, `?hasPlayedGame=true` simulates it)
  * 4. otherwise → **show** (new players, web play, Studio preview, older app hosts)
  *
  * Gating needs nothing from the Game: do not persist `userData` for the tutorial.
@@ -26,5 +28,13 @@ export function shouldShowTutorial(): boolean {
     if (override === "1" || override === "true") return true;
     if (override === "0" || override === "false") return false;
 
-    return window.minit?.hasPlayedGame !== true;
+    return !hasPlayedGame();
+}
+
+export function hasPlayedGame(): boolean {
+    const injected = window.minit?.hasPlayedGame;
+    if (injected !== undefined || !isTestEnvironment()) {
+        return injected === true;
+    }
+    return new URLSearchParams(window.location.search).get(HAS_PLAYED_GAME_PARAM_KEY) === "true";
 }

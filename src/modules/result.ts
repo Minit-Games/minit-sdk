@@ -1,13 +1,13 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { closeTrackingAfterResult } from "./track.js";
-import { getPlayDurationMs, recordReportedResult, recordTrackedEvent } from "./trackDevBuffer.js";
+import { getPlayDurationMs, recordReportedResult, recordResultPending, recordTrackedEvent } from "./trackDevBuffer.js";
 import { showTrackDevPanel } from "./trackDevPanelLoader.js";
+import { USER_DATA_MAX_BYTES } from "./userData.js";
 
 // Hand-copied from packages/shared/src/creatorLimits.ts in the minit-root monorepo;
 // minit-sdk cannot import across repositories.
 const FLAVOR_TEXT_MAX_LENGTH = 64;
-const USER_DATA_MAX_BYTES = 1024;
 
 /**
  * Reports the run's outcome to the host and triggers its result screen. Call once, when the run ends.
@@ -24,8 +24,17 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 
         recordTrackedEvent("minit.result", {});
         showTrackDevPanel();
-        const reported = { result, flavorText: options?.flavorText, durationMs: getPlayDurationMs() };
-        setTimeout(() => recordReportedResult(reported), options?.delay ?? 0);
+        const reported = {
+            result,
+            flavorText: options?.flavorText,
+            userData: typeof options?.userData === "string" ? options.userData : undefined,
+            durationMs: getPlayDurationMs(),
+        };
+        const delay = options?.delay ?? 0;
+        if (delay > 0) {
+            recordResultPending(delay);
+        }
+        setTimeout(() => recordReportedResult(reported), delay);
     }
 
     // Build the host-facing options, forwarding the single-key userData if present.

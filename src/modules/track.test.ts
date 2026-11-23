@@ -235,7 +235,7 @@ describe("track — validation in dev mode", () => {
 
         track(key, props);
 
-        expect(getTrackedEntries()).toEqual([{ kind: "event", key, props: props ?? {}, t: 1000 }]);
+        expect(getTrackedEntries()).toEqual([{ kind: "event", key, props: props ?? {}, bytes: payloadBytes(key, { ...props }), t: 1000 }]);
         expect(warnSpy).not.toHaveBeenCalled();
     });
 });
@@ -389,8 +389,8 @@ describe("track — dev buffer", () => {
         track("second");
 
         expect(getTrackedEntries()).toEqual([
-            { kind: "event", key: "first", props: { a: 1 }, t: 1235 },
-            { kind: "event", key: "second", props: {}, t: 1500 },
+            { kind: "event", key: "first", props: { a: 1 }, bytes: payloadBytes("first", { a: 1 }), t: 1235 },
+            { kind: "event", key: "second", props: {}, bytes: payloadBytes("second", {}), t: 1500 },
         ]);
     });
 
@@ -402,7 +402,7 @@ describe("track — dev buffer", () => {
         props.level = 2;
         props.extra = "x";
 
-        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, t: 1000 }]);
+        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, bytes: payloadBytes("level.start", { level: 1 }), t: 1000 }]);
     });
 
     it("reads each property getter once and records that value", async () => {
@@ -418,7 +418,7 @@ describe("track — dev buffer", () => {
         track("level.start", props);
 
         expect(reads).toBe(1);
-        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, t: 1000 }]);
+        expect(getTrackedEntries()).toEqual([{ kind: "event", key: "level.start", props: { level: 1 }, bytes: payloadBytes("level.start", { level: 1 }), t: 1000 }]);
     });
 
     it("lists entries oldest first across events and drops", async () => {
@@ -432,8 +432,8 @@ describe("track — dev buffer", () => {
         track("");
 
         expect(getTrackedEntries()).toEqual([
-            { kind: "event", key: "a", props: {}, t: 1000 },
-            { kind: "event", key: "b", props: {}, t: 1500 },
+            { kind: "event", key: "a", props: {}, bytes: payloadBytes("a", {}), t: 1000 },
+            { kind: "event", key: "b", props: {}, bytes: payloadBytes("b", {}), t: 1500 },
             { kind: "drop", key: "", reason: "invalid-key", t: 1700 },
         ]);
     });
@@ -450,7 +450,7 @@ describe("track — dev buffer", () => {
         track("after");
 
         expect(listener.mock.calls).toEqual([
-            [{ kind: "event", key: "during", props: { n: 1 }, t: 1000 }],
+            [{ kind: "event", key: "during", props: { n: 1 }, bytes: payloadBytes("during", { n: 1 }), t: 1000 }],
             [{ kind: "drop", key: "", reason: "invalid-key", t: 1000 }],
         ]);
     });
@@ -492,7 +492,7 @@ describe("track — dev token bucket", () => {
         }
 
         expect(getTrackedEntries()).toEqual([
-            ...[0, 1, 2, 3, 4].map((i) => ({ kind: "event", key: `e${i}`, props: {}, t: 1000 })),
+            ...[0, 1, 2, 3, 4].map((i) => ({ kind: "event", key: `e${i}`, props: {}, bytes: payloadBytes(`e${i}`, {}), t: 1000 })),
             { kind: "drop", key: "e5", reason: "rate", t: 1000 },
         ]);
         expect(warnSpy.mock.calls).toEqual([[dropMessage("rate")]]);
@@ -584,7 +584,7 @@ describe("track — dev load cap", () => {
 
         const accepted = events(getTrackedEntries());
         expect(accepted).toHaveLength(100);
-        expect(accepted[99]).toEqual({ kind: "event", key: "e99", props: {}, t: Math.round(now) });
+        expect(accepted[99]).toEqual({ kind: "event", key: "e99", props: {}, bytes: payloadBytes("e99", {}), t: Math.round(now) });
     });
 
     it("drops the 101st valid call with load-cap even when tokens are available", async () => {
@@ -635,12 +635,12 @@ describe("track — default events", () => {
 
         loadingDone();
         for (let i = 0; i < 5; i++) {
-            reportResult(i);
-        }
-        for (let i = 0; i < 5; i++) {
             track(`e${i}`);
         }
         track("e5");
+        for (let i = 0; i < 5; i++) {
+            reportResult(i);
+        }
         reportResult(99);
 
         const keys = events(getTrackedEntries()).map((entry) => entry.key);
@@ -677,5 +677,92 @@ describe("track — default events", () => {
         reportResult(5);
 
         expect(getTrackedEntries()).toEqual([]);
+    });
+});
+
+describe("track — dev bytes cap", () => {
+    const BYTES_CAP = 16 * 1024;
+
+    function bigProps(index: number): TrackProperties {
+        return Object.fromEntries(Array.from({ length: 7 }, (_, i) => [`p${i}`, `${index}`.padEnd(250, "x")]));
+    }
+
+    async function fillToCap() {
+        const sdk = await loadSdk();
+        let total = 0;
+        let i = 0;
+        while (total + payloadBytes(`big${i}`, bigProps(i)) <= BYTES_CAP) {
+            total += payloadBytes(`big${i}`, bigProps(i));
+            now += 200;
+            sdk.track(`big${i}`, bigProps(i));
+            i++;
+        }
+        return { ...sdk, accepted: i, next: i };
+    }
+
+    it("drops an event that would push the accepted bytes over the cap with bytes-cap", async () => {
+        const { track, getTrackedEntries, accepted, next } = await fillToCap();
+
+        now += 200;
+        track(`big${next}`, bigProps(next));
+
+        const entries = getTrackedEntries();
+        expect(events(entries)).toHaveLength(accepted);
+        expect(entries[entries.length - 1]).toEqual({ kind: "drop", key: `big${next}`, reason: "bytes-cap", t: Math.round(now) });
+        expect(warnSpy).toHaveBeenCalledWith(dropMessage("bytes-cap"));
+    });
+
+    it("does not consume a rate token or count a bytes-cap drop as an accepted event", async () => {
+        const { track, getTrackedEntries, accepted, next } = await fillToCap();
+
+        now += 1000;
+        for (let i = 0; i < 6; i++) {
+            track(`big${next}`, bigProps(next));
+        }
+        track("small");
+
+        const entries = getTrackedEntries();
+        expect(drops(entries).map((entry) => entry.kind === "drop" && entry.reason)).toEqual(Array(6).fill("bytes-cap"));
+        expect(events(entries)).toHaveLength(accepted + 1);
+    });
+
+    it("reports load-cap before bytes-cap", async () => {
+        const { track, getTrackedEntries } = await loadSdk();
+        for (let i = 0; i < 100; i++) {
+            now += 200;
+            track(`e${i}`);
+        }
+
+        now += 1000;
+        track("big", bigProps(0));
+
+        const entries = getTrackedEntries();
+        expect(entries[entries.length - 1]).toEqual(expect.objectContaining({ kind: "drop", reason: "load-cap" }));
+    });
+});
+
+describe("track — after reportResult", () => {
+    it("drops later calls with after-result in dev mode", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        reportResult(1);
+        track("late");
+
+        const entries = getTrackedEntries();
+        expect(entries[entries.length - 1]).toEqual({ kind: "drop", key: "late", reason: "after-result", t: 1000 });
+        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after-result"));
+    });
+
+    it("does not forward later calls to the host", async () => {
+        const hostTrack = jest.fn();
+        installHost("app", hostTrack);
+        const { track, reportResult } = await loadSdk();
+
+        track("before");
+        reportResult(1);
+        track("after");
+
+        expect(hostTrack).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after-result"));
     });
 });

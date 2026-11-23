@@ -389,3 +389,69 @@ describe("reportResult — over-limit constraint warnings (DROP-8991)", () => {
         });
     });
 });
+
+describe("reportResult — dev buffer in the testing environment", () => {
+    async function loadResult() {
+        jest.resetModules();
+        const { reportResult: report } = await import("./result");
+        const { getPendingResult, getReportedResult } = await import("./trackDevBuffer");
+        return { report, getPendingResult, getReportedResult };
+    }
+
+    beforeEach(() => {
+        jest.useFakeTimers({ doNotFake: ["performance"] });
+        jest.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+        document.body.innerHTML = "";
+    });
+
+    it("records a pending result before a delayed result arrives", async () => {
+        const { report, getPendingResult, getReportedResult } = await loadResult();
+
+        report(7, { delay: 500 });
+
+        expect(getPendingResult()?.delayMs).toBe(500);
+        expect(getReportedResult()).toBeUndefined();
+
+        jest.advanceTimersByTime(499);
+        expect(getReportedResult()).toBeUndefined();
+
+        jest.advanceTimersByTime(1);
+        expect(getReportedResult()?.result).toBe(7);
+    });
+
+    it.each([
+        ["no delay", undefined],
+        ["a zero delay", 0],
+    ])("records no pending result with %s", async (_label, delay) => {
+        const { report, getPendingResult, getReportedResult } = await loadResult();
+
+        report(7, delay === undefined ? undefined : { delay });
+        jest.advanceTimersByTime(0);
+
+        expect(getPendingResult()).toBeUndefined();
+        expect(getReportedResult()?.result).toBe(7);
+    });
+
+    it("stores the reported userData and flavor text on the reported result", async () => {
+        const { report, getReportedResult } = await loadResult();
+
+        report(7, { userData: '{"level":3}', flavorText: "Nice" });
+        jest.advanceTimersByTime(0);
+
+        expect(getReportedResult()).toMatchObject({ result: 7, userData: '{"level":3}', flavorText: "Nice" });
+    });
+
+    it("drops non-string userData from the reported result", async () => {
+        const { report, getReportedResult } = await loadResult();
+
+        report(7, { userData: 42 as never });
+        jest.advanceTimersByTime(0);
+
+        expect(getReportedResult()?.userData).toBeUndefined();
+    });
+});

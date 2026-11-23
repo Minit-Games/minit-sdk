@@ -24,7 +24,8 @@ async function loadSdk() {
     const { loadingDone } = await import("./loadingDone");
     const { recordTrackedEvent, recordTrackedDrop, getTrackedEntries } = await import("./trackDevBuffer");
     const { showTrackDevPanel } = await import("./trackDevPanel");
-    return { track, loadingDone, recordTrackedEvent, recordTrackedDrop, getTrackedEntries, showTrackDevPanel };
+    const { reportResult } = await import("./result");
+    return { track, loadingDone, reportResult, recordTrackedEvent, recordTrackedDrop, getTrackedEntries, showTrackDevPanel };
 }
 
 // The SDK imports the panel lazily, so a mount triggered by track() lands a few microtasks later.
@@ -61,6 +62,32 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 const launcher = () => byId<HTMLButtonElement>("minit-dev-launcher");
 const tools = () => byId("minit-dev-tools");
 const detail = () => byId("minit-track-dev-detail");
+const replay = () => byId("minit-dev-replay");
+
+function ctrlM(init: KeyboardEventInit = {}): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key: "m", ctrlKey: true, bubbles: true, cancelable: true, ...init });
+    window.dispatchEvent(event);
+    return event;
+}
+
+function usageIndicator(): HTMLElement {
+    const indicator = Array.from(tools().querySelectorAll<HTMLElement>("span[tabindex]")).find((span) =>
+        /\(\d+% left\)$/.test(span.textContent ?? ""),
+    );
+    if (!indicator) {
+        throw new Error("no usage indicator");
+    }
+    return indicator;
+}
+
+function usagePercent(): HTMLElement {
+    return usageIndicator().lastElementChild as HTMLElement;
+}
+
+async function reportAndFlush(report: () => void): Promise<void> {
+    report();
+    await flushPanelLoad();
+}
 
 function toolButton(text: string): HTMLButtonElement {
     const button = Array.from(tools().querySelectorAll("button")).find((candidate) => candidate.textContent === text);
@@ -75,7 +102,7 @@ function tabs(): HTMLElement[] {
 }
 
 function countBadge(): string {
-    return tabs()[0].querySelector("span")?.textContent ?? "";
+    return tabs()[1].querySelector("span")?.textContent ?? "";
 }
 
 function isOpen(): boolean {
@@ -120,6 +147,7 @@ async function mountPanel() {
 let now = 1000;
 
 beforeEach(() => {
+    localStorage.clear();
     now = 1000;
     jest.spyOn(performance, "now").mockImplementation(() => now);
     jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -260,18 +288,76 @@ describe("dev tools launcher", () => {
         expect(isOpen()).toBe(true);
     });
 
-    it("closes from the close button and hides the detail popup", async () => {
+    it("toggles with Ctrl+M and hides the detail popup on close", async () => {
         const { recordTrackedEvent } = await mountPanel();
         recordTrackedEvent("level_start", {});
-        launcher().click();
+
+        const opening = ctrlM();
+        expect(opening.defaultPrevented).toBe(true);
+        expect(isOpen()).toBe(true);
         hoverDetail(rows()[0]);
         expect(detail().style.display).toBe("block");
 
-        tools().querySelector<HTMLButtonElement>("[data-close]")?.click();
+        ctrlM({ key: "M" });
 
         expect(isOpen()).toBe(false);
         expect(launcher().getAttribute("aria-expanded")).toBe("false");
         expect(detail().style.display).toBe("none");
+    });
+
+    it("ignores m with other modifiers or without Ctrl", async () => {
+        await mountPanel();
+
+        ctrlM({ ctrlKey: false });
+        ctrlM({ altKey: true });
+        ctrlM({ shiftKey: true });
+        ctrlM({ metaKey: true });
+
+        expect(isOpen()).toBe(false);
+    });
+
+    it("shows the replay button only while open, and closes the panel and reloads on click", async () => {
+        await mountPanel();
+        const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+        expect(replay().style.display).toBe("none");
+
+        launcher().click();
+        expect(replay().style.display).toBe("flex");
+
+        replay().click();
+        // jsdom cannot stub location.reload; its unimplemented-navigation report proves the call.
+        expect(String(consoleError.mock.calls[0]?.[0])).toContain("navigation");
+
+        expect(isOpen()).toBe(false);
+        expect(replay().style.display).toBe("none");
+    });
+
+    it("restores the open state and size after a remount", async () => {
+        await mountPanel();
+        launcher().click();
+        tools().style.width = "333px";
+        tools().style.height = "222px";
+        launcher().click();
+        launcher().click();
+        document.body.innerHTML = "";
+
+        await mountPanel();
+
+        expect(isOpen()).toBe(true);
+        expect(tools().style.width).toBe("333px");
+        expect(tools().style.height).toBe("222px");
+    });
+
+    it("restores the launcher position after a remount", async () => {
+        await mountPanel();
+        followInlinePosition(launcher());
+        dragLauncher(-60, -40);
+        const moved = launcherPosition();
+        document.body.innerHTML = "";
+
+        await mountPanel();
+
+        expect(launcherPosition()).toEqual(moved);
     });
 });
 
@@ -374,7 +460,6 @@ describe("dev tools launcher drag", () => {
         row.dispatchEvent(pointer("pointerdown", 0, 0));
         row.dispatchEvent(pointer("pointerup", 0, 0));
         row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        toolButton("Group by key").click();
 
         for (const type of ["pointerdown", "pointermove", "pointerup", "click"]) {
             document.removeEventListener(type, listener);
@@ -384,13 +469,12 @@ describe("dev tools launcher drag", () => {
 });
 
 describe("dev tools panel", () => {
-    it("shows the Minit SDK header and a single Tracking tab", async () => {
+    it("shows the Minit SDK header and the Config, Tracking, Result, User data and Suggestions tabs", async () => {
         await mountPanel();
 
         expect(tools().getAttribute("aria-label")).toBe("Minit SDK");
         expect(tools().textContent).toContain("Minit SDK");
-        expect(tabs()).toHaveLength(1);
-        expect(tabs()[0].firstChild?.textContent).toBe("Tracking");
+        expect(tabs().map((tab) => tab.firstChild?.textContent)).toEqual(["Config", "Tracking", "Result", "User data", "Suggestions"]);
         expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
         expect(countBadge()).toBe("0");
     });
@@ -451,27 +535,6 @@ describe("dev tools panel", () => {
         expect(countBadge()).toBe(String(MAX_DEV_ENTRIES));
     });
 
-    it("decrements and removes evicted groups in grouped mode", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-        const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
-        recordTrackedEvent("first", {});
-        recordTrackedEvent("coin", {});
-        toolButton("Group by key").click();
-
-        for (let i = 0; i < MAX_DEV_ENTRIES - 1; i++) {
-            recordTrackedEvent("coin", {});
-        }
-
-        expect(rows().map((row) => rowParts(row)[0])).toEqual(["coin"]);
-        expect(rowParts(rows()[0])[2]).toBe(String(MAX_DEV_ENTRIES));
-
-        recordTrackedEvent("jump", {});
-        expect(rows().map((row) => [rowParts(row)[0], rowParts(row)[2]])).toEqual([
-            ["jump", "1"],
-            ["coin", String(MAX_DEV_ENTRIES - 1)],
-        ]);
-    });
-
     it("caps its height by the room above a launcher in the lower half", async () => {
         await mountPanel();
         jest.spyOn(launcher(), "getBoundingClientRect").mockReturnValue({
@@ -485,7 +548,7 @@ describe("dev tools panel", () => {
 
         launcher().click();
 
-        expect(tools().style.maxHeight).toBe(`min(min(420px, 60vh), ${600 - 8 - 12}px)`);
+        expect(tools().style.maxHeight).toBe(`${600 - 8 - 12}px`);
         expect(tools().style.bottom).toBe(`${window.innerHeight - 600 + 8}px`);
     });
 
@@ -502,7 +565,7 @@ describe("dev tools panel", () => {
 
         launcher().click();
 
-        expect(tools().style.maxHeight).toBe(`min(min(420px, 60vh), ${window.innerHeight - 348 - 8 - 12}px)`);
+        expect(tools().style.maxHeight).toBe(`${window.innerHeight - 348 - 8 - 12}px`);
         expect(tools().style.top).toBe(`${348 + 8}px`);
     });
 
@@ -549,104 +612,6 @@ describe("dev tools panel", () => {
 
             expect(tools().style.left).toBe("12px");
         });
-    });
-});
-
-describe("dev tools panel grouping", () => {
-    it("groups rows by kind and key with a count and the latest time", async () => {
-        const { recordTrackedEvent, track } = await mountPanel();
-        const toggle = toolButton("Group by key");
-        expect(toggle.getAttribute("aria-pressed")).toBe("false");
-
-        now = 1000;
-        recordTrackedEvent("coin", {});
-        now = 2000;
-        recordTrackedEvent("jump", {});
-        now = 3000;
-        recordTrackedEvent("coin", {});
-        now = 4000;
-        track("minit.coin");
-        now = 4500;
-        track("minit.coin");
-
-        toggle.click();
-
-        expect(toggle.getAttribute("aria-pressed")).toBe("true");
-        expect(rows().map(rowParts)).toEqual([
-            ["⚠ dropped minit.coin", "4.50s", "2"],
-            ["coin", "3.00s", "2"],
-            ["jump", "2.00s", "1"],
-        ]);
-    });
-
-    it("updates the grouped view as entries arrive", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-        now = 1000;
-        recordTrackedEvent("coin", {});
-        now = 2000;
-        recordTrackedEvent("jump", {});
-        toolButton("Group by key").click();
-
-        now = 5000;
-        recordTrackedEvent("coin", {});
-
-        expect(rows().map(rowParts)).toEqual([
-            ["coin", "5.00s", "2"],
-            ["jump", "2.00s", "1"],
-        ]);
-    });
-
-    it("restores the flat list when toggled off", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-        now = 1000;
-        recordTrackedEvent("coin", {});
-        now = 2000;
-        recordTrackedEvent("coin", {});
-        const toggle = toolButton("Group by key");
-
-        toggle.click();
-        expect(rows()).toHaveLength(1);
-        toggle.click();
-
-        expect(toggle.getAttribute("aria-pressed")).toBe("false");
-        expect(rows().map(rowParts)).toEqual([
-            ["coin", "2.00s"],
-            ["coin", "1.00s"],
-        ]);
-    });
-
-    it("keeps focus on a group's row when a new entry replaces it", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-        recordTrackedEvent("coin", { value: 1 });
-        recordTrackedEvent("jump", {});
-        toolButton("Group by key").click();
-        (rows()[1] as HTMLElement).focus();
-
-        recordTrackedEvent("coin", { value: 2 });
-
-        const focused = document.activeElement as HTMLElement;
-        expect(focused).toBe(rows()[0]);
-        expect(rowParts(focused)).toEqual(["coin", "1.00s", "2"]);
-        expect(detail().style.display).toBe("block");
-        expect(detail().textContent).toContain("value: 2");
-    });
-
-    it("keeps focus on a group's row when eviction decrements it", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-        const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
-        recordTrackedEvent("coin", {});
-        recordTrackedEvent("coin", {});
-        for (let i = 0; i < MAX_DEV_ENTRIES - 2; i++) {
-            recordTrackedEvent("jump", {});
-        }
-        toolButton("Group by key").click();
-        const coinRow = () => rows().find((row) => rowParts(row)[0] === "coin") as HTMLElement;
-        coinRow().focus();
-
-        recordTrackedEvent("other", {});
-
-        expect(rowParts(coinRow())[2]).toBe("1");
-        expect(document.activeElement).toBe(coinRow());
     });
 });
 
@@ -700,49 +665,6 @@ describe("dev tools panel lazy loading", () => {
     });
 });
 
-describe("dev tools panel clear", () => {
-    it("empties the list and the badge without touching the dev buffer", async () => {
-        const { recordTrackedEvent, getTrackedEntries } = await mountPanel();
-        recordTrackedEvent("coin", {});
-        recordTrackedEvent("jump", {});
-
-        toolButton("Clear").click();
-
-        expect(rows()).toHaveLength(0);
-        expect(countBadge()).toBe("0");
-        expect(document.querySelector(PANEL_SELECTOR)?.textContent).toBe("No events tracked yet.");
-        expect(getTrackedEntries()).toHaveLength(2);
-    });
-
-    it("shows entries tracked after clearing, in flat and grouped mode", async () => {
-        const { recordTrackedEvent, track } = await mountPanel();
-        recordTrackedEvent("coin", {});
-        toolButton("Clear").click();
-
-        track("jump");
-        expect(rows().map((row) => row.firstChild?.textContent)).toEqual(["jump"]);
-        expect(countBadge()).toBe("1");
-
-        toolButton("Group by key").click();
-        toolButton("Clear").click();
-        track("jump");
-        expect(rows().map((row) => rowParts(row)[2])).toEqual(["1"]);
-    });
-
-    it("leaves the track() rate limit in force", async () => {
-        const { track } = await loadSdk();
-        for (let i = 0; i < 5; i++) {
-            track(`e${i}`);
-        }
-        await flushPanelLoad();
-        toolButton("Clear").click();
-
-        track("after_clear");
-
-        expect(rows().map(rowParts)).toEqual([["⚠ dropped after_clear", "1.00s"]]);
-    });
-});
-
 describe("dev tools detail popup", () => {
     it("shows the key and time in its header", async () => {
         const { recordTrackedEvent } = await mountPanel();
@@ -761,7 +683,9 @@ describe("dev tools detail popup", () => {
         hoverDetail(rows()[0]);
 
         const lines = Array.from(detail().children).map((child) => child.textContent);
-        expect(lines.slice(1)).toEqual(["level: 2", "won: false", 'mode: "hard"', "source: minit"]);
+        const footer = Array.from(detail().lastElementChild?.children ?? []).map((child) => child.textContent);
+        expect(lines.slice(1, 4)).toEqual(["level: 2", "won: false", 'mode: "hard"']);
+        expect(footer).toEqual(["received: 1", "source: minit"]);
     });
 
     it("says when an event has no properties", async () => {
@@ -888,5 +812,718 @@ describe("dev tools detail popup", () => {
 
         row.blur();
         expect(detail().style.display).toBe("none");
+    });
+});
+
+describe("dev tools detail popup size and received count", () => {
+    it("shows the size for creator events and counts accepted events per key", async () => {
+        const { track } = await loadSdk();
+        track("coin", { v: 1 });
+        now += 200;
+        track("coin", { v: 2 });
+        await flushPanelLoad();
+
+        const expectedSize = new NodeTextEncoder().encode(JSON.stringify({ key: "coin", props: { v: 2 } })).length;
+        const text = hoverDetail(rows()[0]);
+        expect(text).toContain(`size: ${expectedSize} B`);
+        expect(text).toContain("received: 2");
+    });
+
+    it("omits the size for built-in events", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("minit.loading_done", {});
+
+        const text = hoverDetail(rows()[0]);
+
+        expect(text).not.toContain("size:");
+        expect(text).toContain("received: 1");
+    });
+
+    it.each([
+        ["bytes-cap", "event data this load would exceed 16 KB"],
+        ["after-result", "sent after reportResult()"],
+    ] as const)("explains the %s drop reason", async (reason, text) => {
+        const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
+        recordTrackedDrop("some_key", reason);
+        showTrackDevPanel();
+
+        expect(hoverDetail(rows("drop")[0])).toContain(`reason: ${text}`);
+    });
+});
+
+describe("dev tools usage indicator", () => {
+    const RGB = { ink: "rgb(151, 162, 189)", warn: "rgb(229, 184, 76)", neg: "rgb(224, 108, 108)" };
+
+    it("shows the total size and percentage of the per-load cap", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("a", {}, 100);
+        recordTrackedEvent("b", {}, 1024);
+
+        expect(usageIndicator().textContent).toBe("1.1 KB (93% left)");
+        expect(usagePercent().style.color).toBe(RGB.ink);
+    });
+
+    it("trims a whole number of KB", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("a", {}, 16 * 1024);
+
+        expect(usageIndicator().textContent).toBe("16 KB (0% left)");
+    });
+
+    it("turns warn at 80% and neg at the cap", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+
+        recordTrackedEvent("a", {}, Math.ceil(16 * 1024 * 0.8));
+        expect(usagePercent().style.color).toBe(RGB.warn);
+
+        recordTrackedEvent("b", {}, 16 * 1024);
+        expect(usagePercent().style.color).toBe(RGB.neg);
+    });
+
+    it("turns neg after a bytes-cap drop", async () => {
+        const { recordTrackedEvent, recordTrackedDrop } = await mountPanel();
+        recordTrackedEvent("a", {}, 10);
+
+        recordTrackedDrop("b", "bytes-cap");
+
+        expect(usagePercent().style.color).toBe(RGB.neg);
+    });
+
+    it("shows the Total event size detail on hover and on focus", async () => {
+        await mountPanel();
+
+        usageIndicator().dispatchEvent(new MouseEvent("mouseenter"));
+        expect(detail().style.display).toBe("block");
+        expect(detail().textContent).toContain("Total event size");
+
+        usageIndicator().dispatchEvent(new MouseEvent("mouseleave"));
+        usageIndicator().focus();
+        expect(detail().style.display).toBe("block");
+        expect(detail().textContent).toContain("Total event size");
+    });
+});
+
+describe("dev tools Result tab", () => {
+    it("shows a pending placeholder, then opens the panel on the Result tab once the result arrives", async () => {
+        const { reportResult } = await mountPanel();
+        expect(tabs()[2].querySelector("span")?.title).toBe("Result pending");
+        expect(tools().textContent).toContain("No result received yet.");
+
+        await reportAndFlush(() => reportResult(42));
+
+        expect(isOpen()).toBe(true);
+        expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
+        expect(tabs()[2].querySelector("span")?.title).toBe("Result received");
+        expect(tabs()[2].querySelector("span")?.getAttribute("aria-label")).toBe("Result received");
+    });
+
+    it("shows the score, flavor text and play duration", async () => {
+        const { reportResult } = await mountPanel();
+        now = 2500;
+
+        await reportAndFlush(() => reportResult(42, { flavorText: "Nice run" }));
+
+        const card = tools().querySelector("[data-result]");
+        expect(card?.textContent).toContain("42");
+        expect(card?.textContent).toContain("Nice run");
+        expect(card?.textContent).toContain("⏱ 2.50s");
+    });
+
+    it("omits the flavor text badge when none is given", async () => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult("WIN"));
+
+        const card = tools().querySelector("[data-result]");
+        expect(card?.textContent).toContain("WIN");
+        expect(card?.textContent).not.toContain("Flavor Text");
+    });
+
+    it("does not render the removed fullscreen result overlay", async () => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1));
+
+        expect(document.getElementById("dashboard-overlay")).toBeNull();
+    });
+});
+
+describe("dev tools Config tab", () => {
+    const configTab = () => tabs()[0];
+    const configRows = () =>
+        Array.from(tools().querySelectorAll<HTMLElement>("[data-config-key]:not([data-config-key='tutorial'])"));
+
+    it("shows a placeholder until a config value is requested", async () => {
+        await mountPanel();
+
+        expect(tools().textContent).toContain("No config values requested yet.");
+        expect(configTab().querySelector("span")?.textContent).toBe("0");
+    });
+
+    it("renders one row per key with value and source, counting distinct keys", async () => {
+        await mountPanel();
+        const { recordConfigRequest } = await import("./trackDevBuffer");
+
+        recordConfigRequest({ key: "seed", value: "abc", source: "injected" });
+        recordConfigRequest({ key: "mode", value: "", source: "default" });
+        recordConfigRequest({ key: "gone", value: undefined, source: "missing" });
+        recordConfigRequest({ key: "seed", value: "xyz", source: "injected" });
+
+        expect(configRows().map((row) => Array.from(row.children).map((child) => child.textContent))).toEqual([
+            ["injected", "seed", "xyz", "✎"],
+            ["default", "mode", '""', "✎"],
+            ["missing", "gone", "—", "✎"],
+        ]);
+        expect(configTab().querySelector("span")?.textContent).toBe("3");
+    });
+});
+
+describe("dev tools tab persistence", () => {
+    it("restores the selected tab after a remount", async () => {
+        await mountPanel();
+        tabs()[2].click();
+        expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
+        document.body.innerHTML = "";
+
+        await mountPanel();
+
+        expect(tabs()[2].getAttribute("aria-selected")).toBe("true");
+    });
+
+    it("falls back to Tracking for an unknown saved tab", async () => {
+        localStorage.setItem("minit-dev-tools-layout", JSON.stringify({ tab: "Nope" }));
+
+        await mountPanel();
+
+        expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+    });
+});
+
+const GREEN = "rgb(79, 191, 134)";
+
+function setUrl(search: string): void {
+    window.history.replaceState({}, "", search ? `/?${search}` : "/");
+}
+
+function spyNavigation(): () => boolean {
+    const consoleError = jest.spyOn(console, "error").mockImplementation(() => {});
+    // jsdom cannot stub location.assign/reload; its unimplemented-navigation report proves the call.
+    return () => consoleError.mock.calls.some((call) => String(call[0]).includes("navigation"));
+}
+
+function progressBar(label: string): HTMLElement {
+    const bar = tools().querySelector<HTMLElement>(`[role="progressbar"][aria-label="${label}"]`);
+    if (!bar) {
+        throw new Error(`no "${label}" progress bar`);
+    }
+    return bar;
+}
+
+function switchNamed(label: string): HTMLButtonElement {
+    const toggle = tools().querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`);
+    if (!toggle) {
+        throw new Error(`no "${label}" switch`);
+    }
+    return toggle;
+}
+
+function settingsButton(): HTMLButtonElement {
+    return tools().querySelector<HTMLButtonElement>("[data-settings]")!;
+}
+
+function launcherAlert(): Element | null {
+    return launcher().querySelector("[data-launcher-alert]");
+}
+
+describe("dev tools Tracking tab footer and notices", () => {
+    const trackingPanel = () => byId(PANEL_SELECTOR.slice(1)).closest<HTMLElement>('[role="tabpanel"]')!;
+    const dropNotice = () => trackingPanel().querySelector<HTMLElement>('[data-notice="error"]')!;
+
+    it("reports the remaining event size on the progress bar and indicator", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        expect(progressBar("Remaining event size").getAttribute("aria-valuenow")).toBe("100");
+
+        recordTrackedEvent("a", {}, 4 * 1024);
+
+        expect(progressBar("Remaining event size").getAttribute("aria-valuenow")).toBe("75");
+        expect(usageIndicator().textContent).toBe("4 KB (75% left)");
+    });
+
+    it("shows the Minit Studio disclaimer", async () => {
+        await mountPanel();
+
+        expect(trackingPanel().querySelector('[data-notice="info"]')?.textContent).toBe(
+            "Check out the tracked events for your games in Minit Studio!",
+        );
+    });
+
+    it("has no drop notice or alerts while nothing was dropped", async () => {
+        const { track } = await loadSdk();
+        track("level_start");
+        await flushPanelLoad();
+
+        expect(dropNotice().style.display).toBe("none");
+        expect(tabs()[1].querySelector("span")?.hasAttribute("data-alert")).toBe(false);
+        expect(launcherAlert()).toBeNull();
+    });
+
+    it("lists dropped events by reason in a red notice and raises the tab and launcher alerts", async () => {
+        const { track } = await loadSdk();
+        track("bad key!");
+        await flushPanelLoad();
+
+        expect(dropNotice().style.display).toBe("block");
+        expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
+            "1 event was thrown away and never sent:",
+            "1× invalid key",
+        ]);
+
+        track("other bad!");
+        track("minit.sneaky");
+
+        expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
+            "3 events were thrown away and never sent:",
+            "2× invalid key",
+            "1× reserved minit. prefix",
+        ]);
+        expect(tabs()[1].querySelector("span")?.hasAttribute("data-alert")).toBe(true);
+        expect(launcherAlert()?.textContent).toBe("!");
+        expect(launcher().getAttribute("aria-label")).toBe("Minit SDK tools — has errors");
+    });
+});
+
+describe("dev tools Tracking row highlighting", () => {
+    const marked = () => rows().map((row) => row.hasAttribute("data-same"));
+
+    it("marks every row of the same kind and key on hover and clears it on leave", async () => {
+        const { recordTrackedEvent, recordTrackedDrop } = await mountPanel();
+        recordTrackedEvent("coin", {});
+        recordTrackedEvent("jump", {});
+        recordTrackedEvent("coin", {});
+        recordTrackedDrop("coin", "rate");
+        const [drop, coin] = rows();
+
+        coin.dispatchEvent(new MouseEvent("mouseenter"));
+        expect(marked()).toEqual([false, true, false, true]);
+
+        coin.dispatchEvent(new MouseEvent("mouseleave"));
+        expect(marked()).toEqual([false, false, false, false]);
+
+        drop.dispatchEvent(new MouseEvent("mouseenter"));
+        expect(marked()).toEqual([true, false, false, false]);
+    });
+
+    it("marks rows of the same type on focus and clears them on blur", async () => {
+        const { recordTrackedEvent } = await mountPanel();
+        recordTrackedEvent("coin", {});
+        recordTrackedEvent("jump", {});
+        recordTrackedEvent("coin", {});
+
+        (rows()[0] as HTMLElement).focus();
+        expect(marked()).toEqual([true, false, true]);
+
+        (rows()[0] as HTMLElement).blur();
+        expect(marked()).toEqual([false, false, false]);
+    });
+});
+
+describe("dev tools Config tab tutorial row, editor and reset", () => {
+    const configRows = () => Array.from(tools().querySelectorAll<HTMLElement>("[data-config-key]"));
+    const editDialog = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Edit config"]');
+    const editButton = (index: number) => configRows()[index].querySelector<HTMLButtonElement>("[data-edit]")!;
+
+    afterEach(() => {
+        setUrl("");
+    });
+
+    async function mountWithConfig() {
+        const sdk = await mountPanel();
+        const { recordConfigRequest } = await import("./trackDevBuffer");
+        recordConfigRequest({ key: "seed", value: "abc", source: "injected" });
+        recordConfigRequest({ key: "mode", value: "easy", source: "default" });
+        return sdk;
+    }
+
+    it("starts with the tutorial row whose switch is on for a first-time user", async () => {
+        await mountWithConfig();
+
+        expect(configRows().map((row) => row.dataset.configKey)).toEqual(["tutorial", "seed", "mode"]);
+        expect(configRows()[0].contains(switchNamed("First-time user"))).toBe(true);
+        expect(switchNamed("First-time user").getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("turns the switch off when ?hasPlayedGame=true simulates a returning player", async () => {
+        setUrl("hasPlayedGame=true");
+        await mountPanel();
+
+        expect(switchNamed("First-time user").getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("reloads with new params when the tutorial switch is toggled", async () => {
+        setUrl("hasPlayedGame=true&tutorial=1");
+        await mountPanel();
+        const navigated = spyNavigation();
+
+        switchNamed("First-time user").click();
+
+        expect(navigated()).toBe(true);
+    });
+
+    it("starts regular rows with the source pill and ends them with an edit button", async () => {
+        await mountWithConfig();
+        const seedRow = configRows()[1];
+
+        expect(seedRow.firstElementChild?.textContent).toBe("injected");
+        expect(seedRow.lastElementChild).toBe(editButton(1));
+        expect(editButton(1).getAttribute("aria-label")).toBe("Edit seed");
+    });
+
+    it("opens the editor with one input per key and focuses the clicked one", async () => {
+        await mountWithConfig();
+
+        editButton(2).click();
+
+        const dialog = editDialog();
+        expect(dialog).not.toBeNull();
+        const inputs = Array.from(dialog!.querySelectorAll("input"));
+        expect(inputs.map((input) => input.previousElementSibling?.textContent)).toEqual(["seed", "mode"]);
+        expect(inputs[0].value).toBe("abc");
+        expect(inputs[1].value).toBe("");
+        expect(inputs[1].placeholder).toBe("default: easy");
+        expect(document.activeElement).toBe(inputs[1]);
+    });
+
+    it("closes the editor on Escape", async () => {
+        await mountWithConfig();
+        editButton(1).click();
+
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+
+        expect(editDialog()).toBeNull();
+    });
+
+    it("stays open when a press inside the dialog ends on the backdrop, and closes on a backdrop click", async () => {
+        await mountWithConfig();
+        editButton(1).click();
+        const backdrop = editDialog()!;
+        const form = backdrop.querySelector("form")!;
+
+        form.dispatchEvent(pointer("pointerdown", 0, 0));
+        backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(editDialog()).not.toBeNull();
+
+        backdrop.dispatchEvent(pointer("pointerdown", 0, 0));
+        backdrop.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        expect(editDialog()).toBeNull();
+    });
+
+    it("reloads with the edited values on Apply & reload", async () => {
+        await mountWithConfig();
+        editButton(1).click();
+        const navigated = spyNavigation();
+        const apply = Array.from(editDialog()!.querySelectorAll("button")).find(
+            (button) => button.textContent === "Apply & reload",
+        )!;
+
+        apply.click();
+
+        expect(navigated()).toBe(true);
+    });
+
+    it("disables Reset to defaults when only userData is in the URL", async () => {
+        setUrl("userData=abc");
+        await mountPanel();
+
+        const reset = tools().querySelector<HTMLButtonElement>("[data-config-reset]")!;
+        expect(reset.textContent).toBe("Reset to defaults");
+        expect(reset.disabled).toBe(true);
+    });
+
+    it("enables Reset to defaults for injected params and reloads on click", async () => {
+        setUrl("seed=abc&userData=abc");
+        await mountPanel();
+        const navigated = spyNavigation();
+
+        const reset = tools().querySelector<HTMLButtonElement>("[data-config-reset]")!;
+        expect(reset.disabled).toBe(false);
+        reset.click();
+
+        expect(navigated()).toBe(true);
+    });
+});
+
+describe("dev tools Result tab userData button and auto-open", () => {
+    it.each([
+        ["received", "abc"],
+        ["none", undefined],
+        ["too-big", "x".repeat(1025)],
+    ] as const)("marks the userData button as %s", async (state, userData) => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1, { userData }));
+
+        expect(tools().querySelector("[data-user-data]")?.getAttribute("data-user-data")).toBe(state);
+    });
+
+    it("switches to the User data tab when the userData button is clicked", async () => {
+        const { reportResult } = await mountPanel();
+        await reportAndFlush(() => reportResult(1, { userData: "abc" }));
+
+        tools().querySelector<HTMLButtonElement>("[data-user-data]")!.click();
+
+        expect(tabs()[3].getAttribute("aria-selected")).toBe("true");
+        expect(tabs()[2].getAttribute("aria-selected")).toBe("false");
+    });
+
+    it("stays closed on a result when Open on result is turned off", async () => {
+        localStorage.setItem("minit-dev-tools-settings", JSON.stringify({ autoOpenOnResult: false }));
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(42));
+
+        expect(isOpen()).toBe(false);
+        expect(tabs()[2].getAttribute("aria-selected")).toBe("false");
+    });
+});
+
+describe("dev tools User data tab", () => {
+    const value = () => tools().querySelector<HTMLElement>("[data-user-data-value]")!;
+    const userDataPanel = () => value().closest<HTMLElement>('[role="tabpanel"]')!;
+    const errorNotice = () => userDataPanel().querySelector<HTMLElement>('[data-notice="error"]')!;
+    const valueLabel = () => value().querySelector("[data-result]")?.firstElementChild?.textContent;
+    const tabBadge = () => tabs()[3].querySelector<HTMLElement>("span")!;
+
+    afterEach(() => {
+        setUrl("");
+    });
+
+    it("says there is no user data when none is loaded", async () => {
+        await mountPanel();
+
+        expect(value().textContent).toBe("No user data yet.");
+        expect(progressBar("Remaining user data size").getAttribute("aria-valuenow")).toBe("100");
+    });
+
+    it("shows ?userData pretty-printed as loaded at start", async () => {
+        setUrl(`userData=${encodeURIComponent('{"level":3}')}`);
+        await mountPanel();
+
+        expect(valueLabel()).toBe("Loaded at start");
+        expect(value().querySelector("pre")?.textContent).toBe('{\n  "level": 3\n}');
+        expect(errorNotice().style.display).toBe("none");
+    });
+
+    it("switches to the reported value after reportResult()", async () => {
+        setUrl("userData=old");
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1, { userData: "new" }));
+
+        expect(valueLabel()).toBe("Reported with reportResult()");
+        expect(value().querySelector("pre")?.textContent).toBe("new");
+    });
+
+    it("keeps the loaded value when the result reports no userData", async () => {
+        setUrl("userData=old");
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1));
+
+        expect(valueLabel()).toBe("Loaded at start");
+        expect(value().querySelector("pre")?.textContent).toBe("old");
+    });
+
+    it("reflects the size on the progress bar", async () => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1, { userData: "x".repeat(512) }));
+
+        expect(progressBar("Remaining user data size").getAttribute("aria-valuenow")).toBe("50");
+    });
+
+    it("flags reported user data over 1024 bytes with a notice and both alert badges", async () => {
+        const { reportResult } = await mountPanel();
+        expect(tabBadge().style.display).toBe("none");
+
+        await reportAndFlush(() => reportResult(1, { userData: "x".repeat(1025) }));
+
+        expect(errorNotice().style.display).toBe("block");
+        expect(errorNotice().firstElementChild?.textContent).toBe("User data too big");
+        expect(tabBadge().style.display).toBe("flex");
+        expect(tabBadge().textContent).toBe("!");
+        expect(launcherAlert()).not.toBeNull();
+        expect(progressBar("Remaining user data size").getAttribute("aria-valuenow")).toBe("0");
+    });
+
+    it("does not flag exactly 1024 bytes", async () => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(1, { userData: "x".repeat(1024) }));
+
+        expect(errorNotice().style.display).toBe("none");
+        expect(launcherAlert()).toBeNull();
+    });
+});
+
+describe("dev tools Suggestions tab", () => {
+    const checkStatus = (title: string) =>
+        tools().querySelector(`[data-check="${title}"] [data-check-status]`)?.getAttribute("data-check-status");
+    const badge = () => tabs()[4].querySelector("span")?.textContent;
+
+    it("shows one row per check with a status icon", async () => {
+        await mountPanel();
+
+        expect(Array.from(tools().querySelectorAll("[data-check]")).map((row) => row.getAttribute("data-check"))).toEqual([
+            "Uses the Minit SDK",
+            "Signals when it is ready to play",
+            "Reports a result",
+            "First-play tutorial",
+            "Declares config values",
+            "No external requests",
+        ]);
+        expect(checkStatus("Uses the Minit SDK")).toBe("pass");
+        expect(checkStatus("Signals when it is ready to play")).toBe("warn");
+        expect(checkStatus("Reports a result")).toBe("unverified");
+        expect(checkStatus("First-play tutorial")).toBe("warn");
+        expect(checkStatus("Declares config values")).toBe("unverified");
+    });
+
+    it("warns about config values once meta.json cannot be fetched", async () => {
+        await mountPanel();
+
+        await flushPanelLoad();
+
+        expect(checkStatus("Declares config values")).toBe("warn");
+        expect(tools().querySelector('[data-check="Declares config values"]')?.textContent).toContain(
+            "Couldn't load meta.json",
+        );
+    });
+
+    it("passes checks as the game calls loadingDone(), reportResult() and shouldShowTutorial()", async () => {
+        const { loadingDone, reportResult } = await mountPanel();
+        const { shouldShowTutorial } = await import("./tutorial/gating");
+        await flushPanelLoad();
+        expect(badge()).toBe("2/6");
+
+        loadingDone();
+        expect(checkStatus("Signals when it is ready to play")).toBe("pass");
+
+        reportResult(10);
+        expect(checkStatus("Reports a result")).toBe("pass");
+
+        shouldShowTutorial();
+        expect(checkStatus("First-play tutorial")).toBe("pass");
+
+        expect(badge()).toBe("5/6");
+    });
+});
+
+describe("dev tools Settings", () => {
+    it("opens the Settings view from the gear button with both switches on by default", async () => {
+        await mountPanel();
+
+        settingsButton().click();
+
+        expect(settingsButton().getAttribute("aria-pressed")).toBe("true");
+        expect(tabs().every((tab) => tab.getAttribute("aria-selected") === "false")).toBe(true);
+        expect(switchNamed("Open on result").getAttribute("aria-checked")).toBe("true");
+        expect(switchNamed("Close on replay").getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("persists Close on replay and then keeps the panel open on Replay", async () => {
+        await mountPanel();
+        launcher().click();
+        settingsButton().click();
+        const navigated = spyNavigation();
+
+        switchNamed("Close on replay").click();
+        expect(JSON.parse(localStorage.getItem("minit-dev-tools-settings") ?? "{}")).toEqual({
+            autoOpenOnResult: true,
+            closeOnReplay: false,
+        });
+
+        replay().click();
+
+        expect(navigated()).toBe(true);
+        expect(isOpen()).toBe(true);
+    });
+
+    it("loads saved settings on mount", async () => {
+        localStorage.setItem("minit-dev-tools-settings", JSON.stringify({ autoOpenOnResult: false, closeOnReplay: false }));
+
+        await mountPanel();
+
+        expect(switchNamed("Open on result").getAttribute("aria-checked")).toBe("false");
+        expect(switchNamed("Close on replay").getAttribute("aria-checked")).toBe("false");
+    });
+
+    it("falls back to defaults for corrupt saved settings", async () => {
+        localStorage.setItem("minit-dev-tools-settings", "{nope");
+
+        await mountPanel();
+
+        expect(switchNamed("Open on result").getAttribute("aria-checked")).toBe("true");
+        expect(switchNamed("Close on replay").getAttribute("aria-checked")).toBe("true");
+    });
+});
+
+describe("dev tools launcher result indicator", () => {
+    const ring = () => launcher().querySelector("[data-result-countdown]");
+    const check = () => launcher().querySelector("[data-result-check]");
+
+    it("turns the launcher green and shows the check overlay when the result arrives", async () => {
+        const { reportResult } = await mountPanel();
+        expect(check()).toBeNull();
+
+        await reportAndFlush(() => reportResult(1));
+
+        expect(launcher().style.background).toBe(GREEN);
+        expect(check()).not.toBeNull();
+    });
+
+    it("shows no countdown ring for a delayed result without animation support", async () => {
+        const { reportResult } = await mountPanel();
+        jest.useFakeTimers({ doNotFake: ["performance"] });
+
+        reportResult(1, { delay: 500 });
+        expect(ring()).toBeNull();
+        expect(check()).not.toBeNull();
+        expect(launcher().style.background).not.toBe(GREEN);
+
+        jest.advanceTimersByTime(500);
+        expect(launcher().style.background).toBe(GREEN);
+    });
+
+    describe("with animation support", () => {
+        const fakeAnimation = () => ({ cancel: () => {}, finished: Promise.resolve(), onfinish: null });
+
+        beforeEach(() => {
+            (Element.prototype as { animate?: unknown }).animate = jest.fn(fakeAnimation);
+        });
+
+        afterEach(() => {
+            delete (Element.prototype as { animate?: unknown }).animate;
+        });
+
+        it("shows a countdown ring while a delayed result is pending and removes it on arrival", async () => {
+            const { reportResult } = await mountPanel();
+            jest.useFakeTimers({ doNotFake: ["performance"] });
+
+            reportResult(1, { delay: 500 });
+            expect(ring()).not.toBeNull();
+
+            jest.advanceTimersByTime(500);
+            expect(ring()).toBeNull();
+            expect(launcher().style.background).toBe(GREEN);
+        });
+
+        it("shows no countdown ring for an immediate result", async () => {
+            const { reportResult } = await mountPanel();
+
+            await reportAndFlush(() => reportResult(1));
+
+            expect(ring()).toBeNull();
+            expect(check()).not.toBeNull();
+        });
     });
 });

@@ -2,14 +2,18 @@ import { isTestEnvironment } from "../utils.js";
 import { getLatoFontFaceCSS } from "./fonts/lato.js";
 import {
     MAX_DEV_ENTRIES,
+    getConfigRequests,
     getReceivedCount,
+    getPendingResult,
     getReportedResult,
+    subscribeConfigRequests,
+    subscribePendingResult,
     getTrackedEntries,
     getTrackedUsage,
     subscribeReportedResult,
     subscribeTrackedEntries,
 } from "./trackDevBuffer.js";
-import type { ReportedResult } from "./trackDevBuffer.js";
+import type { ConfigRequest, ConfigSource, PendingResult, ReportedResult } from "./trackDevBuffer.js";
 import {
     MAX_EVENTS_PER_LOAD,
     MAX_PAYLOAD_BYTES_PER_LOAD,
@@ -18,6 +22,9 @@ import {
     RESERVED_KEY_PREFIX,
 } from "./trackLimits.js";
 import type { TrackDropReason, TrackedEntry } from "./trackDevBuffer.js";
+import { USER_DATA_MAX_BYTES, USER_DATA_PARAM_KEY, getUserData } from "./userData.js";
+import { HAS_PLAYED_GAME_PARAM_KEY } from "./config.js";
+import { hasPlayedGame } from "./tutorial/gating.js";
 
 const LAUNCHER_ID = "minit-dev-launcher";
 const TOOLS_ID = "minit-dev-tools";
@@ -40,6 +47,7 @@ const COLORS = {
     neg: "#E06C6C",
     warn: "#E5B84C",
     pos: "#4FBF86",
+    info: "#5B8DEF",
     onAccent: "#FFFFFF",
 };
 
@@ -52,7 +60,7 @@ const EDGE = 12;
 const GAP = 8;
 const DRAG_THRESHOLD = 6;
 const Z_INDEX = "2147483647";
-const PANEL_DEFAULT_WIDTH = 300;
+const PANEL_DEFAULT_WIDTH = 380;
 const PANEL_DEFAULT_HEIGHT = 320;
 const PANEL_MIN_WIDTH = 240;
 const PANEL_MIN_HEIGHT = 160;
@@ -114,10 +122,30 @@ function mount(body: HTMLElement): void {
     injectStyles();
 
     const detail = createDetailPanel();
-    const tools = createToolsPanel([createTrackedEventsTool(detail), createResultTool()]);
+    const attachDetail = createDetailAttacher(detail);
+    const saved = loadLayout();
+    let selectedTab = saved.tab;
+    const alerts = createAlerts();
+    const settings = loadSettings();
+    let openTab = (_label: string) => {};
+    const tools = createToolsPanel(
+        [
+            createConfigTool(body, detail, attachDetail),
+            createTrackedEventsTool(detail, attachDetail, alerts),
+            createResultTool((label) => openTab(label)),
+            createUserDataTool(alerts),
+            createSuggestionsTool(),
+        ],
+        createSettingsTool(settings),
+        selectedTab,
+        (label) => {
+            selectedTab = label;
+            persist();
+        },
+    );
+    openTab = tools.selectLabel;
     const launcher = createLauncher();
 
-    const saved = loadLayout();
     if (saved.width !== undefined && saved.height !== undefined) {
         tools.panel.style.width = `${saved.width}px`;
         tools.panel.style.height = `${saved.height}px`;
@@ -129,6 +157,7 @@ function mount(body: HTMLElement): void {
             width: parseFloat(tools.panel.style.width),
             height: parseFloat(tools.panel.style.height),
             open,
+            tab: selectedTab,
         });
 
     const replay = createReplayButton();
@@ -164,6 +193,12 @@ function mount(body: HTMLElement): void {
                 element.style.display = "none";
             }
         }
+    };
+    replay.onclick = () => {
+        if (settings.closeOnReplay) {
+            setOpen(false);
+        }
+        location.reload();
     };
     window.addEventListener("keydown", (event) => {
         if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key.toLowerCase() === "m") {
@@ -209,6 +244,243 @@ function mount(body: HTMLElement): void {
     if (saved.open) {
         setOpen(true);
     }
+    attachResultIndicator(launcher);
+    attachAlertBadge(launcher, alerts);
+
+    const showResult = () => {
+        if (!settings.autoOpenOnResult) {
+            return;
+        }
+        tools.selectLabel("Result");
+        if (!open) {
+            setOpen(true);
+        }
+    };
+    if (getReportedResult()) {
+        showResult();
+    }
+    subscribeReportedResult(showResult);
+}
+
+function attachAlertBadge(launcher: HTMLElement, alerts: Alerts): void {
+    const badge = document.createElement("span");
+    badge.dataset.launcherAlert = "";
+    badge.textContent = "!";
+    badge.setAttribute("aria-hidden", "true");
+    Object.assign(badge.style, {
+        position: "absolute",
+        top: "-6px",
+        right: "-6px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "18px",
+        height: "18px",
+        boxSizing: "border-box",
+        borderRadius: "50%",
+        border: `2px solid ${COLORS.surface}`,
+        background: COLORS.neg,
+        color: COLORS.onAccent,
+        font: `900 10px/1 ${FONT}`,
+        pointerEvents: "none",
+    });
+    alerts.subscribe((active) => {
+        if (!active) {
+            badge.remove();
+            launcher.setAttribute("aria-label", "Minit SDK tools");
+            return;
+        }
+        if (!badge.isConnected) {
+            launcher.append(badge);
+            if (canAnimate(badge)) {
+                badge.animate([{ transform: "scale(0)" }, { transform: "scale(1.3)" }, { transform: "scale(1)" }], {
+                    duration: 400,
+                    easing: "ease-out",
+                });
+            }
+        }
+        launcher.setAttribute("aria-label", "Minit SDK tools — has errors");
+    });
+}
+
+const RING_INSET = 5;
+
+function attachResultIndicator(launcher: HTMLElement): void {
+    const size = LAUNCHER_SIZE + RING_INSET * 2;
+    const radius = size / 2 - 2;
+    const circumference = 2 * Math.PI * radius;
+    const ring = document.createElementNS(SVG_NS, "svg");
+    ring.dataset.resultCountdown = "";
+    ring.setAttribute("viewBox", `0 0 ${size} ${size}`);
+    ring.setAttribute("aria-hidden", "true");
+    Object.assign(ring.style, {
+        position: "absolute",
+        left: `${-RING_INSET - 2}px`,
+        top: `${-RING_INSET - 2}px`,
+        width: `${size}px`,
+        height: `${size}px`,
+        transform: "rotate(-90deg)",
+        pointerEvents: "none",
+        overflow: "visible",
+    });
+    const track = document.createElementNS(SVG_NS, "circle");
+    const progress = document.createElementNS(SVG_NS, "circle");
+    for (const [circle, color] of [
+        [track, "rgba(255, 255, 255, 0.18)"],
+        [progress, COLORS.pos],
+    ] as const) {
+        circle.setAttribute("cx", String(size / 2));
+        circle.setAttribute("cy", String(size / 2));
+        circle.setAttribute("r", String(radius));
+        circle.setAttribute("fill", "none");
+        circle.setAttribute("stroke", color);
+        circle.setAttribute("stroke-width", "3");
+        circle.setAttribute("stroke-linecap", "round");
+    }
+    progress.setAttribute("stroke-dasharray", String(circumference));
+    ring.append(track, progress);
+
+    const check = document.createElementNS(SVG_NS, "svg");
+    check.dataset.resultCheck = "";
+    check.setAttribute("viewBox", `0 0 ${LAUNCHER_SIZE} ${LAUNCHER_SIZE}`);
+    check.setAttribute("aria-hidden", "true");
+    Object.assign(check.style, {
+        position: "absolute",
+        left: "-2px",
+        top: "-2px",
+        width: `${LAUNCHER_SIZE}px`,
+        height: `${LAUNCHER_SIZE}px`,
+        pointerEvents: "none",
+    });
+    const disc = document.createElementNS(SVG_NS, "circle");
+    disc.setAttribute("cx", String(LAUNCHER_SIZE / 2));
+    disc.setAttribute("cy", String(LAUNCHER_SIZE / 2));
+    disc.setAttribute("r", String(LAUNCHER_SIZE / 2));
+    disc.setAttribute("fill", COLORS.pos);
+    const tick = document.createElementNS(SVG_NS, "path");
+    tick.setAttribute("d", "M14 25l7 7 13-14");
+    tick.setAttribute("pathLength", "1");
+    tick.setAttribute("fill", "none");
+    tick.setAttribute("stroke", COLORS.onAccent);
+    tick.setAttribute("stroke-width", "4.5");
+    tick.setAttribute("stroke-linecap", "round");
+    tick.setAttribute("stroke-linejoin", "round");
+    tick.setAttribute("stroke-dasharray", "1");
+    tick.setAttribute("stroke-dashoffset", "1");
+    check.append(disc, tick);
+
+    let tickOffset = 1;
+    let waiting = false;
+    let idle: Animation | undefined;
+    let hideTimer: ReturnType<typeof setTimeout> | undefined;
+    const animated = canAnimate(launcher);
+
+    const drawTick = (to: number, duration: number): Promise<unknown> => {
+        const from = tickOffset;
+        tickOffset = to;
+        tick.setAttribute("stroke-dashoffset", String(to));
+        if (!animated) {
+            return Promise.resolve();
+        }
+        return tick.animate([{ strokeDashoffset: String(from) }, { strokeDashoffset: String(to) }], {
+            duration,
+            easing: "ease-out",
+        }).finished;
+    };
+
+    const showCheck = () => {
+        clearTimeout(hideTimer);
+        if (check.isConnected) {
+            return;
+        }
+        tickOffset = 1;
+        tick.setAttribute("stroke-dashoffset", "1");
+        launcher.append(check);
+        if (animated) {
+            check.animate([{ opacity: 0, transform: "scale(0.4)" }, { opacity: 1, transform: "scale(1)" }], {
+                duration: 220,
+                easing: "cubic-bezier(0.2, 0.9, 0.3, 1.2)",
+            });
+        }
+    };
+
+    let countdown: Animation | undefined;
+    const startCountdown = (pending: PendingResult) => {
+        const remaining = pending.delayMs - (performance.now() - pending.reportedAt);
+        if (remaining <= 0) {
+            return;
+        }
+        waiting = true;
+        disc.setAttribute("fill", COLORS.warn);
+        progress.setAttribute("stroke", COLORS.warn);
+        showCheck();
+        void drawTick(0, 320).then(() => {
+            if (animated && waiting) {
+                idle = check.animate([{ transform: "scale(1)" }, { transform: "scale(0.9)" }, { transform: "scale(1)" }], {
+                    duration: 900,
+                    iterations: Infinity,
+                    easing: "ease-in-out",
+                });
+            }
+        });
+        if (typeof progress.animate !== "function") {
+            return;
+        }
+        countdown?.cancel();
+        launcher.append(ring);
+        countdown = progress.animate(
+            [{ strokeDashoffset: String(circumference * (remaining / pending.delayMs)) }, { strokeDashoffset: "0" }],
+            { duration: remaining, easing: "linear", fill: "forwards" },
+        );
+    };
+
+    const celebrate = () => {
+        countdown?.cancel();
+        countdown = undefined;
+        ring.remove();
+        idle?.cancel();
+        idle = undefined;
+        const resuming = waiting && check.isConnected;
+        waiting = false;
+        launcher.style.background = COLORS.pos;
+        disc.setAttribute("fill", COLORS.pos);
+        if (resuming && animated) {
+            disc.animate([{ fill: COLORS.warn }, { fill: COLORS.pos }], { duration: 250, easing: "ease-out" });
+        }
+        showCheck();
+        void drawTick(0, resuming ? 250 : 320).then(() => {
+            if (animated) {
+                launcher.animate(
+                    [
+                        { transform: "scale(1)", boxShadow: "0 0 0 0 rgba(79, 191, 134, 0.8)" },
+                        { transform: "scale(1.2)", offset: 0.35 },
+                        { transform: "scale(0.94)", offset: 0.65 },
+                        { transform: "scale(1)", boxShadow: "0 0 0 18px rgba(79, 191, 134, 0)" },
+                    ],
+                    { duration: 650, easing: "ease-out" },
+                );
+            }
+            hideTimer = setTimeout(() => {
+                if (!animated) {
+                    check.remove();
+                    return;
+                }
+                check.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: "ease-in" }).finished.then(
+                    () => check.remove(),
+                    () => check.remove(),
+                );
+            }, 1600);
+        });
+    };
+
+    const pending = getPendingResult();
+    if (getReportedResult()) {
+        celebrate();
+    } else if (pending) {
+        startCountdown(pending);
+    }
+    subscribePendingResult(startCountdown);
+    subscribeReportedResult(celebrate);
 }
 
 function canAnimate(element: HTMLElement): boolean {
@@ -251,6 +523,7 @@ interface PanelLayout {
     width?: number;
     height?: number;
     open?: boolean;
+    tab?: string;
 }
 
 function loadLayout(): PanelLayout {
@@ -292,12 +565,13 @@ function injectStyles(): void {
     }
 }
 #${LAUNCHER_ID}:active { transform: scale(1); }
-#${TOOLS_ID} [data-clear]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
 #${LAUNCHER_ID}:focus-visible, #${TOOLS_ID} button:focus-visible {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: 2px;
 }
-#${PANEL_ID} [data-kind]:hover { background: ${COLORS.hoverRow}; }
+#${TOOLS_ID} [data-edit]:hover, #${TOOLS_ID} [data-config-reset]:not(:disabled):hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
+#${PANEL_ID} [data-same] { background: ${COLORS.hoverRow}; }
+#${PANEL_ID} [data-kind]:hover { background: ${COLORS.hoverRow}; box-shadow: inset 0 0 0 1px #3A4566; }
 #${PANEL_ID} [data-kind]:focus-visible, #${DETAIL_ID}:focus-visible {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: -2px;
@@ -487,7 +761,6 @@ function createReplayButton(): HTMLButtonElement {
         icon.append(path);
     }
     replay.append(icon, "Replay");
-    replay.onclick = () => location.reload();
     isolate(replay);
     return replay;
 }
@@ -496,7 +769,12 @@ function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }
 
-function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HTMLElement; grip: HTMLElement } {
+function createToolsPanel(
+    toolList: DevTool[],
+    settingsTool: DevTool,
+    initialLabel: string | undefined,
+    onSelect: (label: string) => void,
+): { panel: HTMLElement; header: HTMLElement; grip: HTMLElement; selectLabel: (label: string) => void } {
     const panel = document.createElement("div");
     panel.id = TOOLS_ID;
     panel.setAttribute("role", "dialog");
@@ -553,16 +831,55 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HT
     tabBar.setAttribute("role", "tablist");
     Object.assign(tabBar.style, {
         display: "flex",
-        gap: "20px",
-        padding: "0 12px",
+        flex: "1",
+        minWidth: "0",
+        gap: "16px",
+        overflowX: "auto",
+        scrollbarWidth: "none",
+    });
+
+    const settingsButton = document.createElement("button");
+    settingsButton.type = "button";
+    settingsButton.textContent = "⚙";
+    settingsButton.title = "Settings";
+    settingsButton.setAttribute("aria-label", "Settings");
+    settingsButton.dataset.settings = "";
+    Object.assign(settingsButton.style, {
+        flexShrink: "0",
+        width: "26px",
+        height: "26px",
+        alignSelf: "center",
+        padding: "0",
+        borderRadius: "6px",
+        border: "none",
+        background: "transparent",
+        font: `16px/1 ${FONT}`,
+        cursor: "pointer",
+    });
+    settingsButton.onclick = () => {
+        select(settingsTool);
+        onSelect(settingsTool.label);
+    };
+
+    const tabRow = document.createElement("div");
+    Object.assign(tabRow.style, {
+        display: "flex",
+        alignItems: "stretch",
+        gap: "8px",
+        padding: "0 8px 0 12px",
         borderBottom: `1px solid ${COLORS.border}`,
         flexShrink: "0",
     });
+    tabRow.append(tabBar, settingsButton);
 
     const body = document.createElement("div");
     Object.assign(body.style, { display: "flex", flexDirection: "column", minHeight: "0", flex: "1" });
 
     const select = (active: DevTool) => {
+        const settingsSelected = active === settingsTool;
+        settingsTool.content.style.display = settingsSelected ? "flex" : "none";
+        settingsButton.setAttribute("aria-pressed", String(settingsSelected));
+        settingsButton.style.color = settingsSelected ? COLORS.brandOrange : COLORS.inkSecondary;
         for (const tool of toolList) {
             const selected = tool === active;
             tool.content.style.display = selected ? "flex" : "none";
@@ -586,6 +903,8 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HT
             display: "flex",
             alignItems: "center",
             gap: "6px",
+            flexShrink: "0",
+            whiteSpace: "nowrap",
             padding: "6px 2px 8px",
             marginBottom: "-1px",
             border: "none",
@@ -594,12 +913,17 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HT
             font: `700 12px/1.2 ${FONT}`,
             cursor: "pointer",
         });
-        tab.onclick = () => select(tool);
+        tab.onclick = () => {
+            select(tool);
+            onSelect(tool.label);
+        };
         tool.tab = tab;
         tabBar.append(tab);
         body.append(tool.content);
     }
-    select(toolList[0]);
+    body.append(settingsTool.content);
+    const allTools = [...toolList, settingsTool];
+    select(allTools.find((tool) => tool.label === initialLabel) ?? toolList[0]);
 
     const grip = document.createElement("div");
     grip.setAttribute("aria-hidden", "true");
@@ -612,8 +936,15 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HT
     });
     grip.append(createGripDots());
 
-    panel.append(header, tabBar, body, grip);
-    return { panel, header, grip };
+    panel.append(header, tabRow, body, grip);
+    const selectLabel = (label: string) => {
+        const tool = allTools.find((candidate) => candidate.label === label);
+        if (tool) {
+            select(tool);
+            onSelect(label);
+        }
+    };
+    return { panel, header, grip, selectLabel };
 }
 
 function anchorTools(panel: HTMLElement, grip: HTMLElement, launcher: HTMLElement): void {
@@ -734,83 +1065,9 @@ function makeResizable(panel: HTMLElement, grip: HTMLElement, onResize: () => vo
     });
 }
 
-function createTrackedEventsTool(detail: HTMLElement): DevTool {
-    const content = document.createElement("div");
-    content.setAttribute("role", "tabpanel");
-    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
+type AttachDetail = (anchor: HTMLElement, render: () => void) => void;
 
-    const toolbar = document.createElement("div");
-    Object.assign(toolbar.style, {
-        display: "flex",
-        justifyContent: "flex-end",
-        gap: "6px",
-        padding: "8px 12px 4px",
-        flexShrink: "0",
-    });
-    const pillStyle = {
-        padding: "3px 10px",
-        borderRadius: "999px",
-        border: `1px solid ${COLORS.border}`,
-        font: `700 11px/1.4 ${FONT}`,
-        cursor: "pointer",
-    };
-    const clearButton = document.createElement("button");
-    clearButton.type = "button";
-    clearButton.dataset.clear = "";
-    clearButton.textContent = "Clear";
-    Object.assign(clearButton.style, pillStyle, { background: "transparent", color: COLORS.inkSecondary });
-    const groupToggle = document.createElement("button");
-    groupToggle.type = "button";
-    groupToggle.textContent = "Group by key";
-    Object.assign(groupToggle.style, pillStyle);
-    const usageIndicator = document.createElement("span");
-    usageIndicator.tabIndex = 0;
-    usageIndicator.setAttribute("aria-describedby", DETAIL_ID);
-    Object.assign(usageIndicator.style, { fontFamily: MONO, fontSize: "11px", cursor: "help" });
-    toolbar.append(clearButton, groupToggle);
-
-    const footer = document.createElement("div");
-    Object.assign(footer.style, {
-        display: "flex",
-        justifyContent: "flex-end",
-        padding: "6px 24px",
-        borderTop: `1px solid ${COLORS.border}`,
-        flexShrink: "0",
-    });
-    footer.append(usageIndicator);
-
-    const list = document.createElement("div");
-    list.id = PANEL_ID;
-    Object.assign(list.style, {
-        flex: "1",
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        padding: "0 0 6px",
-        minHeight: "48px",
-    });
-
-    const empty = document.createElement("div");
-    empty.textContent = "No events tracked yet.";
-    Object.assign(empty.style, { padding: "12px", color: COLORS.inkMuted, textAlign: "center" });
-    content.append(toolbar, list, footer);
-
-    const countBadge = document.createElement("span");
-    Object.assign(countBadge.style, {
-        minWidth: "18px",
-        padding: "0 6px",
-        boxSizing: "border-box",
-        borderRadius: "999px",
-        background: COLORS.border,
-        color: COLORS.ink,
-        font: `700 10px/16px ${FONT}`,
-        textAlign: "center",
-    });
-
-    const tool: DevTool = { label: "Tracking", badge: countBadge, content };
-    const entries: TrackedEntry[] = [];
-    const groups = new Map<string, { row: HTMLElement; count: number; latest: TrackedEntry }>();
-    let grouped = false;
-
+function createDetailAttacher(detail: HTMLElement): AttachDetail {
     let hideTimer: ReturnType<typeof setTimeout> | undefined;
     const hideDetail = () => {
         clearTimeout(hideTimer);
@@ -828,7 +1085,7 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     detail.onmouseleave = hideDetailSoon;
     detail.onblur = hideDetail;
 
-    const attachDetail = (anchor: HTMLElement, render: () => void) => {
+    return (anchor, render) => {
         const reveal = () => {
             clearTimeout(hideTimer);
             render();
@@ -849,108 +1106,1031 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
             }
         };
     };
+}
 
-    const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
-        const row = renderRow(entry, count);
-        attachDetail(row, () => showDetail(detail, row, entry));
-        return row;
-    };
+interface Alerts {
+    set(id: string, active: boolean): void;
+    subscribe(listener: (active: boolean) => void): void;
+}
 
-    const updateUsage = () => usageIndicator.replaceChildren(...renderUsage());
-    attachDetail(usageIndicator, () => showUsageDetail(detail, usageIndicator));
-
-    const replaceFocusedRow = (previous: HTMLElement, next: HTMLElement) => {
-        if (document.activeElement === previous) {
-            next.focus({ preventScroll: true });
-        }
-    };
-
-    const groupId = (entry: TrackedEntry) => `${entry.kind}:${entry.key}`;
-
-    const show = (entry: TrackedEntry, isNew = false) => {
-        const create = (count?: number) => {
-            const row = createRow(entry, count);
-            if (isNew) {
-                row.dataset.new = "";
+function createAlerts(): Alerts {
+    const active = new Set<string>();
+    const listeners = new Set<(active: boolean) => void>();
+    return {
+        set(id, on) {
+            if (active.has(id) === on) {
+                return;
             }
-            return row;
-        };
-        if (!grouped) {
-            list.insertBefore(create(), list.firstChild);
-            return;
-        }
-        const id = groupId(entry);
-        const group = groups.get(id);
-        const count = (group?.count ?? 0) + 1;
-        const row = create(count);
-        list.insertBefore(row, list.firstChild);
-        if (group) {
-            replaceFocusedRow(group.row, row);
-            group.row.remove();
-        }
-        groups.set(id, { row, count, latest: entry });
+            if (on) {
+                active.add(id);
+            } else {
+                active.delete(id);
+            }
+            listeners.forEach((listener) => listener(active.size > 0));
+        },
+        subscribe(listener) {
+            listeners.add(listener);
+            listener(active.size > 0);
+        },
+    };
+}
+
+function createNotice(tone: "info" | "error"): HTMLElement {
+    const notice = document.createElement("div");
+    notice.dataset.notice = tone;
+    Object.assign(notice.style, {
+        margin: "8px 12px 6px",
+        padding: "6px 10px",
+        borderRadius: "8px",
+        border: `1px solid ${tone === "info" ? COLORS.info : COLORS.neg}`,
+        background: tone === "info" ? "rgba(91, 141, 239, 0.12)" : "rgba(224, 108, 108, 0.14)",
+        color: COLORS.ink,
+        font: `11px/1.5 ${FONT}`,
+        flexShrink: "0",
+    });
+    return notice;
+}
+
+function setNoticeLines(notice: HTMLElement, title: string, lines: string[]): void {
+    const heading = document.createElement("div");
+    heading.textContent = title;
+    heading.style.fontWeight = "700";
+    notice.replaceChildren(
+        heading,
+        ...lines.map((text) => {
+            const line = document.createElement("div");
+            line.textContent = text;
+            return line;
+        }),
+    );
+}
+
+function createCountBadge(): HTMLElement {
+    const badge = document.createElement("span");
+    Object.assign(badge.style, {
+        minWidth: "18px",
+        padding: "0 6px",
+        boxSizing: "border-box",
+        borderRadius: "999px",
+        background: COLORS.border,
+        color: COLORS.ink,
+        font: `700 10px/16px ${FONT}`,
+        textAlign: "center",
+    });
+    return badge;
+}
+
+function setBadgeAlert(badge: HTMLElement, alert: boolean): void {
+    badge.toggleAttribute("data-alert", alert);
+    badge.style.background = alert ? COLORS.neg : COLORS.border;
+    badge.style.color = alert ? COLORS.onAccent : COLORS.ink;
+}
+
+interface UsageFooter {
+    element: HTMLElement;
+    indicator: HTMLElement;
+    update(bytes: number, max: number, overflowed: boolean): void;
+}
+
+function createUsageFooter(label: string): UsageFooter {
+    const indicator = document.createElement("span");
+    indicator.tabIndex = 0;
+    indicator.setAttribute("aria-describedby", DETAIL_ID);
+    Object.assign(indicator.style, { flexShrink: "0", fontFamily: MONO, fontSize: "11px", cursor: "help" });
+
+    const track = document.createElement("div");
+    track.setAttribute("role", "progressbar");
+    track.setAttribute("aria-label", label);
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    Object.assign(track.style, {
+        flex: "1",
+        height: "6px",
+        borderRadius: "999px",
+        background: COLORS.surfaceSunk,
+        overflow: "hidden",
+    });
+    const fill = document.createElement("div");
+    Object.assign(fill.style, { height: "100%", borderRadius: "999px", transition: "width 150ms ease-out" });
+    track.append(fill);
+
+    const row = document.createElement("div");
+    Object.assign(row.style, { display: "flex", alignItems: "center", gap: "10px" });
+    row.append(track, indicator);
+
+    const element = document.createElement("div");
+    Object.assign(element.style, {
+        padding: "8px 12px",
+        borderTop: `1px solid ${COLORS.border}`,
+        flexShrink: "0",
+    });
+    element.append(row);
+
+    return {
+        element,
+        indicator,
+        update(bytes, max, overflowed) {
+            indicator.replaceChildren(...renderUsage(bytes, max, overflowed));
+            const percent = remainingPercent(bytes, max);
+            track.setAttribute("aria-valuenow", String(percent));
+            fill.style.width = `${percent}%`;
+            fill.style.background = usageColor(bytes, max, overflowed, COLORS.pos);
+        },
+    };
+}
+
+function createTrackedEventsTool(detail: HTMLElement, attachDetail: AttachDetail, alerts: Alerts): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
+
+    const disclaimer = createNotice("info");
+    disclaimer.textContent = "Check out the tracked events for your games in Minit Studio!";
+    disclaimer.style.fontWeight = "700";
+    const dropNotice = createNotice("error");
+    dropNotice.style.display = "none";
+
+    const usage = createUsageFooter("Remaining event size");
+
+    const list = document.createElement("div");
+    list.id = PANEL_ID;
+    Object.assign(list.style, {
+        flex: "1",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        padding: "0 0 6px",
+        minHeight: "48px",
+    });
+
+    const empty = document.createElement("div");
+    empty.textContent = "No events tracked yet.";
+    Object.assign(empty.style, { padding: "12px", color: COLORS.inkMuted, textAlign: "center" });
+    content.append(dropNotice, disclaimer, list, usage.element);
+
+    const countBadge = createCountBadge();
+    const tool: DevTool = { label: "Tracking", badge: countBadge, content };
+    const entries: TrackedEntry[] = [];
+    const dropsByReason = new Map<TrackDropReason, number>();
+
+    const updateUsage = () => {
+        const { bytes, bytesCapDrops } = getTrackedUsage();
+        usage.update(bytes, MAX_PAYLOAD_BYTES_PER_LOAD, bytesCapDrops > 0);
+    };
+    attachDetail(usage.indicator, () => showUsageDetail(detail, usage.indicator));
+
+    const recordDrop = (reason: TrackDropReason) => {
+        dropsByReason.set(reason, (dropsByReason.get(reason) ?? 0) + 1);
+        const total = [...dropsByReason.values()].reduce((sum, count) => sum + count, 0);
+        setNoticeLines(
+            dropNotice,
+            `${total} ${total === 1 ? "event was" : "events were"} thrown away and never sent:`,
+            [...dropsByReason].map(([dropReason, count]) => `${count}× ${describeDropReason(dropReason)}`),
+        );
+        dropNotice.style.display = "block";
+        setBadgeAlert(countBadge, true);
+        alerts.set("tracking", true);
     };
 
-    const evict = (entry: TrackedEntry) => {
-        if (!grouped) {
-            list.lastElementChild?.remove();
-            return;
+    const highlightSameType = (row: HTMLElement | undefined) => {
+        for (const other of list.children) {
+            const element = other as HTMLElement;
+            const same = row !== undefined && element.dataset.kind === row.dataset.kind && element.dataset.key === row.dataset.key;
+            element.toggleAttribute("data-same", same);
         }
-        const id = groupId(entry);
-        const group = groups.get(id);
-        if (!group) {
-            return;
-        }
-        if (group.count === 1) {
-            group.row.remove();
-            groups.delete(id);
-            return;
-        }
-        const row = createRow(group.latest, group.count - 1);
-        group.row.after(row);
-        replaceFocusedRow(group.row, row);
-        group.row.remove();
-        groups.set(id, { row, count: group.count - 1, latest: group.latest });
     };
-
-    const setGrouped = (next: boolean) => {
-        grouped = next;
-        groupToggle.setAttribute("aria-pressed", String(grouped));
-        Object.assign(groupToggle.style, {
-            background: grouped ? COLORS.brandOrange : "transparent",
-            borderColor: grouped ? COLORS.brandOrange : COLORS.border,
-            color: grouped ? COLORS.onAccent : COLORS.inkSecondary,
-        });
-        detail.style.display = "none";
-        groups.clear();
-        list.replaceChildren(...(entries.length === 0 ? [empty] : []));
-        entries.forEach((entry) => show(entry));
-    };
-    groupToggle.onclick = () => setGrouped(!grouped);
 
     const add = (entry: TrackedEntry) => {
         entries.push(entry);
         empty.remove();
-        show(entry, true);
+        const row = renderRow(entry);
+        row.dataset.new = "";
+        attachDetail(row, () => showDetail(detail, row, entry));
+        row.addEventListener("mouseenter", () => highlightSameType(row));
+        row.addEventListener("mouseleave", () => highlightSameType(undefined));
+        row.addEventListener("focus", () => highlightSameType(row));
+        row.addEventListener("blur", () => highlightSameType(undefined));
+        list.insertBefore(row, list.firstChild);
         if (entries.length > MAX_DEV_ENTRIES) {
-            evict(entries.shift()!);
+            entries.shift();
+            list.lastElementChild?.remove();
         }
         countBadge.textContent = String(entries.length);
+        if (entry.kind === "drop") {
+            recordDrop(entry.reason);
+        }
         updateUsage();
     };
 
-    clearButton.onclick = () => {
-        entries.length = 0;
-        countBadge.textContent = "0";
-        setGrouped(grouped);
-    };
-
-    setGrouped(false);
+    list.append(empty);
     countBadge.textContent = "0";
     updateUsage();
     getTrackedEntries().forEach(add);
     subscribeTrackedEntries(add);
     return tool;
+}
+
+function createUserDataTool(alerts: Alerts): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
+
+    const errorNotice = createNotice("error");
+    errorNotice.style.display = "none";
+
+    const value = document.createElement("div");
+    value.dataset.userDataValue = "";
+    Object.assign(value.style, {
+        flex: "1",
+        minHeight: "48px",
+        display: "flex",
+        flexDirection: "column",
+        padding: "16px",
+        boxSizing: "border-box",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+    });
+
+    const usage = createUsageFooter("Remaining user data size");
+    content.append(errorNotice, value, usage.element);
+
+    const badge = document.createElement("span");
+    badge.textContent = "!";
+    Object.assign(badge.style, {
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "16px",
+        height: "16px",
+        borderRadius: "50%",
+        background: COLORS.neg,
+        color: COLORS.onAccent,
+        font: `900 10px/1 ${FONT}`,
+    });
+
+    const render = (userData: string | undefined, label: string, reported: boolean) => {
+        const bytes = userData === undefined ? 0 : utf8Bytes(userData);
+        const tooBig = reported && bytes > USER_DATA_MAX_BYTES;
+        usage.update(bytes, USER_DATA_MAX_BYTES, tooBig);
+
+        if (userData === undefined) {
+            const empty = document.createElement("div");
+            empty.textContent = "No user data yet.";
+            Object.assign(empty.style, {
+                margin: "auto",
+                color: COLORS.inkMuted,
+                font: `700 15px/1.4 ${FONT}`,
+                textAlign: "center",
+            });
+            value.replaceChildren(empty);
+        } else {
+            const card = document.createElement("div");
+            card.dataset.result = "";
+            Object.assign(card.style, {
+                margin: "auto 0",
+                alignSelf: "stretch",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "6px",
+                boxSizing: "border-box",
+                padding: "10px 16px 12px",
+                borderRadius: "12px",
+                border: `1px solid ${tooBig ? COLORS.neg : COLORS.border}`,
+                background: COLORS.surfaceSunk,
+            });
+            const pre = document.createElement("pre");
+            pre.textContent = userData === "" ? '""' : formatUserData(userData);
+            Object.assign(pre.style, {
+                margin: "0",
+                alignSelf: "stretch",
+                color: COLORS.ink,
+                font: `12px/1.6 ${MONO}`,
+                textAlign: "left",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+            });
+            card.append(badgeHeader(label, COLORS.inkMuted), pre);
+            value.replaceChildren(card);
+        }
+
+        errorNotice.style.display = tooBig ? "block" : "none";
+        if (tooBig) {
+            setNoticeLines(errorNotice, "User data too big", [
+                `reportResult() passed ${formatBytes(bytes)} of userData, over the ${formatBytes(USER_DATA_MAX_BYTES)} cap. ` +
+                    "The platform will discard it, so it is not saved for this player.",
+            ]);
+        }
+        badge.style.display = tooBig ? "flex" : "none";
+        alerts.set("userData", tooBig);
+    };
+
+    render(getUserData(), "Loaded at start", false);
+    const onResult = (reported: ReportedResult) => {
+        if (reported.userData !== undefined) {
+            render(reported.userData, "Reported with reportResult()", true);
+        }
+    };
+    const existing = getReportedResult();
+    if (existing) {
+        onResult(existing);
+    }
+    subscribeReportedResult(onResult);
+    return { label: "User data", badge, content };
+}
+
+type CheckStatus = "pass" | "warn" | "unverified";
+
+interface Check {
+    title: string;
+    status: CheckStatus;
+    hint: string;
+}
+
+type MetaState = { status: "loading" } | { status: "missing" } | { status: "ok"; configCount: number };
+
+const CHECK_STYLE: Record<CheckStatus, { color: string; background: string; label: string }> = {
+    pass: { color: COLORS.pos, background: "rgba(79, 191, 134, 0.16)", label: "Done" },
+    warn: { color: COLORS.warn, background: "rgba(229, 184, 76, 0.16)", label: "Needs attention" },
+    unverified: { color: COLORS.inkMuted, background: COLORS.surfaceSunk, label: "Not verified" },
+};
+
+function externalOrigins(): string[] {
+    const origins = new Set<string>();
+    for (const entry of performance.getEntriesByType?.("resource") ?? []) {
+        try {
+            const url = new URL(entry.name);
+            if ((url.protocol === "http:" || url.protocol === "https:") && url.origin !== window.location.origin) {
+                origins.add(url.origin);
+            }
+        } catch {
+            // Not a URL: nothing to report.
+        }
+    }
+    return [...origins];
+}
+
+function collectChecks(meta: MetaState): Check[] {
+    const loadingDone = getReceivedCount(`${RESERVED_KEY_PREFIX}loading_done`) > 0;
+    const resultReported = getReceivedCount(`${RESERVED_KEY_PREFIX}result`) > 0 || getReportedResult() !== undefined;
+    const tutorialGated = getConfigRequests().some((request) => request.key === TUTORIAL_PARAM);
+    const origins = externalOrigins();
+
+    const configCheck = (): Check => {
+        const title = "Declares config values";
+        if (meta.status === "loading") {
+            return { title, status: "unverified", hint: "Checking meta.json…" };
+        }
+        if (meta.status === "missing") {
+            return { title, status: "warn", hint: "Couldn't load meta.json next to your index.html." };
+        }
+        return meta.configCount > 0
+            ? {
+                  title,
+                  status: "pass",
+                  hint: `${meta.configCount} config value${meta.configCount === 1 ? "" : "s"} declared in meta.json.`,
+              }
+            : { title, status: "warn", hint: "Recommended: declare config values in meta.json so other creators can mod your Game." };
+    };
+
+    return [
+        { title: "Uses the Minit SDK", status: "pass", hint: "We detected the Minit SDK in your code." },
+        loadingDone
+            ? { title: "Signals when it is ready to play", status: "pass", hint: "Your Game calls loadingDone() when everything is loaded." }
+            : {
+                  title: "Signals when it is ready to play",
+                  status: "warn",
+                  hint: "Platform requirement: call loadingDone() from the Minit SDK once your Game is ready to play.",
+              },
+        resultReported
+            ? { title: "Reports a result", status: "pass", hint: "Your Game sends us a score when it is over." }
+            : {
+                  title: "Reports a result",
+                  status: "unverified",
+                  hint: "Play a run to the end to check this. Call reportResult(score) once when the game ends.",
+              },
+        tutorialGated
+            ? { title: "First-play tutorial", status: "pass", hint: "Your Game shows its tutorial only to first-time players." }
+            : {
+                  title: "First-play tutorial",
+                  status: "warn",
+                  hint: "Recommended: add a brief first-play tutorial and show it only when shouldShowTutorial() is true.",
+              },
+        configCheck(),
+        origins.length === 0
+            ? { title: "No external requests", status: "pass", hint: "Everything loads from inside your bundle." }
+            : {
+                  title: "No external requests",
+                  status: "warn",
+                  hint:
+                      `Platform requirement: bundle every file your Game needs. It loads from ${origins.slice(0, 3).join(", ")}` +
+                      `${origins.length > 3 ? " and more" : ""}.`,
+              },
+    ];
+}
+
+function renderCheckIcon(status: CheckStatus): HTMLElement {
+    const style = CHECK_STYLE[status];
+    const badge = document.createElement("span");
+    badge.dataset.checkStatus = status;
+    badge.setAttribute("role", "img");
+    badge.setAttribute("aria-label", style.label);
+    Object.assign(badge.style, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: "0",
+        width: "24px",
+        height: "24px",
+        borderRadius: "50%",
+        background: style.background,
+        color: style.color,
+        font: `900 13px/1 ${FONT}`,
+    });
+    if (status === "unverified") {
+        badge.textContent = "?";
+        return badge;
+    }
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 14 14");
+    svg.setAttribute("width", "14");
+    svg.setAttribute("height", "14");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    const paths = status === "pass" ? ["M3 7.5l2.5 2.5L11 4.5"] : ["M7 1.8L12.6 11.8H1.4Z", "M7 5.6v2.8", "M7 10.1v0.1"];
+    for (const d of paths) {
+        const path = document.createElementNS(SVG_NS, "path");
+        path.setAttribute("d", d);
+        svg.append(path);
+    }
+    badge.append(svg);
+    return badge;
+}
+
+function createSuggestionsTool(): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1", overflowY: "auto" });
+
+    const badge = createCountBadge();
+    let meta: MetaState = { status: "loading" };
+
+    const render = () => {
+        const checks = collectChecks(meta);
+        const done = checks.filter((check) => check.status === "pass").length;
+        badge.textContent = `${done}/${checks.length}`;
+
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+            display: "flex",
+            alignItems: "baseline",
+            gap: "8px",
+            padding: "10px 12px 6px",
+        });
+        const title = document.createElement("span");
+        title.textContent = "Optimisation checklist";
+        Object.assign(title.style, { flex: "1", font: `700 13px/1.4 ${FONT}` });
+        const summary = document.createElement("span");
+        summary.textContent = `${done} of ${checks.length} done`;
+        Object.assign(summary.style, { color: COLORS.inkMuted, fontSize: "11px" });
+        header.append(title, summary);
+
+        const rows = checks.map((check) => {
+            const row = document.createElement("div");
+            row.dataset.check = check.title;
+            Object.assign(row.style, {
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "10px",
+                padding: "8px 12px",
+                borderTop: `1px solid ${COLORS.border}`,
+            });
+            const text = document.createElement("div");
+            Object.assign(text.style, { flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" });
+            const name = document.createElement("span");
+            name.textContent = check.title;
+            name.style.fontWeight = "700";
+            const hint = document.createElement("span");
+            hint.textContent = check.hint;
+            Object.assign(hint.style, { color: COLORS.inkSecondary, fontSize: "11px", overflowWrap: "anywhere" });
+            text.append(name, hint);
+            row.append(renderCheckIcon(check.status), text);
+            return row;
+        });
+        content.replaceChildren(header, ...rows);
+    };
+
+    render();
+    Promise.resolve()
+        .then(() => fetch(new URL("meta.json", document.baseURI), { cache: "no-store" }))
+        .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
+        .then((json: { config?: unknown }) => {
+            meta = { status: "ok", configCount: Array.isArray(json.config) ? json.config.length : 0 };
+        })
+        .catch(() => {
+            meta = { status: "missing" };
+        })
+        .finally(render);
+    subscribeTrackedEntries(render);
+    subscribeReportedResult(render);
+    subscribeConfigRequests(render);
+    if (typeof PerformanceObserver === "function") {
+        try {
+            new PerformanceObserver(render).observe({ type: "resource", buffered: false });
+        } catch {
+            // Resource timing unsupported: the list stays as first rendered.
+        }
+    }
+    return { label: "Suggestions", badge, content };
+}
+
+const CONFIG_SOURCE_STYLE: Record<ConfigSource, { label: string; color: string; background: string }> = {
+    injected: { label: "injected", color: COLORS.brandOrange, background: "rgba(242, 121, 15, 0.14)" },
+    default: { label: "default", color: COLORS.inkSecondary, background: COLORS.surfaceSunk },
+    missing: { label: "missing", color: COLORS.inkMuted, background: "transparent" },
+};
+
+const TUTORIAL_PARAM = "tutorial";
+
+interface DevSettings {
+    autoOpenOnResult: boolean;
+    closeOnReplay: boolean;
+}
+
+const SETTINGS_STORAGE_KEY = "minit-dev-tools-settings";
+const DEFAULT_SETTINGS: DevSettings = { autoOpenOnResult: true, closeOnReplay: true };
+
+function loadSettings(): DevSettings {
+    try {
+        const stored: unknown = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) ?? "{}");
+        const values = stored !== null && typeof stored === "object" ? (stored as Partial<DevSettings>) : {};
+        return {
+            autoOpenOnResult: typeof values.autoOpenOnResult === "boolean" ? values.autoOpenOnResult : DEFAULT_SETTINGS.autoOpenOnResult,
+            closeOnReplay: typeof values.closeOnReplay === "boolean" ? values.closeOnReplay : DEFAULT_SETTINGS.closeOnReplay,
+        };
+    } catch {
+        return { ...DEFAULT_SETTINGS };
+    }
+}
+
+function saveSettings(settings: DevSettings): void {
+    try {
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch {
+        // Storage blocked: the setting still applies until the next reload.
+    }
+}
+
+function createSwitch(checked: boolean, label: string, onToggle: (next: boolean) => void): HTMLButtonElement {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-label", label);
+    Object.assign(toggle.style, {
+        position: "relative",
+        flexShrink: "0",
+        width: "34px",
+        height: "20px",
+        padding: "0",
+        borderRadius: "999px",
+        border: "none",
+        cursor: "pointer",
+    });
+    const knob = document.createElement("span");
+    Object.assign(knob.style, {
+        position: "absolute",
+        top: "2px",
+        width: "16px",
+        height: "16px",
+        borderRadius: "50%",
+        background: COLORS.onAccent,
+        transition: "left 120ms ease",
+    });
+    toggle.append(knob);
+    let state = checked;
+    const paint = () => {
+        toggle.setAttribute("aria-checked", String(state));
+        toggle.style.background = state ? COLORS.brandOrange : COLORS.border;
+        knob.style.left = state ? "16px" : "2px";
+    };
+    paint();
+    toggle.onclick = () => {
+        state = !state;
+        paint();
+        onToggle(state);
+    };
+    return toggle;
+}
+
+function createSettingsTool(settings: DevSettings): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1", overflowY: "auto" });
+
+    const heading = document.createElement("div");
+    heading.textContent = "Settings";
+    Object.assign(heading.style, { padding: "10px 12px 6px", font: `700 13px/1.4 ${FONT}` });
+
+    const row = (key: keyof DevSettings, title: string, hint: string) => {
+        const element = document.createElement("div");
+        element.dataset.setting = key;
+        Object.assign(element.style, {
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "10px 12px",
+            borderTop: `1px solid ${COLORS.border}`,
+        });
+        const text = document.createElement("div");
+        Object.assign(text.style, { flex: "1", minWidth: "0", display: "flex", flexDirection: "column", gap: "2px" });
+        const name = document.createElement("span");
+        name.textContent = title;
+        name.style.fontWeight = "700";
+        const description = document.createElement("span");
+        description.textContent = hint;
+        Object.assign(description.style, { color: COLORS.inkSecondary, fontSize: "11px" });
+        text.append(name, description);
+        const toggle = createSwitch(settings[key], title, (next) => {
+            settings[key] = next;
+            saveSettings(settings);
+        });
+        element.append(text, toggle);
+        return element;
+    };
+
+    content.append(
+        heading,
+        row("autoOpenOnResult", "Open on result", "Open the panel on the Result tab when the result arrives."),
+        row("closeOnReplay", "Close on replay", "Close the panel when you press Replay."),
+    );
+    return { label: "Settings", content };
+}
+
+function reloadWithParams(params: Record<string, string | undefined>): void {
+    const url = new URL(window.location.href);
+    for (const [key, value] of Object.entries(params)) {
+        if (value === undefined) {
+            url.searchParams.delete(key);
+        } else {
+            url.searchParams.set(key, value);
+        }
+    }
+    window.location.assign(url.toString());
+}
+
+function createConfigTool(body: HTMLElement, detail: HTMLElement, attachDetail: AttachDetail): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, { flexDirection: "column", minHeight: "0", flex: "1" });
+
+    const list = document.createElement("div");
+    Object.assign(list.style, {
+        display: "flex",
+        flexDirection: "column",
+        flex: "1",
+        minHeight: "0",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+    });
+    content.append(list, createConfigFooter());
+
+    const countBadge = createCountBadge();
+
+    const render = (allRequests: readonly ConfigRequest[]) => {
+        const requests = allRequests.filter((request) => request.key !== TUTORIAL_PARAM);
+        countBadge.textContent = String(requests.length);
+        const tutorialRow = renderTutorialSection(detail, attachDetail);
+        if (requests.length === 0) {
+            const empty = document.createElement("div");
+            empty.textContent = "No config values requested yet.";
+            Object.assign(empty.style, {
+                flex: "1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "12px",
+                color: COLORS.inkMuted,
+                font: `700 15px/1.4 ${FONT}`,
+                textAlign: "center",
+            });
+            list.replaceChildren(tutorialRow, empty);
+            return;
+        }
+        const openEditor = (focusKey: string) => openConfigEditor(body, requests, focusKey);
+        list.replaceChildren(tutorialRow, ...requests.map((request) => renderConfigRow(request, openEditor)));
+    };
+
+    render(getConfigRequests());
+    subscribeConfigRequests(render);
+    return { label: "Config", badge: countBadge, content };
+}
+
+function createConfigFooter(): HTMLElement {
+    const injectedKeys = [...new URLSearchParams(window.location.search).keys()].filter((key) => key !== USER_DATA_PARAM_KEY);
+
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.textContent = "Reset to defaults";
+    reset.dataset.configReset = "";
+    reset.disabled = injectedKeys.length === 0;
+    reset.title = reset.disabled ? "Nothing injected" : `Remove ${injectedKeys.join(", ")} and reload`;
+    Object.assign(reset.style, {
+        padding: "4px 12px",
+        borderRadius: "999px",
+        border: `1px solid ${COLORS.border}`,
+        background: "transparent",
+        color: reset.disabled ? COLORS.inkMuted : COLORS.inkSecondary,
+        font: `700 11px/1.4 ${FONT}`,
+        cursor: reset.disabled ? "default" : "pointer",
+    });
+    reset.onclick = () => reloadWithParams(Object.fromEntries(injectedKeys.map((key) => [key, undefined])));
+
+    const footer = document.createElement("div");
+    Object.assign(footer.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        padding: "8px 12px",
+        borderTop: `1px solid ${COLORS.border}`,
+        flexShrink: "0",
+    });
+    footer.append(reset);
+    return footer;
+}
+
+function renderSourcePill(source: ConfigSource): HTMLElement {
+    const style = CONFIG_SOURCE_STYLE[source];
+    const pill = document.createElement("span");
+    pill.textContent = style.label;
+    Object.assign(pill.style, {
+        flexShrink: "0",
+        width: "60px",
+        boxSizing: "border-box",
+        padding: "1px 0",
+        borderRadius: "999px",
+        border: `1px solid ${source === "injected" ? "rgba(242, 121, 15, 0.5)" : COLORS.border}`,
+        background: style.background,
+        color: style.color,
+        font: `700 10px/1.5 ${FONT}`,
+        textAlign: "center",
+    });
+    return pill;
+}
+
+function configRowStyle(row: HTMLElement): void {
+    Object.assign(row.style, {
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        padding: "6px 12px",
+        borderBottom: `1px solid ${COLORS.border}`,
+    });
+}
+
+function renderTutorialSection(detail: HTMLElement, attachDetail: AttachDetail): HTMLElement {
+    const section = document.createElement("div");
+    const cutline = document.createElement("div");
+    Object.assign(cutline.style, { margin: "6px 12px 10px", borderTop: `1px dashed ${COLORS.inkMuted}` });
+    section.append(renderTutorialRow(detail, attachDetail), cutline);
+    return section;
+}
+
+function renderTutorialRow(detail: HTMLElement, attachDetail: AttachDetail): HTMLElement {
+    const firstTime = !hasPlayedGame();
+
+    const row = document.createElement("div");
+    row.dataset.configKey = TUTORIAL_PARAM;
+    configRowStyle(row);
+    Object.assign(row.style, { padding: "12px 12px 10px", borderBottom: "none" });
+
+    const label = document.createElement("span");
+    label.tabIndex = 0;
+    label.setAttribute("aria-describedby", DETAIL_ID);
+    Object.assign(label.style, { flex: "1", minWidth: "0", display: "flex", flexDirection: "column", cursor: "help" });
+    attachDetail(label, () => showTutorialDetail(detail, label));
+    const title = document.createElement("span");
+    title.textContent = "First-time user";
+    title.style.fontWeight = "700";
+    const subtitle = document.createElement("span");
+    subtitle.textContent = `tutorial required · hasPlayedGame: ${!firstTime}`;
+    Object.assign(subtitle.style, { color: COLORS.inkMuted, fontSize: "11px" });
+    label.append(title, subtitle);
+
+    const toggle = createSwitch(firstTime, "First-time user", () =>
+        reloadWithParams({ [HAS_PLAYED_GAME_PARAM_KEY]: String(firstTime), [TUTORIAL_PARAM]: undefined }),
+    );
+
+    row.append(label, toggle);
+    return row;
+}
+
+function showTutorialDetail(detail: HTMLElement, anchor: HTMLElement): void {
+    const title = document.createElement("div");
+    title.textContent = "First-time user";
+    Object.assign(title.style, {
+        paddingBottom: "8px",
+        marginBottom: "8px",
+        borderBottom: `1px solid ${COLORS.border}`,
+        color: COLORS.ink,
+        font: `700 13px/1.4 ${FONT}`,
+    });
+    const text = document.createElement("div");
+    text.textContent =
+        "Use a tutorial to guide new players through your Minit. " +
+        "Toggle this to preview what first-time and returning players see — it sets hasPlayedGame just like the app does.";
+    detail.replaceChildren(title, text);
+    Object.assign(detail.style, { color: COLORS.inkSecondary, fontFamily: FONT, wordBreak: "normal" });
+    placeDetail(detail, anchor);
+}
+
+function openConfigEditor(body: HTMLElement, requests: readonly ConfigRequest[], focusKey: string): void {
+    const backdrop = document.createElement("div");
+    backdrop.setAttribute("role", "dialog");
+    backdrop.setAttribute("aria-modal", "true");
+    backdrop.setAttribute("aria-label", "Edit config");
+    Object.assign(backdrop.style, {
+        position: "fixed",
+        inset: "0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: `${EDGE}px`,
+        background: "rgba(5, 8, 16, 0.6)",
+        zIndex: Z_INDEX,
+        fontFamily: FONT,
+        fontSize: "13px",
+        color: COLORS.ink,
+    });
+    isolate(backdrop);
+
+    const dialog = document.createElement("form");
+    Object.assign(dialog.style, {
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        width: "min(380px, 100%)",
+        maxHeight: "100%",
+        boxSizing: "border-box",
+        padding: "16px",
+        borderRadius: "14px",
+        border: `1px solid ${COLORS.border}`,
+        background: COLORS.surface,
+        boxShadow: "0 16px 40px rgba(0, 0, 0, 0.5)",
+    });
+
+    const title = document.createElement("div");
+    title.textContent = "Edit config";
+    title.style.font = `800 15px/1.3 ${FONT}`;
+    const hint = document.createElement("div");
+    hint.textContent = "Applying sets these as query params and reloads the game. Leave a field empty to use the default.";
+    Object.assign(hint.style, { color: COLORS.inkSecondary, fontSize: "12px" });
+
+    const fields = document.createElement("div");
+    Object.assign(fields.style, { display: "flex", flexDirection: "column", gap: "10px", overflowY: "auto", minHeight: "0" });
+    const inputs = new Map<string, HTMLInputElement>();
+    for (const request of requests) {
+        const field = document.createElement("label");
+        Object.assign(field.style, { display: "flex", flexDirection: "column", gap: "4px" });
+        const name = document.createElement("span");
+        name.textContent = request.key;
+        Object.assign(name.style, { fontWeight: "700", overflowWrap: "anywhere" });
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = request.source === "injected" ? (request.value ?? "") : "";
+        input.placeholder = request.source === "default" ? `default: ${request.value}` : "not set";
+        Object.assign(input.style, {
+            padding: "6px 8px",
+            borderRadius: "8px",
+            border: `1px solid ${COLORS.border}`,
+            background: COLORS.surfaceSunk,
+            color: COLORS.ink,
+            font: `12px/1.4 ${MONO}`,
+            outline: "none",
+        });
+        input.onfocus = () => (input.style.borderColor = COLORS.brandOrange);
+        input.onblur = () => (input.style.borderColor = COLORS.border);
+        field.append(name, input);
+        fields.append(field);
+        inputs.set(request.key, input);
+    }
+
+    const actions = document.createElement("div");
+    Object.assign(actions.style, { display: "flex", justifyContent: "flex-end", gap: "8px" });
+    const buttonStyle = {
+        padding: "6px 14px",
+        borderRadius: "999px",
+        font: `700 12px/1.4 ${FONT}`,
+        cursor: "pointer",
+    };
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    Object.assign(cancel.style, buttonStyle, {
+        border: `1px solid ${COLORS.border}`,
+        background: "transparent",
+        color: COLORS.inkSecondary,
+    });
+    const apply = document.createElement("button");
+    apply.type = "submit";
+    apply.textContent = "Apply & reload";
+    Object.assign(apply.style, buttonStyle, {
+        border: `1px solid ${COLORS.brandOrange}`,
+        background: COLORS.brandOrange,
+        color: COLORS.onAccent,
+    });
+    actions.append(cancel, apply);
+
+    const close = () => {
+        backdrop.remove();
+        document.removeEventListener("keydown", onKeyDown, true);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+            event.stopPropagation();
+            close();
+        }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    cancel.onclick = close;
+    let pressedOnBackdrop = false;
+    backdrop.addEventListener("pointerdown", (event) => {
+        pressedOnBackdrop = event.target === backdrop;
+    });
+    backdrop.onclick = (event) => {
+        if (event.target === backdrop && pressedOnBackdrop) {
+            close();
+        }
+        pressedOnBackdrop = false;
+    };
+    dialog.onsubmit = (event) => {
+        event.preventDefault();
+        const params: Record<string, string | undefined> = {};
+        for (const [key, input] of inputs) {
+            params[key] = input.value === "" ? undefined : input.value;
+        }
+        reloadWithParams(params);
+    };
+
+    dialog.append(title, hint, fields, actions);
+    backdrop.append(dialog);
+    body.append(backdrop);
+    inputs.get(focusKey)?.focus();
+}
+
+function renderConfigRow(request: ConfigRequest, openEditor: (focusKey: string) => void): HTMLElement {
+    const row = document.createElement("div");
+    row.dataset.configKey = request.key;
+    configRowStyle(row);
+
+    const key = document.createElement("span");
+    key.textContent = request.key;
+    key.title = request.key;
+    Object.assign(key.style, {
+        flex: "1",
+        minWidth: "0",
+        fontWeight: "700",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    });
+
+    const valueText = request.value === undefined ? "—" : request.value === "" ? '""' : request.value;
+    const value = document.createElement("span");
+    value.textContent = valueText;
+    value.title = valueText;
+    Object.assign(value.style, {
+        maxWidth: "45%",
+        color: request.value === undefined ? COLORS.inkMuted : COLORS.ink,
+        fontFamily: MONO,
+        fontSize: "11px",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+    });
+
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "✎";
+    edit.title = `Edit ${request.key}`;
+    edit.setAttribute("aria-label", `Edit ${request.key}`);
+    edit.dataset.edit = "";
+    Object.assign(edit.style, {
+        flexShrink: "0",
+        width: "24px",
+        height: "24px",
+        padding: "0",
+        borderRadius: "6px",
+        border: `1px solid ${COLORS.border}`,
+        background: "transparent",
+        color: COLORS.inkSecondary,
+        font: `13px/1 ${FONT}`,
+        cursor: "pointer",
+    });
+    edit.onclick = () => openEditor(request.key);
+
+    row.append(renderSourcePill(request.source), key, value, edit);
+    return row;
 }
 
 function badgeHeader(text: string, color: string): HTMLElement {
@@ -972,7 +2152,51 @@ function badgeValue(text: string, style: Partial<CSSStyleDeclaration>): HTMLElem
     return value;
 }
 
-function createResultTool(): DevTool {
+function renderUserDataButton(reported: ReportedResult, openTab: (label: string) => void): HTMLElement {
+    const received = reported.userData !== undefined;
+    const tooBig = received && utf8Bytes(reported.userData!) > USER_DATA_MAX_BYTES;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.userData = tooBig ? "too-big" : received ? "received" : "none";
+    button.textContent = tooBig ? "⚠ userData too big" : received ? "✓ userData" : "no userData";
+    const tone = tooBig
+        ? { color: COLORS.neg, background: "rgba(224, 108, 108, 0.14)", border: "rgba(224, 108, 108, 0.5)" }
+        : received
+          ? { color: COLORS.pos, background: "rgba(79, 191, 134, 0.14)", border: "rgba(79, 191, 134, 0.5)" }
+          : { color: COLORS.inkMuted, background: COLORS.surfaceSunk, border: COLORS.border };
+    Object.assign(button.style, {
+        position: "absolute",
+        left: "12px",
+        bottom: "12px",
+        padding: "4px 12px",
+        borderRadius: "999px",
+        background: tone.background,
+        border: `1px solid ${tone.border}`,
+        color: tone.color,
+        font: `700 12px/1.4 ${FONT}`,
+        cursor: "pointer",
+    });
+    button.onclick = () => openTab("User data");
+    return button;
+}
+
+function utf8Bytes(text: string): number {
+    return typeof TextEncoder === "undefined" ? text.length : new TextEncoder().encode(text).length;
+}
+
+function formatUserData(userData: string): string {
+    try {
+        const parsed: unknown = JSON.parse(userData);
+        if (parsed !== null && typeof parsed === "object") {
+            return JSON.stringify(parsed, null, 2);
+        }
+    } catch {
+        // Not JSON: show the raw string.
+    }
+    return userData;
+}
+
+function createResultTool(openTab: (label: string) => void): DevTool {
     const content = document.createElement("div");
     content.setAttribute("role", "tabpanel");
     Object.assign(content.style, {
@@ -1053,7 +2277,7 @@ function createResultTool(): DevTool {
             boxShadow: "0 0 28px rgba(242, 121, 15, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
         });
         score.append(
-            badgeHeader("Score", COLORS.brandOrange),
+            badgeHeader("Result", COLORS.brandOrange),
             badgeValue(String(reported.result), {
                 color: COLORS.ink,
                 font: `900 clamp(32px, 20cqmin, 88px)/1 ${FONT}`,
@@ -1101,7 +2325,7 @@ function createResultTool(): DevTool {
             color: COLORS.inkSecondary,
             font: `700 12px/1.4 ${MONO}`,
         });
-        card.append(duration);
+        card.append(duration, renderUserDataButton(reported, openTab));
         content.replaceChildren(card);
     };
 
@@ -1118,34 +2342,45 @@ function formatBytes(bytes: number): string {
     return bytes < 1024 ? `${bytes} B` : `${Number((bytes / 1024).toFixed(1))} KB`;
 }
 
-function usageColor(bytes: number, bytesCapDrops: number): string {
-    if (bytesCapDrops > 0 || bytes >= MAX_PAYLOAD_BYTES_PER_LOAD) {
+function usageColor(bytes: number, max: number, overflowed: boolean, normal = COLORS.inkSecondary): string {
+    if (overflowed || bytes >= max) {
         return COLORS.neg;
     }
-    return bytes >= MAX_PAYLOAD_BYTES_PER_LOAD * USAGE_WARN_RATIO ? COLORS.warn : COLORS.inkSecondary;
+    return bytes >= max * USAGE_WARN_RATIO ? COLORS.warn : normal;
 }
 
-function renderUsage(): HTMLElement[] {
-    const { bytes, bytesCapDrops } = getTrackedUsage();
+function remainingPercent(bytes: number, max: number): number {
+    return Math.max(0, 100 - Math.round((bytes / max) * 100));
+}
+
+function renderUsage(bytes: number, max: number, overflowed: boolean): HTMLElement[] {
     const size = document.createElement("span");
     size.textContent = `${formatBytes(bytes)} `;
     size.style.color = COLORS.inkSecondary;
     const percent = document.createElement("span");
-    percent.textContent = `(${Math.round((bytes / MAX_PAYLOAD_BYTES_PER_LOAD) * 100)}%)`;
-    percent.style.color = usageColor(bytes, bytesCapDrops);
+    percent.textContent = `(${remainingPercent(bytes, max)}% left)`;
+    percent.style.color = usageColor(bytes, max, overflowed);
     return [size, percent];
 }
 
-function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
+function renderTrackedUsage(): HTMLElement[] {
+    const { bytes, bytesCapDrops } = getTrackedUsage();
+    return renderUsage(bytes, MAX_PAYLOAD_BYTES_PER_LOAD, bytesCapDrops > 0);
+}
+
+function renderRow(entry: TrackedEntry): HTMLElement {
     const row = document.createElement("div");
     row.dataset.kind = entry.kind;
+    row.dataset.key = entry.key;
     row.tabIndex = 0;
     row.setAttribute("aria-describedby", DETAIL_ID);
     Object.assign(row.style, {
         display: "flex",
         alignItems: "center",
         gap: "8px",
-        padding: "5px 12px",
+        margin: "0 6px",
+        padding: "5px 6px",
+        borderRadius: "6px",
         borderLeft: `3px solid ${entry.kind === "drop" ? COLORS.neg : "transparent"}`,
         cursor: "pointer",
     });
@@ -1175,23 +2410,6 @@ function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
         key.textContent = `⚠ dropped ${entry.key}`;
     }
     row.append(key, time);
-
-    if (count !== undefined) {
-        const badge = document.createElement("span");
-        badge.textContent = String(count);
-        Object.assign(badge.style, {
-            flexShrink: "0",
-            minWidth: "22px",
-            padding: "1px 7px",
-            boxSizing: "border-box",
-            borderRadius: "999px",
-            background: entry.kind === "drop" ? COLORS.neg : COLORS.border,
-            color: entry.kind === "drop" ? COLORS.onAccent : COLORS.ink,
-            font: `700 11px/1.4 ${FONT}`,
-            textAlign: "center",
-        });
-        row.append(badge);
-    }
     return row;
 }
 
@@ -1310,7 +2528,7 @@ function showUsageDetail(detail: HTMLElement, anchor: HTMLElement): void {
     title.textContent = "Total event size";
     Object.assign(title.style, { flex: "1", color: COLORS.ink, font: `700 13px/1.4 ${FONT}` });
     const total = document.createElement("span");
-    total.append(...renderUsage());
+    total.append(...renderTrackedUsage());
     Object.assign(total.style, { flexShrink: "0", fontFamily: MONO, fontSize: "11px" });
     header.append(title, total);
 

@@ -32,7 +32,43 @@ const receivedByKey = new Map<string, number>();
 export interface ReportedResult {
     result: number | string;
     flavorText?: string;
+    userData?: string;
     durationMs: number;
+}
+
+export type ConfigSource = "injected" | "default" | "missing";
+
+export interface ConfigRequest {
+    key: string;
+    value: string | undefined;
+    source: ConfigSource;
+}
+
+const configRequests = new Map<string, ConfigRequest>();
+const configListeners = new Set<(requests: readonly ConfigRequest[]) => void>();
+
+export function recordConfigRequest(request: ConfigRequest): void {
+    const previous = configRequests.get(request.key);
+    if (previous && previous.value === request.value && previous.source === request.source) {
+        return;
+    }
+    configRequests.set(request.key, request);
+    const requests = getConfigRequests();
+    for (const listener of configListeners) {
+        try {
+            listener(requests);
+        } catch {
+            // A broken listener must not make a config read throw.
+        }
+    }
+}
+
+export function getConfigRequests(): readonly ConfigRequest[] {
+    return [...configRequests.values()];
+}
+
+export function subscribeConfigRequests(listener: (requests: readonly ConfigRequest[]) => void): void {
+    configListeners.add(listener);
 }
 
 let playStartedAt: number | undefined;
@@ -45,6 +81,33 @@ export function markPlayStarted(): void {
 
 export function getPlayDurationMs(): number {
     return Math.round(performance.now() - (playStartedAt ?? 0));
+}
+
+export interface PendingResult {
+    reportedAt: number;
+    delayMs: number;
+}
+
+let pendingResult: PendingResult | undefined;
+const pendingListeners = new Set<(pending: PendingResult) => void>();
+
+export function recordResultPending(delayMs: number): void {
+    pendingResult = { reportedAt: performance.now(), delayMs };
+    for (const listener of pendingListeners) {
+        try {
+            listener(pendingResult);
+        } catch {
+            // A broken listener must not make reportResult() throw.
+        }
+    }
+}
+
+export function getPendingResult(): PendingResult | undefined {
+    return pendingResult;
+}
+
+export function subscribePendingResult(listener: (pending: PendingResult) => void): void {
+    pendingListeners.add(listener);
 }
 
 export function getReportedResult(): ReportedResult | undefined {
