@@ -30,4 +30,4 @@ on('large', () => {
 on('reserved', () => track('minit.sneaky'));
 on('invalid', () => track(''));
 on('loading-done', () => loadingDone());
-on('report-result', () => reportResult(1234, { flavorText: 'Preview run' }));
+on('report-result', () => reportResult(1234, { flavorText: 'Preview run', userData: `level=${level}` }));

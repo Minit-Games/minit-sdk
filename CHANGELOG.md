@@ -11,7 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 ### Added
 
 - `track(key, properties?)` records a gameplay event for the Game's analytics and forwards it to the host's optional `window.minit.track`. Keys and property names are any non-empty string (`minit.` is reserved); values are booleans, finite numbers or strings. The only limit is a budget of 4 KB of events per play (about 70–100 events with 1–2 properties); invalid calls and events that do not fit drop whole with one `[Minit] track dropped: <reason>` warning per reason per play, and it never throws. Outside a host the SDK enforces the budget itself. Exports the `TrackProperties` type; `MinitApi` gains an optional `track`.
-- Dev tools panel (local testing only): Config (edit, reset and the first-time-user toggle), Tracking, Result, User data and Suggestions tabs, error badges for dropped events and oversized `userData`, a launcher countdown for `reportResult`'s `delay`, and settings for auto-opening on result and closing on replay.
+- Dev tools panel (local testing only; `Ctrl+M` toggles it): Config (edit, reset and the first-time-user toggle), Tracking (events, drops and the `used / 4096 bytes` budget), Result (with stars), User data (edit, Copy, Export, Clear, Apply & reload) and Suggestions tabs, error badges for dropped events and oversized `userData`, a launcher countdown for `reportResult`'s `delay`, Replay and "Replay with new user data" buttons, and settings for auto-opening on result and closing on replay.
 - Local testing: `?hasPlayedGame=true|false` stands in for the host's `window.minit.hasPlayedGame` when no host injects it, so `shouldShowTutorial()` gates the way it does in the app. The param is reserved and hidden from `getConfig()` / `getConfigValue()`.
 - `requestDeviceMotionPermission()` requests iOS motion and orientation sensor access from a user gesture, reports `"granted"`, `"denied"`, or `"unsupported"`, and never rejects. Call it from `click`/`pointerup`/`touchend`, not `pointerdown`: iOS denies a request made on touch-down without prompting.
 - `getMotionQuality()`, `prefersReducedMotion()`, and `getDeviceTier()` expose the host's resolved effects quality, OS reduced-motion preference, and RAM-based device tier, with browser fallbacks and URL overrides for local testing (DROP-12021, DROP-12023).
@@ -20,6 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This pr
 
 ### Changed
 
+- Local testing: `reportResult()` no longer shows the result overlay card; the dev tools panel's Result tab shows the result instead.
 - docs: terminology — Minit Games / Game / Post
 - **`shouldShowTutorial()` now gates on `window.minit.hasPlayedGame` instead of userData.** Without a `?tutorial=` override it hides only when `hasPlayedGame === true`; any other value or its absence shows the tutorial. Games no longer need to write `userData` to hide the tutorial for returning players (DROP-9851).
   - **Behaviour change for existing Games:** a returning player whose stored userData used to hide the tutorial now sees it again wherever the host doesn't inject `window.minit.hasPlayedGame` — on every launch on web play, in Studio preview (append `?tutorial=0` to hide), and in older app builds.
