@@ -9,6 +9,17 @@ import { USER_DATA_MAX_BYTES } from "./userData.js";
 // minit-sdk cannot import across repositories.
 const FLAVOR_TEXT_MAX_LENGTH = 64;
 
+// Mirrors the app's getStarsFromPercentage. Dev mode has no other players' results, and the
+// host ranks a result at the 100th percentile until a game has more than 3 of them.
+const DEV_RESULT_PERCENTILE = 100;
+
+function starsFromPercentile(percentile: number): number {
+    if (percentile >= 67) {
+        return 3;
+    }
+    return percentile >= 34 ? 2 : 1;
+}
+
 /**
  * Reports the run's outcome to the host and triggers its result screen. Call once, when the run ends.
  *
@@ -22,11 +33,14 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
 
     if(isTestEnvironment()) {
 
-        recordTrackedEvent("minit.result", {});
+        const flavorText = options?.flavorText;
+        const stars = starsFromPercentile(DEV_RESULT_PERCENTILE);
+        recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars });
         showTrackDevPanel();
         const reported = {
             result,
-            flavorText: options?.flavorText,
+            stars,
+            flavorText,
             userData: typeof options?.userData === "string" ? options.userData : undefined,
             durationMs: getPlayDurationMs(),
         };

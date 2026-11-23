@@ -28,6 +28,6 @@ on('large', () => {
 });
 
 on('reserved', () => track('minit.sneaky'));
-on('invalid', () => track('bad key!'));
+on('invalid', () => track(''));
 on('loading-done', () => loadingDone());
 on('report-result', () => reportResult(1234, { flavorText: 'Preview run' }));

@@ -530,7 +530,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result; optional `flavorText` (64-character cap) for a session stat/moment, not the score, shown on the host result screen and activity feed |
-| `track(key, properties?)`        | Record a gameplay event for analytics; invalid or excess calls warn and drop, never throw (see [Event tracking](#event-tracking)) |
+| `track(key, properties?)`        | Record a gameplay event for analytics; invalid calls and events over the per-play budget warn and drop, never throw (see [Event tracking](#event-tracking)) |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
@@ -621,12 +621,11 @@ track('level.start');
 track('level.complete', { level: 3, perfect: true, boss: 'slime' });
 ```
 
-`track()` never throws. Any call after `reportResult()` is dropped (`after-result`). An invalid or excess call drops the whole event and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per game load.
+`track()` never throws. Any call after `reportResult()` is dropped (`after-result`). An invalid call, or an event that does not fit the budget, is dropped whole and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per play.
 
-- **Key:** 1–64 characters of `A-Z a-z 0-9 _ . -`. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
-- **Properties:** optional plain object, at most 20 entries. Property names use the same characters, 1–40 long. Values are a boolean, a finite number, or a string of at most 256 characters — no `null`, nested objects, or arrays.
-- **Size:** the serialized `{ key, props }` must fit in 2048 UTF-8 bytes, and the sizes of all events in one game load must sum to at most 16 KB (`bytes-cap`).
-- **Rate:** a burst of 5 events, refilling at 5 per second, and at most 100 events per game load (`rate`, `load-cap`). Outside a host (`isTestEnvironment()`) the SDK enforces these itself, so a Game that exceeds them shows the warning during local testing.
+- **Key:** any non-empty string. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
+- **Properties:** optional plain object with non-empty names. Values are a boolean, a finite number, or a string — no `null`, `NaN`, `Infinity`, nested objects, or arrays.
+- **Budget — the only limit:** 4 KB (4096 UTF-8 bytes) of events per play, which is about 70–100 events with 1–2 properties. Each event counts as the UTF-8 size of its stored line `[key, props, t]`. An event that does not fit the remaining budget is dropped (`budget`); a smaller later event can still fit. The budget starts over on every load and replay. There is no rate or count limit, and the platform's own `minit.*` events do not count. Outside a host (`isTestEnvironment()`) the SDK enforces the budget itself, so a Game that exceeds it shows the warning during local testing.
 
 ## Viewability
 

@@ -14,13 +14,7 @@ import {
     subscribeTrackedEntries,
 } from "./trackDevBuffer.js";
 import type { ConfigRequest, ConfigSource, PendingResult, ReportedResult } from "./trackDevBuffer.js";
-import {
-    MAX_EVENTS_PER_LOAD,
-    MAX_PAYLOAD_BYTES_PER_LOAD,
-    MAX_PROPS,
-    RATE_REFILL_PER_SECOND,
-    RESERVED_KEY_PREFIX,
-} from "./trackLimits.js";
+import { PLAY_BUDGET_BYTES, RESERVED_KEY_PREFIX } from "./trackLimits.js";
 import type { TrackDropReason, TrackedEntry } from "./trackDevBuffer.js";
 import { USER_DATA_MAX_BYTES, USER_DATA_PARAM_KEY, getUserData } from "./userData.js";
 import { HAS_PLAYED_GAME_PARAM_KEY } from "./config.js";
@@ -1248,7 +1242,7 @@ interface UsageFooter {
     update(bytes: number, max: number, overflowed: boolean): void;
 }
 
-function createUsageFooter(label: string): UsageFooter {
+function createUsageFooter(label: string, render = renderUsage): UsageFooter {
     const indicator = document.createElement("span");
     indicator.tabIndex = 0;
     indicator.setAttribute("aria-describedby", DETAIL_ID);
@@ -1287,7 +1281,7 @@ function createUsageFooter(label: string): UsageFooter {
         element,
         indicator,
         update(bytes, max, overflowed) {
-            indicator.replaceChildren(...renderUsage(bytes, max, overflowed));
+            indicator.replaceChildren(...render(bytes, max, overflowed));
             const percent = remainingPercent(bytes, max);
             track.setAttribute("aria-valuenow", String(percent));
             fill.style.width = `${percent}%`;
@@ -1307,7 +1301,7 @@ function createTrackedEventsTool(detail: HTMLElement, attachDetail: AttachDetail
     const dropNotice = createNotice("error");
     dropNotice.style.display = "none";
 
-    const usage = createUsageFooter("Remaining event size");
+    const usage = createUsageFooter("Remaining event budget", renderBudgetUsage);
 
     const list = document.createElement("div");
     list.id = PANEL_ID;
@@ -1330,8 +1324,8 @@ function createTrackedEventsTool(detail: HTMLElement, attachDetail: AttachDetail
     const dropsByReason = new Map<TrackDropReason, number>();
 
     const updateUsage = () => {
-        const { bytes, bytesCapDrops } = getTrackedUsage();
-        usage.update(bytes, MAX_PAYLOAD_BYTES_PER_LOAD, bytesCapDrops > 0);
+        const { bytes, budgetDrops } = getTrackedUsage();
+        usage.update(bytes, PLAY_BUDGET_BYTES, budgetDrops > 0);
     };
     attachDetail(usage.indicator, () => showUsageDetail(detail, usage.indicator));
 
@@ -2486,7 +2480,12 @@ function createResultTool(openTab: (label: string) => void): DevTool {
                 textShadow: "0 2px 12px rgba(242, 121, 15, 0.35)",
             }),
         );
-        card.append(score);
+        const stars = document.createElement("div");
+        stars.dataset.stars = String(reported.stars);
+        stars.setAttribute("aria-label", `${reported.stars} of 3 stars`);
+        stars.textContent = "★".repeat(reported.stars) + "☆".repeat(Math.max(0, 3 - reported.stars));
+        Object.assign(stars.style, { color: COLORS.brandOrange, font: `900 22px/1 ${FONT}`, letterSpacing: "0.1em" });
+        card.append(score, stars);
 
         if (reported.flavorText) {
             const flavor = document.createElement("div");
@@ -2565,9 +2564,16 @@ function renderUsage(bytes: number, max: number, overflowed: boolean): HTMLEleme
     return [size, percent];
 }
 
+function renderBudgetUsage(bytes: number, max: number, overflowed: boolean): HTMLElement[] {
+    const used = document.createElement("span");
+    used.textContent = `${bytes} / ${max} bytes`;
+    used.style.color = usageColor(bytes, max, overflowed);
+    return [used];
+}
+
 function renderTrackedUsage(): HTMLElement[] {
-    const { bytes, bytesCapDrops } = getTrackedUsage();
-    return renderUsage(bytes, MAX_PAYLOAD_BYTES_PER_LOAD, bytesCapDrops > 0);
+    const { bytes, budgetDrops } = getTrackedUsage();
+    return renderBudgetUsage(bytes, PLAY_BUDGET_BYTES, budgetDrops > 0);
 }
 
 function renderRow(entry: TrackedEntry): HTMLElement {
@@ -2687,20 +2693,12 @@ function describeDropReason(reason: TrackDropReason): string {
             return `reserved ${RESERVED_KEY_PREFIX} prefix`;
         case "invalid-props":
             return "properties are not an object";
-        case "too-many-props":
-            return `too many properties (more than ${MAX_PROPS})`;
         case "invalid-prop-key":
             return "invalid property key";
         case "invalid-prop-value":
             return "invalid property value";
-        case "too-large":
-            return "event too large";
-        case "rate":
-            return `rate limit exceeded (${RATE_REFILL_PER_SECOND} per second)`;
-        case "load-cap":
-            return `more than ${MAX_EVENTS_PER_LOAD} events this load`;
-        case "bytes-cap":
-            return `event data this load would exceed ${formatBytes(MAX_PAYLOAD_BYTES_PER_LOAD)}`;
+        case "budget":
+            return `over the ${PLAY_BUDGET_BYTES}-byte event budget for this play`;
         case "after-result":
             return "sent after reportResult()";
     }
@@ -2735,7 +2733,7 @@ function showUsageDetail(detail: HTMLElement, anchor: HTMLElement): void {
         borderBottom: `1px solid ${COLORS.border}`,
     });
     const title = document.createElement("span");
-    title.textContent = "Total event size";
+    title.textContent = "Event budget";
     Object.assign(title.style, { flex: "1", color: COLORS.ink, font: `700 13px/1.4 ${FONT}` });
     const total = document.createElement("span");
     total.append(...renderTrackedUsage());
@@ -2744,8 +2742,8 @@ function showUsageDetail(detail: HTMLElement, anchor: HTMLElement): void {
 
     const explanation = document.createElement("div");
     explanation.textContent =
-        `The sum of every tracked event's size. ` +
-        `A game load may send at most ${formatBytes(MAX_PAYLOAD_BYTES_PER_LOAD)}; an event that would exceed it is dropped.`;
+        `The sum of every tracked event's size. Each play may track ${PLAY_BUDGET_BYTES} bytes ` +
+        `(about 70–100 events with 1–2 properties); an event that does not fit is dropped.`;
 
     detail.replaceChildren(header, explanation);
     Object.assign(detail.style, { color: COLORS.inkSecondary, fontFamily: FONT, wordBreak: "normal" });

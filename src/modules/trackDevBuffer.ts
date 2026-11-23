@@ -2,13 +2,9 @@ export type TrackDropReason =
     | "invalid-key"
     | "reserved-key"
     | "invalid-props"
-    | "too-many-props"
     | "invalid-prop-key"
     | "invalid-prop-value"
-    | "too-large"
-    | "rate"
-    | "load-cap"
-    | "bytes-cap"
+    | "budget"
     | "after-result";
 
 export type TrackedEntry =
@@ -17,7 +13,7 @@ export type TrackedEntry =
 
 export interface TrackedUsage {
     bytes: number;
-    bytesCapDrops: number;
+    budgetDrops: number;
 }
 
 type Listener = (entry: TrackedEntry) => void;
@@ -26,11 +22,12 @@ export const MAX_DEV_ENTRIES = 500;
 
 const entries: TrackedEntry[] = [];
 const listeners = new Set<Listener>();
-const usage: TrackedUsage = { bytes: 0, bytesCapDrops: 0 };
+const usage: TrackedUsage = { bytes: 0, budgetDrops: 0 };
 const receivedByKey = new Map<string, number>();
 
 export interface ReportedResult {
     result: number | string;
+    stars: number;
     flavorText?: string;
     userData?: string;
     durationMs: number;
@@ -148,15 +145,20 @@ export function subscribeTrackedEntries(listener: Listener): () => void {
     };
 }
 
-export function recordTrackedEvent(key: string, props: Record<string, boolean | number | string>, bytes?: number): void {
+export function recordTrackedEvent(
+    key: string,
+    props: Record<string, boolean | number | string>,
+    bytes?: number,
+    t = Math.round(performance.now()),
+): void {
     usage.bytes += bytes ?? 0;
     receivedByKey.set(key, getReceivedCount(key) + 1);
-    append({ kind: "event", key, props: { ...props }, bytes, t: Math.round(performance.now()) });
+    append({ kind: "event", key, props: { ...props }, bytes, t });
 }
 
 export function recordTrackedDrop(key: string, reason: TrackDropReason): void {
-    if (reason === "bytes-cap") {
-        usage.bytesCapDrops++;
+    if (reason === "budget") {
+        usage.budgetDrops++;
     }
     append({ kind: "drop", key, reason, t: Math.round(performance.now()) });
 }

@@ -63,6 +63,7 @@ const launcher = () => byId<HTMLButtonElement>("minit-dev-launcher");
 const tools = () => byId("minit-dev-tools");
 const detail = () => byId("minit-track-dev-detail");
 const replay = () => byId("minit-dev-replay");
+const replayButton = () => replay().querySelector("button")!;
 
 function ctrlM(init: KeyboardEventInit = {}): KeyboardEvent {
     const event = new KeyboardEvent("keydown", { key: "m", ctrlKey: true, bubbles: true, cancelable: true, ...init });
@@ -72,7 +73,7 @@ function ctrlM(init: KeyboardEventInit = {}): KeyboardEvent {
 
 function usageIndicator(): HTMLElement {
     const indicator = Array.from(tools().querySelectorAll<HTMLElement>("span[tabindex]")).find((span) =>
-        /\(\d+% left\)$/.test(span.textContent ?? ""),
+        /^\d+ \/ 4096 bytes$/.test(span.textContent ?? ""),
     );
     if (!indicator) {
         throw new Error("no usage indicator");
@@ -80,7 +81,7 @@ function usageIndicator(): HTMLElement {
     return indicator;
 }
 
-function usagePercent(): HTMLElement {
+function usageText(): HTMLElement {
     return usageIndicator().lastElementChild as HTMLElement;
 }
 
@@ -210,13 +211,13 @@ describe("track dev panel", () => {
         now = 1000;
         track("minit.sneaky");
         now = 2000;
-        track("bad key!");
+        track("lvl", { "": 1 });
         await flushPanelLoad();
 
         const dropRows = rows("drop");
         expect(dropRows).toHaveLength(2);
-        expect(dropRows[0].textContent).toContain("bad key!");
-        expect(hoverDetail(dropRows[0])).toContain("reason: invalid key");
+        expect(dropRows[0].textContent).toContain("lvl");
+        expect(hoverDetail(dropRows[0])).toContain("reason: invalid property key");
         expect(dropRows[1].textContent).toContain("minit.sneaky");
         expect(hoverDetail(dropRows[1])).toContain("reason: reserved minit. prefix");
     });
@@ -324,7 +325,7 @@ describe("dev tools launcher", () => {
         launcher().click();
         expect(replay().style.display).toBe("flex");
 
-        replay().click();
+        replayButton().click();
         // jsdom cannot stub location.reload; its unimplemented-navigation report proves the call.
         expect(String(consoleError.mock.calls[0]?.[0])).toContain("navigation");
 
@@ -486,7 +487,7 @@ describe("dev tools panel", () => {
         await flushPanelLoad();
         expect(countBadge()).toBe("2");
 
-        track("bad key!");
+        track("");
         expect(countBadge()).toBe("3");
     });
 
@@ -496,11 +497,11 @@ describe("dev tools panel", () => {
         now = 3420;
         track("level_start");
         now = 12345;
-        track("bad key!");
+        track("bad", { v: NaN });
         await flushPanelLoad();
 
         expect(rows().map(rowParts)).toEqual([
-            ["⚠ dropped bad key!", "12.35s"],
+            ["⚠ dropped bad", "12.35s"],
             ["level_start", "3.42s"],
         ]);
         expect(rows()[0].getAttribute("data-kind")).toBe("drop");
@@ -510,13 +511,18 @@ describe("dev tools panel", () => {
     it("shows a row for every dropped call while warning once per reason", async () => {
         const { track } = await loadSdk();
 
-        for (let i = 0; i < 7; i++) {
-            track(`e${i}`);
+        for (let i = 0; i < 3; i++) {
+            track(`big${i}`, { v: "x".repeat(4100) });
         }
+        track("small");
         await flushPanelLoad();
 
-        expect(rows("event")).toHaveLength(5);
-        expect(rows("drop").map((row) => row.firstChild?.textContent)).toEqual(["⚠ dropped e6", "⚠ dropped e5"]);
+        expect(rows("event")).toHaveLength(1);
+        expect(rows("drop").map((row) => row.firstChild?.textContent)).toEqual([
+            "⚠ dropped big2",
+            "⚠ dropped big1",
+            "⚠ dropped big0",
+        ]);
         expect(console.warn).toHaveBeenCalledTimes(1);
     });
 
@@ -525,7 +531,7 @@ describe("dev tools panel", () => {
         const { MAX_DEV_ENTRIES } = await import("./trackDevBuffer");
 
         for (let i = 0; i < MAX_DEV_ENTRIES + 2; i++) {
-            recordTrackedDrop(`e${i}`, "rate");
+            recordTrackedDrop(`e${i}`, "budget");
         }
 
         const all = rows();
@@ -635,7 +641,7 @@ describe("dev tools panel lazy loading", () => {
         const { factory, track, loadingDone, reportResult } = await loadWithPanelSpy();
 
         track("level_start", { level: 1 });
-        track("bad key!");
+        track("");
         loadingDone();
         reportResult(10);
         await flushPanelLoad();
@@ -661,7 +667,7 @@ describe("dev tools panel lazy loading", () => {
         await flushPanelLoad();
 
         expect(panels()).toHaveLength(1);
-        expect(rows("event").map((row) => row.firstChild?.textContent)).toEqual(["minit.loading_done"]);
+        expect(rows("event").map((row) => row.getAttribute("data-key"))).toEqual(["minit.loading_done"]);
     });
 });
 
@@ -719,12 +725,8 @@ describe("dev tools detail popup", () => {
         ["invalid-key", "invalid key"],
         ["reserved-key", "reserved minit. prefix"],
         ["invalid-props", "properties are not an object"],
-        ["too-many-props", "too many properties (more than 20)"],
         ["invalid-prop-key", "invalid property key"],
         ["invalid-prop-value", "invalid property value"],
-        ["too-large", "event too large"],
-        ["rate", "rate limit exceeded (5 per second)"],
-        ["load-cap", "more than 100 events this load"],
     ] as const)("explains the %s drop reason", async (reason, text) => {
         const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
         recordTrackedDrop("some_key", reason);
@@ -823,10 +825,21 @@ describe("dev tools detail popup size and received count", () => {
         track("coin", { v: 2 });
         await flushPanelLoad();
 
-        const expectedSize = new NodeTextEncoder().encode(JSON.stringify({ key: "coin", props: { v: 2 } })).length;
+        const expectedSize = new NodeTextEncoder().encode(JSON.stringify(["coin", { v: 2 }, 1200])).length;
         const text = hoverDetail(rows()[0]);
         expect(text).toContain(`size: ${expectedSize} B`);
         expect(text).toContain("received: 2");
+    });
+
+    it("shows the result, stars and flavor text of minit.result", async () => {
+        const { reportResult } = await mountPanel();
+        reportResult(42, { flavorText: "Nice run", delay: 10_000 });
+
+        const text = hoverDetail(rows()[0]);
+
+        expect(text).toContain("result: 42");
+        expect(text).toContain("stars: 3");
+        expect(text).toContain('flavorText: "Nice run"');
     });
 
     it("omits the size for built-in events", async () => {
@@ -840,7 +853,7 @@ describe("dev tools detail popup size and received count", () => {
     });
 
     it.each([
-        ["bytes-cap", "event data this load would exceed 16 KB"],
+        ["budget", "over the 4096-byte event budget for this play"],
         ["after-result", "sent after reportResult()"],
     ] as const)("explains the %s drop reason", async (reason, text) => {
         const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
@@ -854,52 +867,56 @@ describe("dev tools detail popup size and received count", () => {
 describe("dev tools usage indicator", () => {
     const RGB = { ink: "rgb(151, 162, 189)", warn: "rgb(229, 184, 76)", neg: "rgb(224, 108, 108)" };
 
-    it("shows the total size and percentage of the per-load cap", async () => {
+    it("shows the budget used as used / 4096 bytes", async () => {
         const { recordTrackedEvent } = await mountPanel();
+        expect(usageIndicator().textContent).toBe("0 / 4096 bytes");
+
         recordTrackedEvent("a", {}, 100);
         recordTrackedEvent("b", {}, 1024);
 
-        expect(usageIndicator().textContent).toBe("1.1 KB (93% left)");
-        expect(usagePercent().style.color).toBe(RGB.ink);
+        expect(usageIndicator().textContent).toBe("1124 / 4096 bytes");
+        expect(usageText().style.color).toBe(RGB.ink);
     });
 
-    it("trims a whole number of KB", async () => {
+    it("does not count built-in events toward the budget", async () => {
+        const { loadingDone, reportResult } = await mountPanel();
+
+        loadingDone();
+        reportResult(1);
+
+        expect(usageIndicator().textContent).toBe("0 / 4096 bytes");
+    });
+
+    it("turns warn at 80% and neg at the budget", async () => {
         const { recordTrackedEvent } = await mountPanel();
-        recordTrackedEvent("a", {}, 16 * 1024);
 
-        expect(usageIndicator().textContent).toBe("16 KB (0% left)");
+        recordTrackedEvent("a", {}, Math.ceil(4096 * 0.8));
+        expect(usageText().style.color).toBe(RGB.warn);
+
+        recordTrackedEvent("b", {}, 4096);
+        expect(usageText().style.color).toBe(RGB.neg);
     });
 
-    it("turns warn at 80% and neg at the cap", async () => {
-        const { recordTrackedEvent } = await mountPanel();
-
-        recordTrackedEvent("a", {}, Math.ceil(16 * 1024 * 0.8));
-        expect(usagePercent().style.color).toBe(RGB.warn);
-
-        recordTrackedEvent("b", {}, 16 * 1024);
-        expect(usagePercent().style.color).toBe(RGB.neg);
-    });
-
-    it("turns neg after a bytes-cap drop", async () => {
+    it("turns neg after a budget drop", async () => {
         const { recordTrackedEvent, recordTrackedDrop } = await mountPanel();
         recordTrackedEvent("a", {}, 10);
 
-        recordTrackedDrop("b", "bytes-cap");
+        recordTrackedDrop("b", "budget");
 
-        expect(usagePercent().style.color).toBe(RGB.neg);
+        expect(usageText().style.color).toBe(RGB.neg);
     });
 
-    it("shows the Total event size detail on hover and on focus", async () => {
+    it("shows the Event budget detail on hover and on focus", async () => {
         await mountPanel();
 
         usageIndicator().dispatchEvent(new MouseEvent("mouseenter"));
         expect(detail().style.display).toBe("block");
-        expect(detail().textContent).toContain("Total event size");
+        expect(detail().textContent).toContain("Event budget");
 
         usageIndicator().dispatchEvent(new MouseEvent("mouseleave"));
         usageIndicator().focus();
         expect(detail().style.display).toBe("block");
-        expect(detail().textContent).toContain("Total event size");
+        expect(detail().textContent).toContain("Event budget");
     });
 });
 
@@ -927,6 +944,16 @@ describe("dev tools Result tab", () => {
         expect(card?.textContent).toContain("42");
         expect(card?.textContent).toContain("Nice run");
         expect(card?.textContent).toContain("⏱ 2.50s");
+    });
+
+    it("shows the dev stars", async () => {
+        const { reportResult } = await mountPanel();
+
+        await reportAndFlush(() => reportResult(42));
+
+        const stars = tools().querySelector<HTMLElement>("[data-result] [data-stars]");
+        expect(stars?.dataset.stars).toBe("3");
+        expect(stars?.getAttribute("aria-label")).toBe("3 of 3 stars");
     });
 
     it("omits the flavor text badge when none is given", async () => {
@@ -1039,14 +1066,14 @@ describe("dev tools Tracking tab footer and notices", () => {
     const trackingPanel = () => byId(PANEL_SELECTOR.slice(1)).closest<HTMLElement>('[role="tabpanel"]')!;
     const dropNotice = () => trackingPanel().querySelector<HTMLElement>('[data-notice="error"]')!;
 
-    it("reports the remaining event size on the progress bar and indicator", async () => {
+    it("reports the remaining event budget on the progress bar and indicator", async () => {
         const { recordTrackedEvent } = await mountPanel();
-        expect(progressBar("Remaining event size").getAttribute("aria-valuenow")).toBe("100");
+        expect(progressBar("Remaining event budget").getAttribute("aria-valuenow")).toBe("100");
 
-        recordTrackedEvent("a", {}, 4 * 1024);
+        recordTrackedEvent("a", {}, 1024);
 
-        expect(progressBar("Remaining event size").getAttribute("aria-valuenow")).toBe("75");
-        expect(usageIndicator().textContent).toBe("4 KB (75% left)");
+        expect(progressBar("Remaining event budget").getAttribute("aria-valuenow")).toBe("75");
+        expect(usageIndicator().textContent).toBe("1024 / 4096 bytes");
     });
 
     it("shows the Minit Studio disclaimer", async () => {
@@ -1069,21 +1096,21 @@ describe("dev tools Tracking tab footer and notices", () => {
 
     it("lists dropped events by reason in a red notice and raises the tab and launcher alerts", async () => {
         const { track } = await loadSdk();
-        track("bad key!");
+        track("bad", { v: NaN });
         await flushPanelLoad();
 
         expect(dropNotice().style.display).toBe("block");
         expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
             "1 event was thrown away and never sent:",
-            "1× invalid key",
+            "1× invalid property value",
         ]);
 
-        track("other bad!");
+        track("other", { v: null as unknown as string });
         track("minit.sneaky");
 
         expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
             "3 events were thrown away and never sent:",
-            "2× invalid key",
+            "2× invalid property value",
             "1× reserved minit. prefix",
         ]);
         expect(tabs()[1].querySelector("span")?.hasAttribute("data-alert")).toBe(true);
@@ -1100,7 +1127,7 @@ describe("dev tools Tracking row highlighting", () => {
         recordTrackedEvent("coin", {});
         recordTrackedEvent("jump", {});
         recordTrackedEvent("coin", {});
-        recordTrackedDrop("coin", "rate");
+        recordTrackedDrop("coin", "budget");
         const [drop, coin] = rows();
 
         coin.dispatchEvent(new MouseEvent("mouseenter"));
@@ -1287,40 +1314,41 @@ describe("dev tools Result tab userData button and auto-open", () => {
 });
 
 describe("dev tools User data tab", () => {
-    const value = () => tools().querySelector<HTMLElement>("[data-user-data-value]")!;
-    const userDataPanel = () => value().closest<HTMLElement>('[role="tabpanel"]')!;
-    const errorNotice = () => userDataPanel().querySelector<HTMLElement>('[data-notice="error"]')!;
-    const valueLabel = () => value().querySelector("[data-result]")?.firstElementChild?.textContent;
+    const editor = () => tools().querySelector<HTMLTextAreaElement>("[data-user-data-input]")!;
+    const userDataPanel = () => editor().closest<HTMLElement>('[role="tabpanel"]')!;
+    const notice = () => userDataPanel().querySelector<HTMLElement>("[data-notice]")!;
     const tabBadge = () => tabs()[3].querySelector<HTMLElement>("span")!;
 
     afterEach(() => {
         setUrl("");
     });
 
-    it("says there is no user data when none is loaded", async () => {
+    it("shows an empty editor when no user data is loaded", async () => {
         await mountPanel();
 
-        expect(value().textContent).toBe("No user data yet.");
+        expect(editor().value).toBe("");
+        expect(editor().placeholder).toBe("No user data yet. Type or paste it here.");
         expect(progressBar("Remaining user data size").getAttribute("aria-valuenow")).toBe("100");
     });
 
-    it("shows ?userData pretty-printed as loaded at start", async () => {
+    it("shows ?userData verbatim", async () => {
         setUrl(`userData=${encodeURIComponent('{"level":3}')}`);
         await mountPanel();
 
-        expect(valueLabel()).toBe("Loaded at start");
-        expect(value().querySelector("pre")?.textContent).toBe('{\n  "level": 3\n}');
-        expect(errorNotice().style.display).toBe("none");
+        expect(editor().value).toBe('{"level":3}');
+        expect(notice().style.display).toBe("none");
     });
 
-    it("switches to the reported value after reportResult()", async () => {
+    it("switches to the reported value after reportResult() with a success notice", async () => {
         setUrl("userData=old");
         const { reportResult } = await mountPanel();
 
         await reportAndFlush(() => reportResult(1, { userData: "new" }));
 
-        expect(valueLabel()).toBe("Reported with reportResult()");
-        expect(value().querySelector("pre")?.textContent).toBe("new");
+        expect(editor().value).toBe("new");
+        expect(notice().style.display).toBe("block");
+        expect(notice().dataset.notice).toBe("success");
+        expect(notice().firstElementChild?.textContent).toBe("User data updated");
     });
 
     it("keeps the loaded value when the result reports no userData", async () => {
@@ -1329,8 +1357,8 @@ describe("dev tools User data tab", () => {
 
         await reportAndFlush(() => reportResult(1));
 
-        expect(valueLabel()).toBe("Loaded at start");
-        expect(value().querySelector("pre")?.textContent).toBe("old");
+        expect(editor().value).toBe("old");
+        expect(notice().style.display).toBe("none");
     });
 
     it("reflects the size on the progress bar", async () => {
@@ -1347,8 +1375,9 @@ describe("dev tools User data tab", () => {
 
         await reportAndFlush(() => reportResult(1, { userData: "x".repeat(1025) }));
 
-        expect(errorNotice().style.display).toBe("block");
-        expect(errorNotice().firstElementChild?.textContent).toBe("User data too big");
+        expect(notice().style.display).toBe("block");
+        expect(notice().dataset.notice).toBe("error");
+        expect(notice().firstElementChild?.textContent).toBe("User data too big");
         expect(tabBadge().style.display).toBe("flex");
         expect(tabBadge().textContent).toBe("!");
         expect(launcherAlert()).not.toBeNull();
@@ -1360,8 +1389,19 @@ describe("dev tools User data tab", () => {
 
         await reportAndFlush(() => reportResult(1, { userData: "x".repeat(1024) }));
 
-        expect(errorNotice().style.display).toBe("none");
+        expect(notice().dataset.notice).toBe("success");
         expect(launcherAlert()).toBeNull();
+    });
+
+    it("enables Apply only after an edit", async () => {
+        await mountPanel();
+        const apply = tools().querySelector<HTMLButtonElement>('[data-user-data-action="apply"]')!;
+        expect(apply.disabled).toBe(true);
+
+        editor().value = "anything, not just JSON";
+        editor().dispatchEvent(new Event("input"));
+
+        expect(apply.disabled).toBe(false);
     });
 });
 
@@ -1442,7 +1482,7 @@ describe("dev tools Settings", () => {
             closeOnReplay: false,
         });
 
-        replay().click();
+        replayButton().click();
 
         expect(navigated()).toBe(true);
         expect(isOpen()).toBe(true);
