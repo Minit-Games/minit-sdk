@@ -621,11 +621,11 @@ track('level.start');
 track('level.complete', { level: 3, perfect: true, boss: 'slime' });
 ```
 
-`track()` never throws. An invalid or excess call drops the whole event and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per game load.
+`track()` never throws. Any call after `reportResult()` is dropped (`after-result`). An invalid or excess call drops the whole event and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per game load.
 
 - **Key:** 1–64 characters of `A-Z a-z 0-9 _ . -`. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
 - **Properties:** optional plain object, at most 20 entries. Property names use the same characters, 1–40 long. Values are a boolean, a finite number, or a string of at most 256 characters — no `null`, nested objects, or arrays.
-- **Size:** the serialized `{ key, props }` must fit in 2048 UTF-8 bytes.
+- **Size:** the serialized `{ key, props }` must fit in 2048 UTF-8 bytes, and the sizes of all events in one game load must sum to at most 16 KB (`bytes-cap`).
 - **Rate:** a burst of 5 events, refilling at 5 per second, and at most 100 events per game load (`rate`, `load-cap`). Outside a host (`isTestEnvironment()`) the SDK enforces these itself, so a Game that exceeds them shows the warning during local testing.
 
 ## Viewability

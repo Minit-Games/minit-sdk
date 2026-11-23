@@ -7,6 +7,7 @@ import {
     KEY_PATTERN,
     MAX_EVENTS_PER_LOAD,
     MAX_PAYLOAD_BYTES,
+    MAX_PAYLOAD_BYTES_PER_LOAD,
     MAX_PROPS,
     PROP_KEY_MAX_LENGTH,
     RATE_BURST,
@@ -24,29 +25,39 @@ const warnedReasons = new Set<TrackDropReason>();
 let bucketMs = BUCKET_CAPACITY_MS;
 let bucketUpdatedAt: number | undefined;
 let acceptedEvents = 0;
+let acceptedBytes = 0;
+let resultReported = false;
+
+export function closeTrackingAfterResult(): void {
+    resultReported = true;
+}
 
 /**
- * Records a custom gameplay event for the creator's analytics. Invalid or excess calls are
- * dropped with a console warning; it never throws.
+ * Records a custom gameplay event for the creator's analytics. Invalid or excess calls, and any
+ * call after `reportResult()`, are dropped with a console warning; it never throws.
  *
  * @param key 1–64 chars of `A-Z a-z 0-9 _ . -`; the `minit.` prefix is reserved.
  * @param properties Up to 20 properties of boolean, finite number or string (≤ 256 chars).
  */
 export function track(key: string, properties?: TrackProperties): void {
+    if (resultReported) {
+        drop(key, "after-result");
+        return;
+    }
     const result = validate(key, properties);
     if ("reason" in result) {
         drop(key, result.reason);
         return;
     }
-    const { props } = result;
+    const { props, bytes } = result;
 
     if (isTestEnvironment()) {
-        const limitReason = consumeDevLimits();
+        const limitReason = consumeDevLimits(bytes);
         if (limitReason) {
             drop(key, limitReason);
             return;
         }
-        recordTrackedEvent(key, props);
+        recordTrackedEvent(key, props, bytes);
         showTrackDevPanel();
     }
 
@@ -64,17 +75,17 @@ export function track(key: string, properties?: TrackProperties): void {
     }, message);
 }
 
-function validate(key: unknown, properties: unknown): { props: TrackProperties } | { reason: TrackDropReason } {
+function validate(
+    key: unknown,
+    properties: unknown,
+): { props: TrackProperties; bytes: number } | { reason: TrackDropReason } {
     if (typeof key !== "string" || key.length > KEY_MAX_LENGTH || !KEY_PATTERN.test(key)) {
         return { reason: "invalid-key" };
     }
     if (key.startsWith(RESERVED_KEY_PREFIX)) {
         return { reason: "reserved-key" };
     }
-    if (properties === undefined) {
-        return { props: {} };
-    }
-    const entries = snapshotEntries(properties);
+    const entries = properties === undefined ? [] : snapshotEntries(properties);
     if (!entries) {
         return { reason: "invalid-props" };
     }
@@ -90,10 +101,11 @@ function validate(key: unknown, properties: unknown): { props: TrackProperties }
         }
     }
     const props = Object.fromEntries(entries) as TrackProperties;
-    if (new TextEncoder().encode(JSON.stringify({ key, props })).length > MAX_PAYLOAD_BYTES) {
+    const bytes = new TextEncoder().encode(JSON.stringify({ key, props })).length;
+    if (bytes > MAX_PAYLOAD_BYTES) {
         return { reason: "too-large" };
     }
-    return { props };
+    return { props, bytes };
 }
 
 function snapshotEntries(properties: unknown): [string, unknown][] | undefined {
@@ -124,9 +136,12 @@ function isValidValue(value: unknown): boolean {
     }
 }
 
-function consumeDevLimits(): TrackDropReason | undefined {
+function consumeDevLimits(bytes: number): TrackDropReason | undefined {
     if (acceptedEvents >= MAX_EVENTS_PER_LOAD) {
         return "load-cap";
+    }
+    if (acceptedBytes + bytes > MAX_PAYLOAD_BYTES_PER_LOAD) {
+        return "bytes-cap";
     }
     // Millisecond credit instead of fractional tokens keeps the refill exact at integer times.
     const now = performance.now();
@@ -137,6 +152,7 @@ function consumeDevLimits(): TrackDropReason | undefined {
     }
     bucketMs -= TOKEN_COST_MS;
     acceptedEvents++;
+    acceptedBytes += bytes;
     return undefined;
 }
 

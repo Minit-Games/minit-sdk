@@ -10,3 +10,4 @@ export const MAX_PAYLOAD_BYTES = 2048;
 export const RATE_BURST = 5;
 export const RATE_REFILL_PER_SECOND = 5;
 export const MAX_EVENTS_PER_LOAD = 100;
+export const MAX_PAYLOAD_BYTES_PER_LOAD = 16 * 1024;

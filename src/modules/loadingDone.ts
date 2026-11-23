@@ -1,5 +1,5 @@
 import { callApiFunction, isTestEnvironment } from "../utils.js";
-import { recordTrackedEvent } from "./trackDevBuffer.js";
+import { markPlayStarted, recordTrackedEvent } from "./trackDevBuffer.js";
 import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 
 let _loadingDonePosted = false;
@@ -11,6 +11,7 @@ export function loadingDone(): void {
     _loadingDonePosted = true;
 
     if (isTestEnvironment()) {
+        markPlayStarted();
         recordTrackedEvent("minit.loading_done", {});
         showTrackDevPanel();
         return;

@@ -19,6 +19,14 @@ on('burst', () => {
 	}
 });
 
+on('large', () => {
+	const props = {};
+	for (let i = 0; i < 7; i++) {
+		props[`chunk${i}`] = 'x'.repeat(250);
+	}
+	track('replay_snapshot', props);
+});
+
 on('reserved', () => track('minit.sneaky'));
 on('invalid', () => track('bad key!'));
 on('loading-done', () => loadingDone());

@@ -1,7 +1,22 @@
 import { isTestEnvironment } from "../utils.js";
 import { getLatoFontFaceCSS } from "./fonts/lato.js";
-import { MAX_DEV_ENTRIES, getTrackedEntries, subscribeTrackedEntries } from "./trackDevBuffer.js";
-import { MAX_EVENTS_PER_LOAD, MAX_PROPS, RATE_REFILL_PER_SECOND, RESERVED_KEY_PREFIX } from "./trackLimits.js";
+import {
+    MAX_DEV_ENTRIES,
+    getReceivedCount,
+    getReportedResult,
+    getTrackedEntries,
+    getTrackedUsage,
+    subscribeReportedResult,
+    subscribeTrackedEntries,
+} from "./trackDevBuffer.js";
+import type { ReportedResult } from "./trackDevBuffer.js";
+import {
+    MAX_EVENTS_PER_LOAD,
+    MAX_PAYLOAD_BYTES_PER_LOAD,
+    MAX_PROPS,
+    RATE_REFILL_PER_SECOND,
+    RESERVED_KEY_PREFIX,
+} from "./trackLimits.js";
 import type { TrackDropReason, TrackedEntry } from "./trackDevBuffer.js";
 
 const LAUNCHER_ID = "minit-dev-launcher";
@@ -9,6 +24,9 @@ const TOOLS_ID = "minit-dev-tools";
 const PANEL_ID = "minit-track-dev-panel";
 const DETAIL_ID = "minit-track-dev-detail";
 const STYLE_ID = "minit-dev-tools-styles";
+const LAYOUT_STORAGE_KEY = "minit-dev-tools-layout";
+const SVG_NS = "http://www.w3.org/2000/svg";
+const REPLAY_ID = "minit-dev-replay";
 
 const COLORS = {
     brandOrange: "#F2790F",
@@ -20,8 +38,12 @@ const COLORS = {
     inkSecondary: "#97A2BD",
     inkMuted: "#6B7691",
     neg: "#E06C6C",
+    warn: "#E5B84C",
+    pos: "#4FBF86",
     onAccent: "#FFFFFF",
 };
+
+const USAGE_WARN_RATIO = 0.8;
 
 const FONT = "Lato, system-ui, -apple-system, 'Segoe UI', sans-serif";
 const MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -29,8 +51,12 @@ const LAUNCHER_SIZE = 48;
 const EDGE = 12;
 const GAP = 8;
 const DRAG_THRESHOLD = 6;
-const Z_INDEX = "9999";
-const PANEL_MAX_HEIGHT = "min(420px, 60vh)";
+const Z_INDEX = "2147483647";
+const PANEL_DEFAULT_WIDTH = 300;
+const PANEL_DEFAULT_HEIGHT = 320;
+const PANEL_MIN_WIDTH = 240;
+const PANEL_MIN_HEIGHT = 160;
+const GRIP_SIZE = 16;
 const DETAIL_HIDE_DELAY_MS = 150;
 
 const LOGO_VIEWBOX = "0 0 610.4 800";
@@ -88,40 +114,160 @@ function mount(body: HTMLElement): void {
     injectStyles();
 
     const detail = createDetailPanel();
-    const tools = createToolsPanel([createTrackedEventsTool(detail)]);
+    const tools = createToolsPanel([createTrackedEventsTool(detail), createResultTool()]);
     const launcher = createLauncher();
 
+    const saved = loadLayout();
+    if (saved.width !== undefined && saved.height !== undefined) {
+        tools.panel.style.width = `${saved.width}px`;
+        tools.panel.style.height = `${saved.height}px`;
+    }
+    const persist = () =>
+        saveLayout({
+            left: launcher.offsetLeft,
+            top: launcher.offsetTop,
+            width: parseFloat(tools.panel.style.width),
+            height: parseFloat(tools.panel.style.height),
+            open,
+        });
+
+    const replay = createReplayButton();
+
     let open = false;
+    let closing: Animation[] = [];
     const setOpen = (next: boolean) => {
         open = next;
-        tools.panel.style.display = open ? "flex" : "none";
+        persist();
         launcher.setAttribute("aria-expanded", String(open));
+        closing.forEach((animation) => animation.cancel());
+        closing = [];
         if (open) {
-            anchorTools(tools.panel, launcher);
-        } else {
-            detail.style.display = "none";
+            tools.panel.style.display = "flex";
+            replay.style.display = "flex";
+            placeLauncher(launcher, launcher.offsetLeft, launcher.offsetTop);
+            anchorTools(tools.panel, tools.grip, launcher);
+            animatePanel(tools.panel, tools.grip, true);
+            animateReplay(replay, launcher, true);
+            return;
+        }
+        detail.style.display = "none";
+        for (const [element, animation] of [
+            [tools.panel, animatePanel(tools.panel, tools.grip, false)],
+            [replay, animateReplay(replay, launcher, false)],
+        ] as const) {
+            if (animation) {
+                animation.onfinish = () => {
+                    element.style.display = "none";
+                };
+                closing.push(animation);
+            } else {
+                element.style.display = "none";
+            }
         }
     };
-    tools.close.onclick = () => setOpen(false);
+    window.addEventListener("keydown", (event) => {
+        if (event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey && event.key.toLowerCase() === "m") {
+            event.preventDefault();
+            setOpen(!open);
+        }
+    });
 
     makeDraggable(launcher, {
         onTap: () => setOpen(!open),
         onMove: () => {
             if (open) {
-                anchorTools(tools.panel, launcher);
+                anchorTools(tools.panel, tools.grip, launcher);
             }
+            persist();
         },
+    });
+
+    makeHeaderDraggable(tools.header, tools.panel, launcher, () => {
+        detail.style.display = "none";
+        persist();
+    });
+
+    makeResizable(tools.panel, tools.grip, () => {
+        detail.style.display = "none";
+        anchorTools(tools.panel, tools.grip, launcher);
+        persist();
     });
 
     window.addEventListener("resize", () => {
         placeLauncher(launcher, launcher.offsetLeft, launcher.offsetTop);
         if (open) {
-            anchorTools(tools.panel, launcher);
+            anchorTools(tools.panel, tools.grip, launcher);
         }
     });
 
-    body.append(tools.panel, detail, launcher);
-    placeLauncher(launcher, window.innerWidth - LAUNCHER_SIZE - EDGE, window.innerHeight - LAUNCHER_SIZE - EDGE);
+    body.append(tools.panel, detail, replay, launcher);
+    placeLauncher(
+        launcher,
+        saved.left ?? window.innerWidth - LAUNCHER_SIZE - EDGE,
+        saved.top ?? window.innerHeight - LAUNCHER_SIZE - EDGE,
+    );
+    if (saved.open) {
+        setOpen(true);
+    }
+}
+
+function canAnimate(element: HTMLElement): boolean {
+    return typeof element.animate === "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
+function animateReplay(replay: HTMLElement, launcher: HTMLElement, showing: boolean): Animation | undefined {
+    if (!canAnimate(replay)) {
+        return undefined;
+    }
+    const towardLauncher = replay.offsetLeft < launcher.offsetLeft ? 12 : -12;
+    const hidden = { opacity: 0, transform: `translateX(${towardLauncher}px) scale(0.85)` };
+    const shown = { opacity: 1, transform: "none" };
+    return replay.animate(showing ? [hidden, shown] : [shown, hidden], {
+        duration: showing ? 200 : 140,
+        delay: showing ? 60 : 0,
+        easing: showing ? "cubic-bezier(0.2, 0.9, 0.3, 1.2)" : "ease-in",
+        fill: "backwards",
+    });
+}
+
+function animatePanel(panel: HTMLElement, grip: HTMLElement, opening: boolean): Animation | undefined {
+    if (!canAnimate(panel)) {
+        return undefined;
+    }
+    const originX = grip.dataset.h === "left" ? "right" : "left";
+    const originY = grip.dataset.v === "top" ? "bottom" : "top";
+    panel.style.transformOrigin = `${originY} ${originX}`;
+    const hidden = { opacity: 0, transform: "scale(0.92)" };
+    const shown = { opacity: 1, transform: "none" };
+    return panel.animate(opening ? [hidden, shown] : [shown, hidden], {
+        duration: opening ? 180 : 140,
+        easing: opening ? "cubic-bezier(0.2, 0.9, 0.3, 1.2)" : "ease-in",
+    });
+}
+
+interface PanelLayout {
+    left?: number;
+    top?: number;
+    width?: number;
+    height?: number;
+    open?: boolean;
+}
+
+function loadLayout(): PanelLayout {
+    try {
+        const layout = JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY) ?? "{}");
+        return typeof layout === "object" && layout !== null ? layout : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveLayout(layout: PanelLayout): void {
+    try {
+        localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+    } catch {
+        // Storage can be blocked (private mode, sandboxed iframe); the panel works without it.
+    }
 }
 
 function injectStyles(): void {
@@ -156,9 +302,22 @@ function injectStyles(): void {
     outline: 2px solid ${COLORS.brandOrange};
     outline-offset: -2px;
 }
-#${TOOLS_ID} [data-close]:hover { color: ${COLORS.ink}; background: ${COLORS.hoverRow}; }
 #${TOOLS_ID} [aria-pressed="false"]:hover { color: ${COLORS.ink} !important; background: ${COLORS.hoverRow} !important; }
 #${PANEL_ID}, #${DETAIL_ID} { scrollbar-width: thin; scrollbar-color: ${COLORS.border} transparent; }
+@keyframes minit-row-in { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: none; } }
+#${PANEL_ID} [data-new] { animation: minit-row-in 220ms ease-out; }
+@keyframes minit-result-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+#${TOOLS_ID} [data-result] { animation: minit-result-in 260ms cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+@keyframes minit-received {
+    0% { transform: scale(0); box-shadow: 0 0 0 0 rgba(79, 191, 134, 0.7); }
+    45% { transform: scale(1.35); }
+    70% { transform: scale(0.9); }
+    100% { transform: scale(1); box-shadow: 0 0 0 8px rgba(79, 191, 134, 0); }
+}
+#${TOOLS_ID} [data-received] { animation: minit-received 600ms ease-out; }
+@media (prefers-reduced-motion: reduce) {
+    #${PANEL_ID} [data-new], #${TOOLS_ID} [data-result], #${TOOLS_ID} [data-received] { animation: none; }
+}
 `;
     document.head.append(style);
 }
@@ -173,7 +332,7 @@ function createLauncher(): HTMLButtonElement {
     const launcher = document.createElement("button");
     launcher.id = LAUNCHER_ID;
     launcher.type = "button";
-    launcher.title = "Minit SDK tools";
+    launcher.title = "Minit SDK tools (Ctrl+M)";
     launcher.setAttribute("aria-label", "Minit SDK tools");
     launcher.setAttribute("aria-controls", TOOLS_ID);
     launcher.setAttribute("aria-expanded", "false");
@@ -202,7 +361,7 @@ function createLauncher(): HTMLButtonElement {
 }
 
 function createLogoMark(height: number): SVGSVGElement {
-    const ns = "http://www.w3.org/2000/svg";
+    const ns = SVG_NS;
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", LOGO_VIEWBOX);
     svg.setAttribute("height", String(height));
@@ -276,15 +435,68 @@ function makeDraggable(launcher: HTMLButtonElement, handlers: { onTap: () => voi
 function placeLauncher(launcher: HTMLElement, left: number, top: number): void {
     const maxLeft = Math.max(EDGE, window.innerWidth - LAUNCHER_SIZE - EDGE);
     const maxTop = Math.max(EDGE, window.innerHeight - LAUNCHER_SIZE - EDGE);
-    launcher.style.left = `${clamp(left, EDGE, maxLeft)}px`;
-    launcher.style.top = `${clamp(top, EDGE, maxTop)}px`;
+    const clampedLeft = clamp(left, EDGE, maxLeft);
+    const clampedTop = clamp(top, EDGE, maxTop);
+    launcher.style.left = `${clampedLeft}px`;
+    launcher.style.top = `${clampedTop}px`;
+
+    const replay = document.getElementById(REPLAY_ID);
+    if (replay) {
+        const onRight = clampedLeft + LAUNCHER_SIZE / 2 > window.innerWidth / 2;
+        replay.style.top = `${clampedTop + (LAUNCHER_SIZE - replay.offsetHeight) / 2}px`;
+        replay.style.left = onRight
+            ? `${clampedLeft - GAP - replay.offsetWidth}px`
+            : `${clampedLeft + LAUNCHER_SIZE + GAP}px`;
+    }
+}
+
+function createReplayButton(): HTMLButtonElement {
+    const replay = document.createElement("button");
+    replay.id = REPLAY_ID;
+    replay.type = "button";
+    replay.title = "Reload the game";
+    Object.assign(replay.style, {
+        position: "fixed",
+        display: "none",
+        alignItems: "center",
+        gap: "6px",
+        height: "32px",
+        padding: "0 14px 0 11px",
+        borderRadius: "999px",
+        border: `1px solid ${COLORS.border}`,
+        background: COLORS.surface,
+        color: COLORS.ink,
+        boxShadow: "0 6px 16px rgba(0, 0, 0, 0.35)",
+        font: `700 12px/1 ${FONT}`,
+        cursor: "pointer",
+        zIndex: Z_INDEX,
+    });
+    const icon = document.createElementNS(SVG_NS, "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("width", "14");
+    icon.setAttribute("height", "14");
+    icon.setAttribute("fill", "none");
+    icon.setAttribute("stroke", "currentColor");
+    icon.setAttribute("stroke-width", "2.5");
+    icon.setAttribute("stroke-linecap", "round");
+    icon.setAttribute("stroke-linejoin", "round");
+    icon.setAttribute("aria-hidden", "true");
+    for (const d of ["M21 12a9 9 0 1 1-2.64-6.36", "M21 3v6h-6"]) {
+        const path = document.createElementNS(SVG_NS, "path");
+        path.setAttribute("d", d);
+        icon.append(path);
+    }
+    replay.append(icon, "Replay");
+    replay.onclick = () => location.reload();
+    isolate(replay);
+    return replay;
 }
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }
 
-function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTMLButtonElement } {
+function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; header: HTMLElement; grip: HTMLElement } {
     const panel = document.createElement("div");
     panel.id = TOOLS_ID;
     panel.setAttribute("role", "dialog");
@@ -294,9 +506,9 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
         display: "none",
         flexDirection: "column",
         position: "fixed",
-        width: "300px",
+        width: `${PANEL_DEFAULT_WIDTH}px`,
+        height: `${PANEL_DEFAULT_HEIGHT}px`,
         maxWidth: `calc(100vw - ${EDGE * 2}px)`,
-        maxHeight: PANEL_MAX_HEIGHT,
         background: COLORS.surface,
         color: COLORS.ink,
         border: `1px solid ${COLORS.border}`,
@@ -333,29 +545,15 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
     const title = document.createElement("span");
     title.textContent = "Minit SDK";
     Object.assign(title.style, { flex: "1", fontSize: "14px", fontWeight: "700", letterSpacing: "0.01em" });
-    const close = document.createElement("button");
-    close.type = "button";
-    close.dataset.close = "";
-    close.textContent = "×";
-    close.setAttribute("aria-label", "Close Minit SDK tools");
-    Object.assign(close.style, {
-        width: "26px",
-        height: "26px",
-        padding: "0",
-        border: "none",
-        borderRadius: "8px",
-        background: "transparent",
-        color: COLORS.inkSecondary,
-        font: `400 18px/1 ${FONT}`,
-        cursor: "pointer",
-    });
-    header.append(badge, title, close);
+    header.style.cursor = "grab";
+    header.style.touchAction = "none";
+    header.append(badge, title);
 
     const tabBar = document.createElement("div");
     tabBar.setAttribute("role", "tablist");
     Object.assign(tabBar.style, {
         display: "flex",
-        gap: "4px",
+        gap: "20px",
         padding: "0 12px",
         borderBottom: `1px solid ${COLORS.border}`,
         flexShrink: "0",
@@ -403,21 +601,137 @@ function createToolsPanel(toolList: DevTool[]): { panel: HTMLElement; close: HTM
     }
     select(toolList[0]);
 
-    panel.append(header, tabBar, body);
-    return { panel, close };
+    const grip = document.createElement("div");
+    grip.setAttribute("aria-hidden", "true");
+    Object.assign(grip.style, {
+        position: "absolute",
+        width: `${GRIP_SIZE}px`,
+        height: `${GRIP_SIZE}px`,
+        touchAction: "none",
+        zIndex: "1",
+    });
+    grip.append(createGripDots());
+
+    panel.append(header, tabBar, body, grip);
+    return { panel, header, grip };
 }
 
-function anchorTools(panel: HTMLElement, launcher: HTMLElement): void {
+function anchorTools(panel: HTMLElement, grip: HTMLElement, launcher: HTMLElement): void {
     const rect = launcher.getBoundingClientRect();
     const onRight = rect.left + rect.width / 2 > window.innerWidth / 2;
     const below = rect.top + rect.height / 2 < window.innerHeight / 2;
     const room = below ? window.innerHeight - rect.bottom - GAP - EDGE : rect.top - GAP - EDGE;
-    panel.style.maxHeight = `min(${PANEL_MAX_HEIGHT}, ${Math.max(0, room)}px)`;
+    panel.style.maxHeight = `${Math.max(0, room)}px`;
+    placeGrip(grip, onRight ? "left" : "right", below ? "bottom" : "top");
     const width = panel.getBoundingClientRect().width;
     const left = onRight ? rect.right - width : rect.left;
     panel.style.left = `${clamp(left, EDGE, Math.max(EDGE, window.innerWidth - width - EDGE))}px`;
     panel.style.top = below ? `${rect.bottom + GAP}px` : "";
     panel.style.bottom = below ? "" : `${window.innerHeight - rect.top + GAP}px`;
+}
+
+function placeGrip(grip: HTMLElement, horizontal: "left" | "right", vertical: "top" | "bottom"): void {
+    grip.dataset.h = horizontal;
+    grip.dataset.v = vertical;
+    Object.assign(grip.style, {
+        left: horizontal === "left" ? "3px" : "",
+        right: horizontal === "right" ? "3px" : "",
+        top: vertical === "top" ? "3px" : "",
+        bottom: vertical === "bottom" ? "3px" : "",
+        transform: `scale(${horizontal === "left" ? -1 : 1}, ${vertical === "top" ? -1 : 1})`,
+        cursor: (horizontal === "left") === (vertical === "top") ? "nwse-resize" : "nesw-resize",
+    });
+}
+
+function createGripDots(): SVGSVGElement {
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${GRIP_SIZE} ${GRIP_SIZE}`);
+    svg.setAttribute("width", String(GRIP_SIZE));
+    svg.setAttribute("height", String(GRIP_SIZE));
+    svg.style.display = "block";
+    const centers = [3, 8, 13];
+    centers.forEach((cy, row) =>
+        centers.forEach((cx, column) => {
+            if (row + column < 2) {
+                return;
+            }
+            const dot = document.createElementNS(SVG_NS, "circle");
+            dot.setAttribute("cx", String(cx));
+            dot.setAttribute("cy", String(cy));
+            dot.setAttribute("r", "1.5");
+            dot.setAttribute("fill", COLORS.inkMuted);
+            svg.append(dot);
+        }),
+    );
+    return svg;
+}
+
+// The panel keeps its side of the launcher while dragging; re-anchoring mid-drag would flip it under the pointer.
+function makeHeaderDraggable(header: HTMLElement, panel: HTMLElement, launcher: HTMLElement, onMove: () => void): void {
+    header.addEventListener("pointerdown", (down) => {
+        if (down.button !== 0) {
+            return;
+        }
+        down.preventDefault();
+        header.setPointerCapture(down.pointerId);
+        header.style.cursor = "grabbing";
+        const launcherStart = { left: launcher.offsetLeft, top: launcher.offsetTop };
+        const panelStart = {
+            left: parseFloat(panel.style.left),
+            top: panel.style.top ? parseFloat(panel.style.top) : undefined,
+            bottom: panel.style.bottom ? parseFloat(panel.style.bottom) : undefined,
+        };
+        const move = (event: PointerEvent) => {
+            placeLauncher(
+                launcher,
+                launcherStart.left + event.clientX - down.clientX,
+                launcherStart.top + event.clientY - down.clientY,
+            );
+            const dx = launcher.offsetLeft - launcherStart.left;
+            const dy = launcher.offsetTop - launcherStart.top;
+            panel.style.left = `${panelStart.left + dx}px`;
+            if (panelStart.top !== undefined) {
+                panel.style.top = `${panelStart.top + dy}px`;
+            } else if (panelStart.bottom !== undefined) {
+                panel.style.bottom = `${panelStart.bottom - dy}px`;
+            }
+            onMove();
+        };
+        const end = () => {
+            header.style.cursor = "grab";
+            header.removeEventListener("pointermove", move);
+            header.removeEventListener("pointerup", end);
+            header.removeEventListener("pointercancel", end);
+        };
+        header.addEventListener("pointermove", move);
+        header.addEventListener("pointerup", end);
+        header.addEventListener("pointercancel", end);
+    });
+}
+
+function makeResizable(panel: HTMLElement, grip: HTMLElement, onResize: () => void): void {
+    grip.addEventListener("pointerdown", (down) => {
+        down.preventDefault();
+        grip.setPointerCapture(down.pointerId);
+        const start = panel.getBoundingClientRect();
+        const xSign = grip.dataset.h === "left" ? -1 : 1;
+        const ySign = grip.dataset.v === "top" ? -1 : 1;
+        const move = (event: PointerEvent) => {
+            const width = start.width + (event.clientX - down.clientX) * xSign;
+            const height = start.height + (event.clientY - down.clientY) * ySign;
+            panel.style.width = `${clamp(width, PANEL_MIN_WIDTH, window.innerWidth - EDGE * 2)}px`;
+            panel.style.height = `${Math.max(PANEL_MIN_HEIGHT, height)}px`;
+            onResize();
+        };
+        const end = () => {
+            grip.removeEventListener("pointermove", move);
+            grip.removeEventListener("pointerup", end);
+            grip.removeEventListener("pointercancel", end);
+        };
+        grip.addEventListener("pointermove", move);
+        grip.addEventListener("pointerup", end);
+        grip.addEventListener("pointercancel", end);
+    });
 }
 
 function createTrackedEventsTool(detail: HTMLElement): DevTool {
@@ -449,11 +763,26 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     groupToggle.type = "button";
     groupToggle.textContent = "Group by key";
     Object.assign(groupToggle.style, pillStyle);
+    const usageIndicator = document.createElement("span");
+    usageIndicator.tabIndex = 0;
+    usageIndicator.setAttribute("aria-describedby", DETAIL_ID);
+    Object.assign(usageIndicator.style, { fontFamily: MONO, fontSize: "11px", cursor: "help" });
     toolbar.append(clearButton, groupToggle);
+
+    const footer = document.createElement("div");
+    Object.assign(footer.style, {
+        display: "flex",
+        justifyContent: "flex-end",
+        padding: "6px 24px",
+        borderTop: `1px solid ${COLORS.border}`,
+        flexShrink: "0",
+    });
+    footer.append(usageIndicator);
 
     const list = document.createElement("div");
     list.id = PANEL_ID;
     Object.assign(list.style, {
+        flex: "1",
         overflowY: "auto",
         overscrollBehavior: "contain",
         padding: "0 0 6px",
@@ -463,7 +792,7 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     const empty = document.createElement("div");
     empty.textContent = "No events tracked yet.";
     Object.assign(empty.style, { padding: "12px", color: COLORS.inkMuted, textAlign: "center" });
-    content.append(toolbar, list);
+    content.append(toolbar, list, footer);
 
     const countBadge = document.createElement("span");
     Object.assign(countBadge.style, {
@@ -499,29 +828,36 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
     detail.onmouseleave = hideDetailSoon;
     detail.onblur = hideDetail;
 
-    const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
-        const row = renderRow(entry, count);
+    const attachDetail = (anchor: HTMLElement, render: () => void) => {
         const reveal = () => {
             clearTimeout(hideTimer);
-            showDetail(detail, row, entry);
+            render();
         };
-        row.onmouseenter = reveal;
-        row.onmouseleave = hideDetailSoon;
-        row.onfocus = reveal;
-        row.onblur = (event) => {
+        anchor.onmouseenter = reveal;
+        anchor.onmouseleave = hideDetailSoon;
+        anchor.onfocus = reveal;
+        anchor.onblur = (event) => {
             if (event.relatedTarget !== detail) {
                 hideDetail();
             }
         };
-        row.onkeydown = (event) => {
+        anchor.onkeydown = (event) => {
             if (event.key === "Enter") {
                 event.preventDefault();
                 reveal();
                 detail.focus({ preventScroll: true });
             }
         };
+    };
+
+    const createRow = (entry: TrackedEntry, count?: number): HTMLElement => {
+        const row = renderRow(entry, count);
+        attachDetail(row, () => showDetail(detail, row, entry));
         return row;
     };
+
+    const updateUsage = () => usageIndicator.replaceChildren(...renderUsage());
+    attachDetail(usageIndicator, () => showUsageDetail(detail, usageIndicator));
 
     const replaceFocusedRow = (previous: HTMLElement, next: HTMLElement) => {
         if (document.activeElement === previous) {
@@ -531,15 +867,22 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
 
     const groupId = (entry: TrackedEntry) => `${entry.kind}:${entry.key}`;
 
-    const show = (entry: TrackedEntry) => {
+    const show = (entry: TrackedEntry, isNew = false) => {
+        const create = (count?: number) => {
+            const row = createRow(entry, count);
+            if (isNew) {
+                row.dataset.new = "";
+            }
+            return row;
+        };
         if (!grouped) {
-            list.insertBefore(createRow(entry), list.firstChild);
+            list.insertBefore(create(), list.firstChild);
             return;
         }
         const id = groupId(entry);
         const group = groups.get(id);
         const count = (group?.count ?? 0) + 1;
-        const row = createRow(entry, count);
+        const row = create(count);
         list.insertBefore(row, list.firstChild);
         if (group) {
             replaceFocusedRow(group.row, row);
@@ -581,18 +924,19 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
         detail.style.display = "none";
         groups.clear();
         list.replaceChildren(...(entries.length === 0 ? [empty] : []));
-        entries.forEach(show);
+        entries.forEach((entry) => show(entry));
     };
     groupToggle.onclick = () => setGrouped(!grouped);
 
     const add = (entry: TrackedEntry) => {
         entries.push(entry);
         empty.remove();
-        show(entry);
+        show(entry, true);
         if (entries.length > MAX_DEV_ENTRIES) {
             evict(entries.shift()!);
         }
         countBadge.textContent = String(entries.length);
+        updateUsage();
     };
 
     clearButton.onclick = () => {
@@ -603,13 +947,193 @@ function createTrackedEventsTool(detail: HTMLElement): DevTool {
 
     setGrouped(false);
     countBadge.textContent = "0";
+    updateUsage();
     getTrackedEntries().forEach(add);
     subscribeTrackedEntries(add);
     return tool;
 }
 
+function badgeHeader(text: string, color: string): HTMLElement {
+    const header = document.createElement("div");
+    header.textContent = text;
+    Object.assign(header.style, {
+        color,
+        font: `800 10px/1.2 ${FONT}`,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+    });
+    return header;
+}
+
+function badgeValue(text: string, style: Partial<CSSStyleDeclaration>): HTMLElement {
+    const value = document.createElement("div");
+    value.textContent = text;
+    Object.assign(value.style, { maxWidth: "100%", overflowWrap: "anywhere" }, style);
+    return value;
+}
+
+function createResultTool(): DevTool {
+    const content = document.createElement("div");
+    content.setAttribute("role", "tabpanel");
+    Object.assign(content.style, {
+        flexDirection: "column",
+        minHeight: "0",
+        flex: "1",
+        overflow: "hidden",
+        containerType: "size",
+    });
+
+    const status = document.createElement("span");
+    Object.assign(status.style, {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "14px",
+        height: "14px",
+        boxSizing: "border-box",
+        borderRadius: "50%",
+        color: COLORS.onAccent,
+        font: `900 9px/1 ${FONT}`,
+    });
+
+    const render = (reported: ReportedResult | undefined) => {
+        status.title = reported ? "Result received" : "Result pending";
+        status.setAttribute("aria-label", status.title);
+        status.textContent = reported ? "✓" : "";
+        status.style.border = reported ? "none" : `1.5px dashed ${COLORS.inkMuted}`;
+        status.style.background = reported ? COLORS.pos : "transparent";
+        delete status.dataset.received;
+        if (reported) {
+            void status.offsetWidth;
+            status.dataset.received = "";
+        }
+        if (!reported) {
+            const empty = document.createElement("div");
+            empty.textContent = "No result received yet.";
+            Object.assign(empty.style, {
+                flex: "1",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "12px",
+                color: COLORS.inkMuted,
+                font: `700 15px/1.4 ${FONT}`,
+                textAlign: "center",
+            });
+            content.replaceChildren(empty);
+            return;
+        }
+        const card = document.createElement("div");
+        card.dataset.result = "";
+        Object.assign(card.style, {
+            flex: "1",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            position: "relative",
+            padding: "16px 16px 44px",
+            textAlign: "center",
+        });
+
+        const score = document.createElement("div");
+        Object.assign(score.style, {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "4px",
+            minWidth: "55%",
+            maxWidth: "100%",
+            boxSizing: "border-box",
+            padding: "12px 28px 16px",
+            borderRadius: "20px",
+            border: "1px solid rgba(242, 121, 15, 0.55)",
+            background: "linear-gradient(160deg, rgba(242, 121, 15, 0.22), rgba(242, 121, 15, 0.04) 70%)",
+            boxShadow: "0 0 28px rgba(242, 121, 15, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+        });
+        score.append(
+            badgeHeader("Score", COLORS.brandOrange),
+            badgeValue(String(reported.result), {
+                color: COLORS.ink,
+                font: `900 clamp(32px, 20cqmin, 88px)/1 ${FONT}`,
+                textShadow: "0 2px 12px rgba(242, 121, 15, 0.35)",
+            }),
+        );
+        card.append(score);
+
+        if (reported.flavorText) {
+            const flavor = document.createElement("div");
+            Object.assign(flavor.style, {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "3px",
+                alignSelf: "stretch",
+                boxSizing: "border-box",
+                marginTop: "10px",
+                padding: "8px 16px 10px",
+                borderRadius: "12px",
+                border: `1px solid ${COLORS.border}`,
+                background: COLORS.surfaceSunk,
+            });
+            flavor.append(
+                badgeHeader("Flavor Text", COLORS.inkMuted),
+                badgeValue(reported.flavorText, {
+                    color: COLORS.ink,
+                    font: `700 clamp(12px, 5cqmin, 15px)/1.4 ${FONT}`,
+                }),
+            );
+            card.append(flavor);
+        }
+
+        const duration = document.createElement("div");
+        duration.textContent = `⏱ ${formatSeconds(reported.durationMs)}`;
+        duration.title = "Play duration: from loadingDone() (or page load) to reportResult()";
+        Object.assign(duration.style, {
+            position: "absolute",
+            right: "12px",
+            bottom: "12px",
+            padding: "4px 12px",
+            borderRadius: "999px",
+            background: COLORS.surfaceSunk,
+            border: `1px solid ${COLORS.border}`,
+            color: COLORS.inkSecondary,
+            font: `700 12px/1.4 ${MONO}`,
+        });
+        card.append(duration);
+        content.replaceChildren(card);
+    };
+
+    render(getReportedResult());
+    subscribeReportedResult(render);
+    return { label: "Result", badge: status, content };
+}
+
 function formatSeconds(ms: number): string {
     return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function formatBytes(bytes: number): string {
+    return bytes < 1024 ? `${bytes} B` : `${Number((bytes / 1024).toFixed(1))} KB`;
+}
+
+function usageColor(bytes: number, bytesCapDrops: number): string {
+    if (bytesCapDrops > 0 || bytes >= MAX_PAYLOAD_BYTES_PER_LOAD) {
+        return COLORS.neg;
+    }
+    return bytes >= MAX_PAYLOAD_BYTES_PER_LOAD * USAGE_WARN_RATIO ? COLORS.warn : COLORS.inkSecondary;
+}
+
+function renderUsage(): HTMLElement[] {
+    const { bytes, bytesCapDrops } = getTrackedUsage();
+    const size = document.createElement("span");
+    size.textContent = `${formatBytes(bytes)} `;
+    size.style.color = COLORS.inkSecondary;
+    const percent = document.createElement("span");
+    percent.textContent = `(${Math.round((bytes / MAX_PAYLOAD_BYTES_PER_LOAD) * 100)}%)`;
+    percent.style.color = usageColor(bytes, bytesCapDrops);
+    return [size, percent];
 }
 
 function renderRow(entry: TrackedEntry, count?: number): HTMLElement {
@@ -747,7 +1271,57 @@ function describeDropReason(reason: TrackDropReason): string {
             return `rate limit exceeded (${RATE_REFILL_PER_SECOND} per second)`;
         case "load-cap":
             return `more than ${MAX_EVENTS_PER_LOAD} events this load`;
+        case "bytes-cap":
+            return `event data this load would exceed ${formatBytes(MAX_PAYLOAD_BYTES_PER_LOAD)}`;
+        case "after-result":
+            return "sent after reportResult()";
     }
+}
+
+function renderFooter(lines: string[]): HTMLElement {
+    const footer = document.createElement("div");
+    Object.assign(footer.style, {
+        paddingTop: "8px",
+        marginTop: "8px",
+        borderTop: `1px solid ${COLORS.border}`,
+        color: COLORS.inkMuted,
+    });
+    footer.append(
+        ...lines.map((text) => {
+            const line = document.createElement("div");
+            line.textContent = text;
+            return line;
+        }),
+    );
+    return footer;
+}
+
+function showUsageDetail(detail: HTMLElement, anchor: HTMLElement): void {
+    const header = document.createElement("div");
+    Object.assign(header.style, {
+        display: "flex",
+        alignItems: "baseline",
+        gap: "12px",
+        paddingBottom: "8px",
+        marginBottom: "8px",
+        borderBottom: `1px solid ${COLORS.border}`,
+    });
+    const title = document.createElement("span");
+    title.textContent = "Total event size";
+    Object.assign(title.style, { flex: "1", color: COLORS.ink, font: `700 13px/1.4 ${FONT}` });
+    const total = document.createElement("span");
+    total.append(...renderUsage());
+    Object.assign(total.style, { flexShrink: "0", fontFamily: MONO, fontSize: "11px" });
+    header.append(title, total);
+
+    const explanation = document.createElement("div");
+    explanation.textContent =
+        `The sum of every tracked event's size. ` +
+        `A game load may send at most ${formatBytes(MAX_PAYLOAD_BYTES_PER_LOAD)}; an event that would exceed it is dropped.`;
+
+    detail.replaceChildren(header, explanation);
+    Object.assign(detail.style, { color: COLORS.inkSecondary, fontFamily: FONT, wordBreak: "normal" });
+    placeDetail(detail, anchor);
 }
 
 function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry): void {
@@ -758,14 +1332,13 @@ function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry):
     if (lines.length === 0) {
         lines.push("no properties");
     }
-    const source = document.createElement("div");
-    source.textContent = `source: ${entry.kind === "event" && entry.key.startsWith(RESERVED_KEY_PREFIX) ? "built in" : "minit"}`;
-    Object.assign(source.style, {
-        paddingTop: "8px",
-        marginTop: "8px",
-        borderTop: `1px solid ${COLORS.border}`,
-        color: COLORS.inkMuted,
-    });
+    const footer = [`source: ${entry.kind === "event" && entry.key.startsWith(RESERVED_KEY_PREFIX) ? "built in" : "minit"}`];
+    if (entry.kind === "event") {
+        footer.unshift(`received: ${getReceivedCount(entry.key)}`);
+        if (entry.bytes !== undefined) {
+            footer.unshift(`size: ${formatBytes(entry.bytes)}`);
+        }
+    }
     detail.replaceChildren(
         renderDetailHeader(entry),
         ...lines.map((text) => {
@@ -773,13 +1346,20 @@ function showDetail(detail: HTMLElement, row: HTMLElement, entry: TrackedEntry):
             line.textContent = text;
             return line;
         }),
-        source,
+        renderFooter(footer),
     );
-    detail.style.color = entry.kind === "event" ? COLORS.inkSecondary : COLORS.neg;
-    detail.style.display = "block";
+    Object.assign(detail.style, {
+        color: entry.kind === "event" ? COLORS.inkSecondary : COLORS.neg,
+        fontFamily: MONO,
+        wordBreak: "break-all",
+    });
+    placeDetail(detail, row);
+}
 
-    const panelRect = document.getElementById(TOOLS_ID)?.getBoundingClientRect() ?? row.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
+function placeDetail(detail: HTMLElement, anchor: HTMLElement): void {
+    detail.style.display = "block";
+    const panelRect = document.getElementById(TOOLS_ID)?.getBoundingClientRect() ?? anchor.getBoundingClientRect();
+    const rowRect = anchor.getBoundingClientRect();
     const width = detail.offsetWidth;
     const roomLeft = panelRect.left - GAP - EDGE;
     const roomRight = window.innerWidth - panelRect.right - GAP - EDGE;
