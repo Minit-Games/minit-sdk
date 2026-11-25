@@ -455,3 +455,150 @@ describe("reportResult — dev buffer in the testing environment", () => {
         expect(getReportedResult()?.userData).toBeUndefined();
     });
 });
+
+describe("reportResult — invalid result runtime guard", () => {
+    const invalidResults: Array<[string, unknown]> = [
+        ["object", { score: 10 }],
+        ["array", [1, 2]],
+        ["null", null],
+        ["undefined", undefined],
+        ["boolean true", true],
+        ["boolean false", false],
+    ];
+
+    beforeEach(() => {
+        document.body.innerHTML = "";
+    });
+
+    afterEach(() => {
+        delete window.minit;
+        calls = [];
+        document.body.innerHTML = "";
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+    });
+
+    describe("in a host", () => {
+        it.each(invalidResults)("rejects %s with one [MinitSDK] warning naming its type and does not call the host", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            expect(() => reportResult(value as any)).not.toThrow();
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            const message = warnSpy.mock.calls[0].join(" ");
+            expect(message).toMatch(/^\[MinitSDK\]/);
+            expect(message).toContain(typeof value);
+            expect(message).toMatch(/ignored/i);
+        });
+
+        it("rejects an invalid result through the reportDropResult alias", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportDropResult({} as any);
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it("rejects an invalid result even when options are provided", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult({} as any, { flavorText: "Nice!", userData: "state" });
+
+            expect(calls).toHaveLength(0);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(warnSpy.mock.calls[0].join(" ")).toContain("object");
+        });
+
+        it("forwards a valid number reported right after a rejected call", () => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult({} as any);
+            reportResult(100, { flavorText: "Nice!" });
+
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(calls).toEqual([{ result: 100, options: { flavorText: "Nice!" } }]);
+        });
+
+        it("forwards a valid string reported right after a rejected call", () => {
+            setupMinit();
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(null as any);
+            reportResult("WIN");
+
+            expect(calls).toEqual([{ result: "WIN", options: undefined }]);
+        });
+
+        it.each([
+            ["number", 42.5],
+            ["zero", 0],
+            ["string", "WIN"],
+            ["empty string", ""],
+        ])("forwards a valid %s result without warning", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(value);
+
+            expect(warnSpy).not.toHaveBeenCalled();
+            expect(calls).toEqual([{ result: value, options: undefined }]);
+        });
+
+        it.each([
+            ["NaN", NaN],
+            ["Infinity", Infinity],
+        ])("keeps forwarding a non-finite %s number as before", (_label, value) => {
+            setupMinit();
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+
+            reportResult(value);
+
+            expect(warnSpy).not.toHaveBeenCalled();
+            expect(calls).toHaveLength(1);
+            expect(calls[0].result).toBe(value);
+        });
+    });
+
+    describe("in local testing (no host)", () => {
+        async function loadResult() {
+            jest.resetModules();
+            const { reportResult: report } = await import("./result");
+            const { getReportedResult, getTrackedEntries } = await import("./trackDevBuffer");
+            return { report, getReportedResult, getTrackedEntries };
+        }
+
+        it.each(invalidResults)("rejects %s with one [MinitSDK] warning and records no result", async (_label, value) => {
+            jest.useFakeTimers({ doNotFake: ["performance"] });
+            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+            const { report, getReportedResult, getTrackedEntries } = await loadResult();
+
+            expect(() => report(value as any, { delay: 500 })).not.toThrow();
+            jest.advanceTimersByTime(1000);
+
+            expect(getReportedResult()).toBeUndefined();
+            expect(getTrackedEntries()).toEqual([]);
+            expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(warnSpy.mock.calls[0].join(" ")).toMatch(/^\[MinitSDK\]/);
+        });
+
+        it("records a valid result reported right after a rejected call", async () => {
+            jest.useFakeTimers({ doNotFake: ["performance"] });
+            jest.spyOn(console, "warn").mockImplementation(() => {});
+            jest.spyOn(console, "log").mockImplementation(() => {});
+            const { report, getReportedResult } = await loadResult();
+
+            report(undefined as any);
+            report("WIN");
+            jest.advanceTimersByTime(0);
+
+            expect(getReportedResult()?.result).toBe("WIN");
+        });
+    });
+});

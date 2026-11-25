@@ -29,13 +29,23 @@ function starsFromPercentile(percentile: number): number {
  * @param options Optional `flavorText`, `userData`, `delay` (ms).
  */
 export function reportResult(result: number|string, options?: ResultOptions): void {
-    closeTrackingAfterResult();
+    if(typeof result !== "number" && typeof result !== "string") {
+        console.warn(`[MinitSDK] reportResult(result) expects a number or a string, got ${typeof result}; the result was ignored and no result screen is shown.`);
+        return;
+    }
+    // Matches the host's track script: a non-finite number is not a play result, so tracking stays open.
+    const closesTracking = typeof result === "string" || Number.isFinite(result);
+    if (closesTracking) {
+        closeTrackingAfterResult();
+    }
 
     if(isTestEnvironment()) {
 
         const flavorText = options?.flavorText;
         const stars = starsFromPercentile(DEV_RESULT_PERCENTILE);
-        recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars });
+        if (closesTracking) {
+            recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars });
+        }
         showTrackDevPanel();
         const reported = {
             result,

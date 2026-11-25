@@ -625,6 +625,19 @@ describe("track — after reportResult", () => {
         expect(warnSpy).toHaveBeenCalledWith(dropMessage("after-result"));
     });
 
+    it.each([
+        ["a non-number/string result", { score: 1 }],
+        ["NaN", NaN],
+        ["Infinity", Infinity],
+    ])("keeps tracking open after %s", async (_label, value) => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        reportResult(value as never);
+        track("still_open");
+
+        expect(getTrackedEntries()).toEqual([expect.objectContaining({ kind: "event", key: "still_open" })]);
+    });
+
     it("does not forward later calls to the host", async () => {
         const hostTrack = jest.fn();
         installHost("app", hostTrack);
