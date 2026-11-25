@@ -8,7 +8,7 @@ if (typeof (globalThis as { TextEncoder?: unknown }).TextEncoder === "undefined"
         NodeTextEncoder as unknown as typeof globalThis.TextEncoder;
 }
 
-const BUDGET = 4096;
+const BUDGET = 3072;
 
 function utf8Bytes(value: string): number {
     return new NodeTextEncoder().encode(value).length;

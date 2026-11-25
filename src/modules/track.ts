@@ -15,7 +15,7 @@ export function closeTrackingAfterResult(): void {
 
 /**
  * Records a custom gameplay event for the creator's analytics. Invalid calls, events over the
- * 4 KB budget per play, and any call after `reportResult()` are dropped with a console warning;
+ * 3 KB budget per play, and any call after `reportResult()` are dropped with a console warning;
  * it never throws.
  *
  * @param key Any non-empty string; the `minit.` prefix is reserved.

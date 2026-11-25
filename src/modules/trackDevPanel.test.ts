@@ -73,7 +73,7 @@ function ctrlM(init: KeyboardEventInit = {}): KeyboardEvent {
 
 function usageIndicator(): HTMLElement {
     const indicator = Array.from(tools().querySelectorAll<HTMLElement>("span[tabindex]")).find((span) =>
-        /^\d+ \/ 4096 bytes$/.test(span.textContent ?? ""),
+        /^\d+ \/ 3072 bytes$/.test(span.textContent ?? ""),
     );
     if (!indicator) {
         throw new Error("no usage indicator");
@@ -853,7 +853,7 @@ describe("dev tools detail popup size and received count", () => {
     });
 
     it.each([
-        ["budget", "over the 4096-byte event budget for this play"],
+        ["budget", "over the 3072-byte event budget for this play"],
         ["after-result", "sent after reportResult()"],
     ] as const)("explains the %s drop reason", async (reason, text) => {
         const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
@@ -867,14 +867,14 @@ describe("dev tools detail popup size and received count", () => {
 describe("dev tools usage indicator", () => {
     const RGB = { ink: "rgb(151, 162, 189)", warn: "rgb(229, 184, 76)", neg: "rgb(224, 108, 108)" };
 
-    it("shows the budget used as used / 4096 bytes", async () => {
+    it("shows the budget used as used / 3072 bytes", async () => {
         const { recordTrackedEvent } = await mountPanel();
-        expect(usageIndicator().textContent).toBe("0 / 4096 bytes");
+        expect(usageIndicator().textContent).toBe("0 / 3072 bytes");
 
         recordTrackedEvent("a", {}, 100);
         recordTrackedEvent("b", {}, 1024);
 
-        expect(usageIndicator().textContent).toBe("1124 / 4096 bytes");
+        expect(usageIndicator().textContent).toBe("1124 / 3072 bytes");
         expect(usageText().style.color).toBe(RGB.ink);
     });
 
@@ -884,16 +884,16 @@ describe("dev tools usage indicator", () => {
         loadingDone();
         reportResult(1);
 
-        expect(usageIndicator().textContent).toBe("0 / 4096 bytes");
+        expect(usageIndicator().textContent).toBe("0 / 3072 bytes");
     });
 
     it("turns warn at 80% and neg at the budget", async () => {
         const { recordTrackedEvent } = await mountPanel();
 
-        recordTrackedEvent("a", {}, Math.ceil(4096 * 0.8));
+        recordTrackedEvent("a", {}, Math.ceil(3072 * 0.8));
         expect(usageText().style.color).toBe(RGB.warn);
 
-        recordTrackedEvent("b", {}, 4096);
+        recordTrackedEvent("b", {}, 3072);
         expect(usageText().style.color).toBe(RGB.neg);
     });
 
@@ -1070,10 +1070,10 @@ describe("dev tools Tracking tab footer and notices", () => {
         const { recordTrackedEvent } = await mountPanel();
         expect(progressBar("Remaining event budget").getAttribute("aria-valuenow")).toBe("100");
 
-        recordTrackedEvent("a", {}, 1024);
+        recordTrackedEvent("a", {}, 768);
 
         expect(progressBar("Remaining event budget").getAttribute("aria-valuenow")).toBe("75");
-        expect(usageIndicator().textContent).toBe("1024 / 4096 bytes");
+        expect(usageIndicator().textContent).toBe("768 / 3072 bytes");
     });
 
     it("shows the Minit Studio disclaimer", async () => {
