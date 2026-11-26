@@ -2687,22 +2687,16 @@ function renderDetailHeader(entry: TrackedEntry): HTMLElement {
 
 function describeDropReason(reason: TrackDropReason): string {
     switch (reason) {
-        case "invalid-key":
+        case "invalid_key":
             return "invalid key";
-        case "reserved-key":
+        case "reserved_key":
             return `reserved ${RESERVED_KEY_PREFIX} prefix`;
-        case "invalid-props":
-            return "properties are not an object";
-        case "invalid-prop-key":
-            return "invalid property key";
-        case "invalid-prop-value":
-            return "invalid property value";
+        case "invalid_props":
+            return "invalid properties";
         case "budget":
             return `over the ${PLAY_BUDGET_BYTES}-byte event budget for this play`;
-        case "after-result":
+        case "after_result":
             return "sent after reportResult()";
-        default:
-            return reason;
     }
 }
 

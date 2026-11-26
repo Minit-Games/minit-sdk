@@ -1,7 +1,13 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
 import { closeTrackingAfterResult } from "./track.js";
-import { getPlayDurationMs, recordReportedResult, recordResultPending, recordTrackedEvent } from "./trackDevBuffer.js";
+import {
+    getPlayDurationMs,
+    recordDroppedSummary,
+    recordReportedResult,
+    recordResultPending,
+    recordTrackedEvent,
+} from "./trackDevBuffer.js";
 import { showTrackDevPanel } from "./trackDevPanelLoader.js";
 import { USER_DATA_MAX_BYTES } from "./userData.js";
 
@@ -44,7 +50,9 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
         const flavorText = options?.flavorText;
         const stars = starsFromPercentile(DEV_RESULT_PERCENTILE);
         if (closesTracking) {
-            recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars });
+            const t = Math.round(performance.now());
+            recordDroppedSummary(t);
+            recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars }, undefined, t);
         }
         showTrackDevPanel();
         const reported = {
