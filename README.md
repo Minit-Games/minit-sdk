@@ -235,7 +235,7 @@ The header bar is the standard HUD across Posts. Treat it as **layout only**:
 
 ## Building & uploading your game
 
-Minit Games games are uploaded to the [Creator Console](https://console.minit.games) as a **self-contained, pre-built ZIP**. Chat-based AI assistants (Claude, ChatGPT, Gemini, Google AI Studio, and others) can scaffold a complete game, but their output is almost always raw source — it needs a build step before it can be uploaded.
+Minit Games games are uploaded to the [Creator Console](https://minit.studio) as a **self-contained, pre-built ZIP**. Chat-based AI assistants (Claude, ChatGPT, Gemini, Google AI Studio, and others) can scaffold a complete game, but their output is almost always raw source — it needs a build step before it can be uploaded.
 
 ### What a Minit Games-ready ZIP looks like
 
@@ -255,7 +255,7 @@ Once your game works in the AI's preview or chat environment, send it this messa
 The game is ready. Please run `npm run build` and give me a ZIP whose root is the contents of the `dist/` folder — `index.html` should be at the top of the ZIP, not inside a `dist/` subfolder.
 ```
 
-The AI will run the build and hand you a ZIP of the compiled output. That ZIP is what you upload at [console.minit.games](https://console.minit.games). If the upload is rejected with a message about unexpected files or folder structure, double-check the ZIP was made from `dist/` and not the project root.
+The AI will run the build and hand you a ZIP of the compiled output. That ZIP is what you upload at [minit.studio](https://minit.studio). If the upload is rejected with a message about unexpected files or folder structure, double-check the ZIP was made from `dist/` and not the project root.
 
 ### Google AI Studio (Build Mode)
 
@@ -428,7 +428,7 @@ A license in the **No** hosting rows fails the upload. SPDX deprecated the bare 
 
 #### `THIRD-PARTY-NOTICES.txt`
 
-A license marked *Required* in the Notice column needs a `THIRD-PARTY-NOTICES.txt` file at the **ZIP root**, next to `index.html` and `meta.json`. Uploading without one is not blocked — the [Creator Console](https://console.minit.games) warns and lets you proceed, so add the file before publishing.
+A license marked *Required* in the Notice column needs a `THIRD-PARTY-NOTICES.txt` file at the **ZIP root**, next to `index.html` and `meta.json`. Uploading without one is not blocked — the [Creator Console](https://minit.studio) warns and lets you proceed, so add the file before publishing.
 
 `credits` does not substitute for it, and it does not substitute for `credits` — they satisfy different obligations. The file is the durable legal record that travels with the bundle; `credits` is the player-facing acknowledgment, which can be summarized or never opened.
 
