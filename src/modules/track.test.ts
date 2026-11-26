@@ -33,35 +33,34 @@ function propsWithCount(count: number): TrackProperties {
 type InvalidCase = { label: string; key: unknown; props: unknown; reason: TrackDropReason };
 
 const invalidCases: InvalidCase[] = [
-    { label: "an empty key", key: "", props: undefined, reason: "invalid-key" },
-    { label: "a number key", key: 42, props: undefined, reason: "invalid-key" },
-    { label: "an undefined key", key: undefined, props: undefined, reason: "invalid-key" },
-    { label: "a null key", key: null, props: undefined, reason: "invalid-key" },
-    { label: "an object key", key: { key: "x" }, props: undefined, reason: "invalid-key" },
-    { label: "the minit.result key", key: "minit.result", props: undefined, reason: "reserved-key" },
-    { label: "the minit.loading_done key", key: "minit.loading_done", props: undefined, reason: "reserved-key" },
-    { label: "a custom minit.-prefixed key", key: "minit.custom", props: undefined, reason: "reserved-key" },
-    { label: "null properties", key: "ok", props: null, reason: "invalid-props" },
-    { label: "array properties", key: "ok", props: ["a"], reason: "invalid-props" },
-    { label: "string properties", key: "ok", props: "a=1", reason: "invalid-props" },
-    { label: "number properties", key: "ok", props: 7, reason: "invalid-props" },
-    { label: "Map properties", key: "ok", props: new Map([["a", 1]]), reason: "invalid-props" },
-    { label: "Date properties", key: "ok", props: new Date(0), reason: "invalid-props" },
-    { label: "class-instance properties", key: "ok", props: new (class Props { a = 1; })(), reason: "invalid-props" },
+    { label: "an empty key", key: "", props: undefined, reason: "invalid_key" },
+    { label: "a number key", key: 42, props: undefined, reason: "invalid_key" },
+    { label: "an undefined key", key: undefined, props: undefined, reason: "invalid_key" },
+    { label: "a null key", key: null, props: undefined, reason: "invalid_key" },
+    { label: "an object key", key: { key: "x" }, props: undefined, reason: "invalid_key" },
+    { label: "the minit.result key", key: "minit.result", props: undefined, reason: "reserved_key" },
+    { label: "the minit.loading_done key", key: "minit.loading_done", props: undefined, reason: "reserved_key" },
+    { label: "a custom minit.-prefixed key", key: "minit.custom", props: undefined, reason: "reserved_key" },
+    { label: "null properties", key: "ok", props: null, reason: "invalid_props" },
+    { label: "array properties", key: "ok", props: ["a"], reason: "invalid_props" },
+    { label: "string properties", key: "ok", props: "a=1", reason: "invalid_props" },
+    { label: "number properties", key: "ok", props: 7, reason: "invalid_props" },
+    { label: "Map properties", key: "ok", props: new Map([["a", 1]]), reason: "invalid_props" },
+    { label: "Date properties", key: "ok", props: new Date(0), reason: "invalid_props" },
     {
         label: "properties with a throwing getter",
         key: "ok",
         props: { get level(): number { throw new Error("unavailable"); } },
-        reason: "invalid-props",
+        reason: "invalid_props",
     },
-    { label: "an empty property name", key: "ok", props: { "": 1 }, reason: "invalid-prop-key" },
-    { label: "a NaN value", key: "ok", props: { v: NaN }, reason: "invalid-prop-value" },
-    { label: "an Infinity value", key: "ok", props: { v: Infinity }, reason: "invalid-prop-value" },
-    { label: "a -Infinity value", key: "ok", props: { v: -Infinity }, reason: "invalid-prop-value" },
-    { label: "a null value", key: "ok", props: { v: null }, reason: "invalid-prop-value" },
-    { label: "an undefined value", key: "ok", props: { v: undefined }, reason: "invalid-prop-value" },
-    { label: "a nested object value", key: "ok", props: { v: { a: 1 } }, reason: "invalid-prop-value" },
-    { label: "an array value", key: "ok", props: { v: [1, 2] }, reason: "invalid-prop-value" },
+    { label: "an empty property name", key: "ok", props: { "": 1 }, reason: "invalid_props" },
+    { label: "a NaN value", key: "ok", props: { v: NaN }, reason: "invalid_props" },
+    { label: "an Infinity value", key: "ok", props: { v: Infinity }, reason: "invalid_props" },
+    { label: "a -Infinity value", key: "ok", props: { v: -Infinity }, reason: "invalid_props" },
+    { label: "a null value", key: "ok", props: { v: null }, reason: "invalid_props" },
+    { label: "an undefined value", key: "ok", props: { v: undefined }, reason: "invalid_props" },
+    { label: "a nested object value", key: "ok", props: { v: { a: 1 } }, reason: "invalid_props" },
+    { label: "an array value", key: "ok", props: { v: [1, 2] }, reason: "invalid_props" },
 ];
 
 type ValidCase = { label: string; key: string; props: TrackProperties | undefined };
@@ -81,6 +80,7 @@ const validCases: ValidCase[] = [
     },
     { label: "a 1000-char string value", key: "ok", props: { v: "x".repeat(1000) } },
     { label: "a null-prototype properties object", key: "ok", props: Object.assign(Object.create(null), { a: 1 }) },
+    { label: "class-instance properties, as the host injection accepts them", key: "ok", props: new (class Props { a = 1; })() as unknown as TrackProperties },
 ];
 
 function dropMessage(reason: TrackDropReason): string {
@@ -146,20 +146,63 @@ describe("track fixtures", () => {
     });
 });
 
-describe("track — validation in host mode", () => {
-    it.each(invalidCases)("drops $label with $reason and does not forward it", async ({ key, props, reason }) => {
+function expectForwardedUnchanged(hostTrack: jest.Mock, key: unknown, props: unknown, call = 0): void {
+    expect(hostTrack.mock.calls[call][0]).toBe(key);
+    expect(hostTrack.mock.calls[call][1]).toBe(props);
+}
+
+describe("track — no validation in host mode", () => {
+    it.each(invalidCases)("forwards $label to the host unchanged, without a warning", async ({ key, props }) => {
         const hostTrack = jest.fn();
         installHost("app", hostTrack);
         const { track, getTrackedEntries } = await loadSdk();
 
         track(key as string, props as TrackProperties);
 
-        expect(hostTrack).not.toHaveBeenCalled();
-        expect(warnSpy.mock.calls).toEqual([[dropMessage(reason)]]);
+        expect(hostTrack).toHaveBeenCalledTimes(1);
+        expectForwardedUnchanged(hostTrack, key, props);
+        expect(warnSpy).not.toHaveBeenCalled();
         expect(getTrackedEntries()).toEqual([]);
     });
 
-    it.each(validCases)("forwards $label to the host", async ({ key, props }) => {
+    it("forwards a symbol key unchanged", async () => {
+        const hostTrack = jest.fn();
+        installHost("app", hostTrack);
+        const { track } = await loadSdk();
+        const key = Symbol("k");
+
+        track(key as unknown as string, { level: 1 });
+
+        expect(hostTrack).toHaveBeenCalledTimes(1);
+        expect(hostTrack.mock.calls[0][0]).toBe(key);
+        expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it("forwards every invalid call, not just the first per reason", async () => {
+        const hostTrack = jest.fn();
+        installHost("app", hostTrack);
+        const { track } = await loadSdk();
+        const nanProps = { v: NaN };
+        const emptyNameProps = { "": 1 };
+
+        track("");
+        track("");
+        track("minit.custom");
+        track("minit.result");
+        track("ok", emptyNameProps);
+        track("ok", nanProps);
+
+        expect(hostTrack).toHaveBeenCalledTimes(6);
+        expectForwardedUnchanged(hostTrack, "", undefined, 0);
+        expectForwardedUnchanged(hostTrack, "", undefined, 1);
+        expectForwardedUnchanged(hostTrack, "minit.custom", undefined, 2);
+        expectForwardedUnchanged(hostTrack, "minit.result", undefined, 3);
+        expectForwardedUnchanged(hostTrack, "ok", emptyNameProps, 4);
+        expectForwardedUnchanged(hostTrack, "ok", nanProps, 5);
+        expect(warnSpy).not.toHaveBeenCalled();
+    });
+
+    it.each(validCases)("forwards $label to the host unchanged", async ({ key, props }) => {
         const hostTrack = jest.fn();
         installHost("app", hostTrack);
         const { track } = await loadSdk();
@@ -167,7 +210,7 @@ describe("track — validation in host mode", () => {
         track(key, props);
 
         expect(hostTrack).toHaveBeenCalledTimes(1);
-        expect(hostTrack).toHaveBeenCalledWith(key, props ?? {});
+        expectForwardedUnchanged(hostTrack, key, props);
         expect(warnSpy).not.toHaveBeenCalled();
     });
 });
@@ -193,22 +236,43 @@ describe("track — validation in dev mode", () => {
 });
 
 describe("track — drop warnings", () => {
-    it.each(["host", "dev"] as const)("warns once per reason per load in %s mode", async (mode) => {
-        if (mode === "host") {
-            installHost("app", jest.fn());
-        }
+    it("warns once per reason per load in dev mode", async () => {
         const { track } = await loadSdk();
 
         track("");
         track("");
-        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid-key")]]);
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid_key")]]);
 
         track("minit.custom");
-        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid-key")], [dropMessage("reserved-key")]]);
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid_key")], [dropMessage("reserved_key")]]);
 
         track("minit.result");
         track(42 as unknown as string);
         expect(warnSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it("warns invalid_props once for an empty property name followed by a NaN value", async () => {
+        const { track, getTrackedEntries } = await loadSdk();
+
+        track("ok", { "": 1 });
+        track("ok", { v: NaN });
+
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid_props")]]);
+        expect(getTrackedEntries()).toEqual([
+            { kind: "drop", key: "ok", reason: "invalid_props", t: 1000 },
+            { kind: "drop", key: "ok", reason: "invalid_props", t: 1000 },
+        ]);
+    });
+
+    it("never warns about an invalid call in host mode", async () => {
+        installHost("app", jest.fn());
+        const { track } = await loadSdk();
+
+        for (const { key, props } of invalidCases) {
+            track(key as string, props as TrackProperties);
+        }
+
+        expect(warnSpy).not.toHaveBeenCalled();
     });
 
     it("buffers a drop entry for every dropped call, stamped at that moment, while warning once per reason", async () => {
@@ -222,15 +286,15 @@ describe("track — drop warnings", () => {
         track("minit.custom");
 
         expect(getTrackedEntries()).toEqual([
-            { kind: "drop", key: "", reason: "invalid-key", t: 1000 },
-            { kind: "drop", key: "ok", reason: "invalid-prop-key", t: 1100 },
-            { kind: "drop", key: "minit.custom", reason: "reserved-key", t: 1201 },
+            { kind: "drop", key: "", reason: "invalid_key", t: 1000 },
+            { kind: "drop", key: "ok", reason: "invalid_props", t: 1100 },
+            { kind: "drop", key: "minit.custom", reason: "reserved_key", t: 1201 },
         ]);
         expect(events(getTrackedEntries())).toEqual([]);
         expect(warnSpy.mock.calls).toEqual([
-            [dropMessage("invalid-key")],
-            [dropMessage("invalid-prop-key")],
-            [dropMessage("reserved-key")],
+            [dropMessage("invalid_key")],
+            [dropMessage("invalid_props")],
+            [dropMessage("reserved_key")],
         ]);
     });
 
@@ -254,10 +318,18 @@ describe("track — host forwarding", () => {
         track("level.complete", { level: 3, perfect: true, boss: "slime" });
         track("level.start");
 
-        expect(hostTrack.mock.calls).toEqual([
-            ["level.complete", { level: 3, perfect: true, boss: "slime" }],
-            ["level.start", {}],
-        ]);
+        expect(hostTrack).toHaveBeenCalledTimes(2);
+        expect(hostTrack.mock.calls[0]).toEqual(["level.complete", { level: 3, perfect: true, boss: "slime" }]);
+        expect(hostTrack.mock.calls[1][0]).toBe("level.start");
+        expect(hostTrack.mock.calls[1][1]).toBeUndefined();
+    });
+
+    it("does not throw for a symbol key when the host has no track function", async () => {
+        installHost("app");
+        const { track } = await loadSdk();
+
+        expect(() => track(Symbol("k") as unknown as string)).not.toThrow();
+        expect(warnSpy).not.toHaveBeenCalled();
     });
 
     it("logs the call and does not throw when the host has no track function", async () => {
@@ -325,13 +397,13 @@ describe("track — robustness", () => {
     it.each([
         ["a null-prototype object", Object.create(null)],
         ["a throwing Symbol.toPrimitive", { [Symbol.toPrimitive]: () => { throw new Error("nope"); } }],
-    ])("drops a key that cannot be stringified (%s) as invalid-key in dev mode", async (_label, key) => {
+    ])("drops a key that cannot be stringified (%s) as invalid_key in dev mode", async (_label, key) => {
         const { track, getTrackedEntries } = await loadSdk();
 
         expect(() => track(key as unknown as string)).not.toThrow();
 
-        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid-key")]]);
-        expect(getTrackedEntries()).toEqual([{ kind: "drop", key: "(unprintable key)", reason: "invalid-key", t: 1000 }]);
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("invalid_key")]]);
+        expect(getTrackedEntries()).toEqual([{ kind: "drop", key: "(unprintable key)", reason: "invalid_key", t: 1000 }]);
     });
 });
 
@@ -390,7 +462,7 @@ describe("track — dev buffer", () => {
         expect(getTrackedEntries()).toEqual([
             { kind: "event", key: "a", props: {}, bytes: lineBytes("a", {}, 1000), t: 1000 },
             { kind: "event", key: "b", props: {}, bytes: lineBytes("b", {}, 1500), t: 1500 },
-            { kind: "drop", key: "", reason: "invalid-key", t: 1700 },
+            { kind: "drop", key: "", reason: "invalid_key", t: 1700 },
         ]);
     });
 
@@ -407,7 +479,7 @@ describe("track — dev buffer", () => {
 
         expect(listener.mock.calls).toEqual([
             [{ kind: "event", key: "during", props: { n: 1 }, bytes: lineBytes("during", { n: 1 }, 1000), t: 1000 }],
-            [{ kind: "drop", key: "", reason: "invalid-key", t: 1000 }],
+            [{ kind: "drop", key: "", reason: "invalid_key", t: 1000 }],
         ]);
     });
 
@@ -575,6 +647,7 @@ describe("track — default events", () => {
             "minit.loading_done",
             "full",
             "drop:budget",
+            "minit.dropped",
             "minit.result",
         ]);
         expect(getTrackedUsage().bytes).toBe(BUDGET);
@@ -614,15 +687,15 @@ describe("track — result ordering", () => {
 });
 
 describe("track — after reportResult", () => {
-    it("drops later calls with after-result in dev mode", async () => {
+    it("drops later calls with after_result in dev mode", async () => {
         const { track, reportResult, getTrackedEntries } = await loadSdk();
 
         reportResult(1);
         track("late");
 
         const entries = getTrackedEntries();
-        expect(entries[entries.length - 1]).toEqual({ kind: "drop", key: "late", reason: "after-result", t: 1000 });
-        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after-result"));
+        expect(entries[entries.length - 1]).toEqual({ kind: "drop", key: "late", reason: "after_result", t: 1000 });
+        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after_result"));
     });
 
     it.each([
@@ -648,6 +721,179 @@ describe("track — after reportResult", () => {
         track("after");
 
         expect(hostTrack).toHaveBeenCalledTimes(1);
-        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after-result"));
+        expect(warnSpy).toHaveBeenCalledWith(dropMessage("after_result"));
+    });
+
+    it.each([
+        ["a number", 1],
+        ["a string", "WIN"],
+    ])("stops forwarding invalid and valid calls after %s result in host mode, warning after_result once", async (_label, value) => {
+        const hostTrack = jest.fn();
+        installHost("app", hostTrack);
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        reportResult(value);
+        track("after");
+        track("");
+        track("minit.custom");
+        track("ok", { v: NaN });
+
+        expect(hostTrack).not.toHaveBeenCalled();
+        expect(warnSpy.mock.calls).toEqual([[dropMessage("after_result")]]);
+        expect(getTrackedEntries()).toEqual([]);
+    });
+
+    it.each([
+        ["a non-number/string result", { score: 1 }],
+        ["NaN", NaN],
+        ["Infinity", Infinity],
+    ])("keeps forwarding unchanged in host mode after %s", async (_label, value) => {
+        const hostTrack = jest.fn();
+        installHost("app", hostTrack);
+        const { track, reportResult } = await loadSdk();
+        const props = { v: NaN };
+
+        reportResult(value as never);
+        track("", props);
+
+        expect(hostTrack).toHaveBeenCalledTimes(1);
+        expectForwardedUnchanged(hostTrack, "", props);
+        expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("track dropped"));
+    });
+});
+
+describe("track — minit.dropped in dev mode", () => {
+    function keysOf(entries: readonly TrackedEntry[]): string[] {
+        return entries.map((entry) => (entry.kind === "drop" ? `drop:${entry.reason}` : entry.key));
+    }
+
+    it("records per-reason counts of every dropped call immediately before minit.result, with the same t", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("");
+        track(42 as unknown as string);
+        track("minit.custom");
+        track("ok", { "": 1 });
+        track("ok", { v: NaN });
+        track("ok", null as unknown as TrackProperties);
+        track("fill", propsForLineBytes("fill", 1000, BUDGET - 50));
+        track("big", propsForLineBytes("big", 1000, 51));
+        track("big", propsForLineBytes("big", 1000, 51));
+        now = 5000.4;
+        reportResult(10);
+
+        const entries = getTrackedEntries();
+        expect(entries.slice(-2)).toEqual([
+            { kind: "event", key: "minit.dropped", props: { invalid_key: 2, reserved_key: 1, invalid_props: 3, budget: 2 }, t: 5000 },
+            { kind: "event", key: "minit.result", props: { result: 10, stars: 3 }, t: 5000 },
+        ]);
+    });
+
+    it("omits reasons with no drops", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("minit.custom");
+        track("ok");
+        reportResult("WIN");
+
+        expect(keysOf(getTrackedEntries())).toEqual(["drop:reserved_key", "ok", "minit.dropped", "minit.result"]);
+        expect(getTrackedEntries()[2]).toEqual({ kind: "event", key: "minit.dropped", props: { reserved_key: 1 }, t: 1000 });
+    });
+
+    it("records no minit.dropped when nothing was dropped", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("ok");
+        reportResult(1);
+
+        expect(keysOf(getTrackedEntries())).toEqual(["ok", "minit.result"]);
+    });
+
+    it("keeps minit.dropped outside the creator budget", async () => {
+        const { track, reportResult } = await loadSdk();
+        const { getTrackedUsage } = await import("./trackDevBuffer");
+
+        track("ok", { level: 1 });
+        track("");
+        const bytesBefore = getTrackedUsage().bytes;
+        reportResult(1);
+
+        expect(getTrackedUsage().bytes).toBe(bytesBefore);
+    });
+
+    it("never counts after_result drops", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("");
+        reportResult(1);
+        track("late");
+        track("");
+        reportResult(2);
+
+        expect(keysOf(getTrackedEntries())).toEqual([
+            "drop:invalid_key",
+            "minit.dropped",
+            "minit.result",
+            "drop:after_result",
+            "drop:after_result",
+            "minit.result",
+        ]);
+        expect(getTrackedEntries()[1]).toEqual(expect.objectContaining({ key: "minit.dropped", props: { invalid_key: 1 } }));
+    });
+
+    it("records no minit.dropped when the only drops come after the result", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        reportResult(1);
+        track("late");
+        reportResult(2);
+
+        expect(keysOf(getTrackedEntries())).toEqual(["minit.result", "drop:after_result", "minit.result"]);
+    });
+
+    it("records minit.dropped at most once per play", async () => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("");
+        reportResult(1);
+        reportResult("WIN");
+
+        expect(keysOf(getTrackedEntries())).toEqual(["drop:invalid_key", "minit.dropped", "minit.result", "minit.result"]);
+    });
+
+    it.each([
+        ["a non-number/string result", { score: 1 }],
+        ["NaN", NaN],
+        ["Infinity", Infinity],
+    ])("records neither minit.dropped nor minit.result for %s, and keeps counting until a closing result", async (_label, value) => {
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("");
+        reportResult(value as never);
+        expect(keysOf(getTrackedEntries())).toEqual(["drop:invalid_key"]);
+
+        track("minit.custom");
+        now = 2000;
+        reportResult(3);
+
+        expect(keysOf(getTrackedEntries())).toEqual(["drop:invalid_key", "drop:reserved_key", "minit.dropped", "minit.result"]);
+        expect(getTrackedEntries()[2]).toEqual({
+            kind: "event",
+            key: "minit.dropped",
+            props: { invalid_key: 1, reserved_key: 1 },
+            t: 2000,
+        });
+    });
+
+    it("is never recorded by the SDK in host mode", async () => {
+        installHost("app", jest.fn());
+        const { track, reportResult, getTrackedEntries } = await loadSdk();
+
+        track("");
+        track("minit.custom");
+        reportResult(1);
+        track("late");
+
+        expect(getTrackedEntries()).toEqual([]);
     });
 });

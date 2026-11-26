@@ -1,4 +1,4 @@
-import { callApiFunction, isTestEnvironment } from "../utils.js";
+import { isTestEnvironment } from "../utils.js";
 import { getTrackedUsage, recordTrackedDrop, recordTrackedEvent } from "./trackDevBuffer.js";
 import type { TrackDropReason } from "./trackDevBuffer.js";
 import { showTrackDevPanel } from "./trackDevPanelLoader.js";
@@ -23,39 +23,53 @@ export function closeTrackingAfterResult(): void {
  */
 export function track(key: string, properties?: TrackProperties): void {
     if (resultReported) {
-        drop(key, "after-result");
+        drop(key, "after_result");
         return;
     }
+    if (isTestEnvironment()) {
+        trackLocally(key, properties);
+    } else {
+        forwardToHost(key, properties);
+    }
+}
+
+function trackLocally(key: string, properties: TrackProperties | undefined): void {
     const result = validate(key, properties);
     if ("reason" in result) {
         drop(key, result.reason);
         return;
     }
     const { props } = result;
-
-    if (isTestEnvironment()) {
-        const t = Math.round(performance.now());
-        const bytes = new TextEncoder().encode(JSON.stringify([key, props, t])).length;
-        if (getTrackedUsage().bytes + bytes > PLAY_BUDGET_BYTES) {
-            drop(key, "budget");
-            return;
-        }
-        recordTrackedEvent(key, props, bytes, t);
-        showTrackDevPanel();
+    const t = Math.round(performance.now());
+    const bytes = new TextEncoder().encode(JSON.stringify([key, props, t])).length;
+    if (getTrackedUsage().bytes + bytes > PLAY_BUDGET_BYTES) {
+        drop(key, "budget");
+        return;
     }
+    recordTrackedEvent(key, props, bytes, t);
+    showTrackDevPanel();
+    logCall(key, props);
+}
 
-    const message = () => `track => ${key}\nProps: ${JSON.stringify(props)}`;
-    callApiFunction(() => {
-        if (typeof window.minit?.track !== "function") {
-            console.log("[MinitSDK]", message());
-            return;
-        }
-        try {
-            window.minit.track(key, props);
-        } catch {
-            // A host failure must never break the game.
-        }
-    }, message);
+// The host injection validates, budgets and warns, so the raw call goes through untouched.
+function forwardToHost(key: string, properties: TrackProperties | undefined): void {
+    if (typeof window.minit?.track !== "function") {
+        logCall(key, properties);
+        return;
+    }
+    try {
+        window.minit.track(key, properties as TrackProperties);
+    } catch {
+        // A host failure must never break the game.
+    }
+}
+
+function logCall(key: unknown, properties: unknown): void {
+    try {
+        console.log("[MinitSDK]", `track => ${keyLabel(key)}\nProps: ${JSON.stringify(properties ?? {})}`);
+    } catch {
+        // Unserializable properties must not make track() throw.
+    }
 }
 
 function validate(
@@ -63,36 +77,24 @@ function validate(
     properties: unknown,
 ): { props: TrackProperties } | { reason: TrackDropReason } {
     if (typeof key !== "string" || key === "") {
-        return { reason: "invalid-key" };
+        return { reason: "invalid_key" };
     }
     if (key.startsWith(RESERVED_KEY_PREFIX)) {
-        return { reason: "reserved-key" };
+        return { reason: "reserved_key" };
     }
     const entries = properties === undefined ? [] : snapshotEntries(properties);
-    if (!entries) {
-        return { reason: "invalid-props" };
-    }
-    for (const [propKey, value] of entries) {
-        if (propKey === "") {
-            return { reason: "invalid-prop-key" };
-        }
-        if (!isValidValue(value)) {
-            return { reason: "invalid-prop-value" };
-        }
+    if (!entries || entries.some(([propKey, value]) => propKey === "" || !isValidValue(value))) {
+        return { reason: "invalid_props" };
     }
     return { props: Object.fromEntries(entries) as TrackProperties };
 }
 
 function snapshotEntries(properties: unknown): [string, unknown][] | undefined {
     try {
-        if (typeof properties !== "object" || properties === null) {
+        if (Object.prototype.toString.call(properties) !== "[object Object]") {
             return undefined;
         }
-        const prototype = Object.getPrototypeOf(properties);
-        if (prototype !== Object.prototype && prototype !== null) {
-            return undefined;
-        }
-        return Object.entries(properties);
+        return Object.entries(properties as object);
     } catch {
         return undefined;
     }

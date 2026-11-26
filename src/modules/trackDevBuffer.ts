@@ -1,11 +1,4 @@
-export type TrackDropReason =
-    | "invalid-key"
-    | "reserved-key"
-    | "invalid-props"
-    | "invalid-prop-key"
-    | "invalid-prop-value"
-    | "budget"
-    | "after-result";
+export type TrackDropReason = "invalid_key" | "reserved_key" | "invalid_props" | "budget" | "after_result";
 
 export type TrackedEntry =
     | { kind: "event"; key: string; props: Record<string, boolean | number | string>; bytes?: number; t: number }
@@ -24,6 +17,7 @@ const entries: TrackedEntry[] = [];
 const listeners = new Set<Listener>();
 const usage: TrackedUsage = { bytes: 0, budgetDrops: 0 };
 const receivedByKey = new Map<string, number>();
+const countedDrops = new Map<TrackDropReason, number>();
 
 export interface ReportedResult {
     result: number | string;
@@ -160,7 +154,19 @@ export function recordTrackedDrop(key: string, reason: TrackDropReason): void {
     if (reason === "budget") {
         usage.budgetDrops++;
     }
+    if (reason !== "after_result") {
+        countedDrops.set(reason, (countedDrops.get(reason) ?? 0) + 1);
+    }
     append({ kind: "drop", key, reason, t: Math.round(performance.now()) });
+}
+
+// Every later call is an uncounted after_result drop, so clearing keeps this to once per play.
+export function recordDroppedSummary(t: number): void {
+    if (countedDrops.size === 0) {
+        return;
+    }
+    recordTrackedEvent("minit.dropped", Object.fromEntries(countedDrops), undefined, t);
+    countedDrops.clear();
 }
 
 function append(entry: TrackedEntry): void {
