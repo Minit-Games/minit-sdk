@@ -621,10 +621,11 @@ track('level.start');
 track('level.complete', { level: 3, perfect: true, boss: 'slime' });
 ```
 
-`track()` never throws. Any call after `reportResult()` is dropped (`after-result`). An invalid call, or an event that does not fit the budget, is dropped whole and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per play.
+`track()` never throws. Any call after `reportResult()` is dropped (`after_result`). An invalid call, or an event that does not fit the budget, is dropped whole and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per play. On a host the SDK forwards every call made before `reportResult()` unchanged and the host validates, warns and counts; outside a host (`isTestEnvironment()`) the SDK does the same itself.
 
-- **Key:** any non-empty string. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
-- **Properties:** optional plain object with non-empty names. Values are a boolean, a finite number, or a string — no `null`, `NaN`, `Infinity`, nested objects, or arrays.
+- **Key:** any non-empty string (`invalid_key`). Keys starting with `minit.` are reserved for the platform (`reserved_key`).
+- **Properties:** optional plain object with non-empty names. Values are a boolean, a finite number, or a string — no `null`, `NaN`, `Infinity`, nested objects, or arrays (`invalid_props`).
+- **Dropped calls:** the per-reason counts of `invalid_key`, `reserved_key`, `invalid_props` and `budget` drops are recorded as the built-in `minit.dropped` event, at most once per play, directly before `minit.result` and only when something was dropped. On a host, a play without a result records it when the session ends. `after_result` drops are never counted.
 - **Budget — the only limit:** 3 KB (3072 UTF-8 bytes) of events per play, which is about 50–75 events with 1–2 properties. Each event counts as the UTF-8 size of its stored line `[key, props, t]`. An event that does not fit the remaining budget is dropped (`budget`); a smaller later event can still fit. The budget starts over on every load and replay. There is no rate or count limit, and the platform's own `minit.*` events do not count. Outside a host (`isTestEnvironment()`) the SDK enforces the budget itself, so a Game that exceeds it shows the warning during local testing.
 
 ## Dev tools panel
@@ -632,7 +633,7 @@ track('level.complete', { level: 3, perfect: true, boss: 'slime' });
 Outside a host (`isTestEnvironment()`), the first `track()`, `loadingDone()` or `reportResult()` call adds an orange, draggable Minit launcher that opens the dev tools panel (`Ctrl+M` toggles it). It never renders on a host. Tabs:
 
 - **Config:** the config values the Game read (injected, default or missing); edit one, reset to defaults, or toggle the first-time-user flag (`?hasPlayedGame`), each followed by a reload.
-- **Tracking:** every tracked and dropped event with its time, and the budget used (`used / 3072 bytes`). Built-in events (`minit.loading_done`; `minit.result` with `result`, `stars` and `flavorText` when set) show in orange with a Minit icon. Hover or focus a row for its properties, size or drop reason.
+- **Tracking:** every tracked and dropped event with its time, and the budget used (`used / 3072 bytes`). Built-in events (`minit.loading_done`; `minit.dropped` with per-reason drop counts; `minit.result` with `result`, `stars` and `flavorText` when set) show in orange with a Minit icon. Hover or focus a row for its properties, size or drop reason.
 - **Result:** the last `reportResult()` with its stars, flavor text and play duration. Dev mode has no other players, so it always shows 3 stars.
 - **User data:** edit the `?userData` value, then Copy, Export, Clear or Apply & reload. A green notice shows when `reportResult()` updated it, a red one when it exceeds 1024 bytes.
 - **Suggestions:** an integration checklist (SDK detected, `loadingDone()`, `reportResult()`, tutorial, no external requests, `meta.json` config); the tab shows ✓ when all pass.
