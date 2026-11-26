@@ -217,7 +217,7 @@ describe("track dev panel", () => {
         const dropRows = rows("drop");
         expect(dropRows).toHaveLength(2);
         expect(dropRows[0].textContent).toContain("lvl");
-        expect(hoverDetail(dropRows[0])).toContain("reason: invalid property key");
+        expect(hoverDetail(dropRows[0])).toContain("reason: invalid properties");
         expect(dropRows[1].textContent).toContain("minit.sneaky");
         expect(hoverDetail(dropRows[1])).toContain("reason: reserved minit. prefix");
     });
@@ -722,11 +722,9 @@ describe("dev tools detail popup", () => {
     });
 
     it.each([
-        ["invalid-key", "invalid key"],
-        ["reserved-key", "reserved minit. prefix"],
-        ["invalid-props", "properties are not an object"],
-        ["invalid-prop-key", "invalid property key"],
-        ["invalid-prop-value", "invalid property value"],
+        ["invalid_key", "invalid key"],
+        ["reserved_key", "reserved minit. prefix"],
+        ["invalid_props", "invalid properties"],
     ] as const)("explains the %s drop reason", async (reason, text) => {
         const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
         recordTrackedDrop("some_key", reason);
@@ -852,9 +850,30 @@ describe("dev tools detail popup size and received count", () => {
         expect(text).toContain("received: 1");
     });
 
+    it("renders minit.dropped as a built-in row below minit.result with its per-reason counts", async () => {
+        const { track, reportResult } = await loadSdk();
+        track("");
+        track("ok", { v: NaN });
+        track("ok", { "": 1 });
+        reportResult(7);
+        await flushPanelLoad();
+
+        const eventRows = rows("event");
+        expect(eventRows.map((row) => row.getAttribute("data-key"))).toEqual(["minit.result", "minit.dropped"]);
+        const [resultRow, droppedRow] = eventRows as HTMLElement[];
+        expect(droppedRow.querySelector("svg")).not.toBeNull();
+        expect(droppedRow.style.color).toBe(resultRow.style.color);
+
+        const text = hoverDetail(droppedRow);
+        expect(text).toContain("invalid_key: 1");
+        expect(text).toContain("invalid_props: 2");
+        expect(text).toContain("source: built in");
+        expect(text).not.toContain("size:");
+    });
+
     it.each([
         ["budget", "over the 3072-byte event budget for this play"],
-        ["after-result", "sent after reportResult()"],
+        ["after_result", "sent after reportResult()"],
     ] as const)("explains the %s drop reason", async (reason, text) => {
         const { recordTrackedDrop, showTrackDevPanel } = await loadSdk();
         recordTrackedDrop("some_key", reason);
@@ -1102,7 +1121,7 @@ describe("dev tools Tracking tab footer and notices", () => {
         expect(dropNotice().style.display).toBe("block");
         expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
             "1 event was thrown away and never sent:",
-            "1× invalid property value",
+            "1× invalid properties",
         ]);
 
         track("other", { v: null as unknown as string });
@@ -1110,7 +1129,7 @@ describe("dev tools Tracking tab footer and notices", () => {
 
         expect(Array.from(dropNotice().children).map((line) => line.textContent)).toEqual([
             "3 events were thrown away and never sent:",
-            "2× invalid property value",
+            "2× invalid properties",
             "1× reserved minit. prefix",
         ]);
         expect(tabs()[1].querySelector("span")?.hasAttribute("data-alert")).toBe(true);

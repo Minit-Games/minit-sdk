@@ -5,7 +5,11 @@ export type TrackDropReason =
     | "invalid-prop-key"
     | "invalid-prop-value"
     | "budget"
-    | "after-result";
+    | "after-result"
+    | "invalid_key"
+    | "reserved_key"
+    | "invalid_props"
+    | "after_result";
 
 export type TrackedEntry =
     | { kind: "event"; key: string; props: Record<string, boolean | number | string>; bytes?: number; t: number }

@@ -2701,6 +2701,8 @@ function describeDropReason(reason: TrackDropReason): string {
             return `over the ${PLAY_BUDGET_BYTES}-byte event budget for this play`;
         case "after-result":
             return "sent after reportResult()";
+        default:
+            return reason;
     }
 }
 
