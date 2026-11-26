@@ -75,9 +75,10 @@ The Game does not need to persist anything for the tutorial — `userData` plays
 |-----|----------|
 | `/?tutorial=1` | Tutorial always shows |
 | `/?tutorial=0` | Tutorial never shows |
+| `/?hasPlayedGame=true` | Tutorial skipped — simulates the app's returning-player flag |
 | `/` (no host flag) | Tutorial shows |
 
-Use `/?tutorial=0` to check the returning-player outcome (tutorial skipped).
+Without a host, `?hasPlayedGame=true|false` stands in for `window.minit.hasPlayedGame`; the dev panel's Config tab toggles it. Use it to check the returning-player outcome the way the app produces it.
 
 ## Primitives
 

@@ -42,6 +42,9 @@ export function getUserData(): string | undefined {
  */
 export const USER_DATA_PARAM_KEY = "userData";
 
+// Hand-copied from packages/shared/src/creatorLimits.ts in the minit-root monorepo.
+export const USER_DATA_MAX_BYTES = 1024;
+
 /**
  * Reads `?userData=<value>` from the current URL search string and returns its value,
  * or `undefined` if not present.

@@ -2,8 +2,8 @@
 // These are checked by tsc (npm run check) — not executed at runtime.
 import { getUserData } from "./userData.js";
 import type { ResultOptions, MinitApi } from "../minitApi.js";
-import { getMotionQuality, prefersReducedMotion, getDeviceTier, requestDeviceMotionPermission } from "../index.js";
-import type { MotionQuality, DeviceTier, DeviceMotionPermission } from "../index.js";
+import { getMotionQuality, prefersReducedMotion, getDeviceTier, requestDeviceMotionPermission, track } from "../index.js";
+import type { MotionQuality, DeviceTier, DeviceMotionPermission, TrackProperties } from "../index.js";
 
 // --- getUserData ---
 
@@ -99,3 +99,24 @@ const _deviceMotionPermissionInvalid: DeviceMotionPermission = "prompt";
 const _deviceMotionPermissionSync: DeviceMotionPermission = requestDeviceMotionPermission();
 // @ts-expect-error requestDeviceMotionPermission takes no arguments
 requestDeviceMotionPermission("motion");
+
+// --- track and TrackProperties ---
+
+const _trackNoProps: void = track("level.start");
+const _trackProps: void = track("level.complete", { level: 3, perfect: true, boss: "slime" });
+const _trackProperties: TrackProperties = { won: true, score: 12.5, name: "boss" };
+// @ts-expect-error track requires a key
+track();
+// @ts-expect-error track keys are strings
+track(42);
+// @ts-expect-error TrackProperties values are boolean, number or string
+const _trackPropertiesNested: TrackProperties = { nested: { a: 1 } };
+// @ts-expect-error TrackProperties values cannot be null
+track("level.start", { level: null });
+
+// --- MinitApi.track (optional; absent on older hosts) ---
+
+const _minitApiTrack: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, track: (_key: string, _props: Record<string, boolean | number | string>) => {} };
+const _minitApiNoTrack: MinitApi = { environment: "web", dropConfig: {}, reportResult: () => {}, loadingDone: () => {} };
+// @ts-expect-error MinitApi.track takes a string key
+const _minitApiInvalidTrack: MinitApi = { environment: "app", dropConfig: {}, reportResult: () => {}, loadingDone: () => {}, track: (_key: number) => {} };

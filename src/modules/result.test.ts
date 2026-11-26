@@ -390,6 +390,72 @@ describe("reportResult — over-limit constraint warnings (DROP-8991)", () => {
     });
 });
 
+describe("reportResult — dev buffer in the testing environment", () => {
+    async function loadResult() {
+        jest.resetModules();
+        const { reportResult: report } = await import("./result");
+        const { getPendingResult, getReportedResult } = await import("./trackDevBuffer");
+        return { report, getPendingResult, getReportedResult };
+    }
+
+    beforeEach(() => {
+        jest.useFakeTimers({ doNotFake: ["performance"] });
+        jest.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.restoreAllMocks();
+        document.body.innerHTML = "";
+    });
+
+    it("records a pending result before a delayed result arrives", async () => {
+        const { report, getPendingResult, getReportedResult } = await loadResult();
+
+        report(7, { delay: 500 });
+
+        expect(getPendingResult()?.delayMs).toBe(500);
+        expect(getReportedResult()).toBeUndefined();
+
+        jest.advanceTimersByTime(499);
+        expect(getReportedResult()).toBeUndefined();
+
+        jest.advanceTimersByTime(1);
+        expect(getReportedResult()?.result).toBe(7);
+    });
+
+    it.each([
+        ["no delay", undefined],
+        ["a zero delay", 0],
+    ])("records no pending result with %s", async (_label, delay) => {
+        const { report, getPendingResult, getReportedResult } = await loadResult();
+
+        report(7, delay === undefined ? undefined : { delay });
+        jest.advanceTimersByTime(0);
+
+        expect(getPendingResult()).toBeUndefined();
+        expect(getReportedResult()?.result).toBe(7);
+    });
+
+    it("stores the reported userData and flavor text on the reported result", async () => {
+        const { report, getReportedResult } = await loadResult();
+
+        report(7, { userData: '{"level":3}', flavorText: "Nice" });
+        jest.advanceTimersByTime(0);
+
+        expect(getReportedResult()).toMatchObject({ result: 7, userData: '{"level":3}', flavorText: "Nice" });
+    });
+
+    it("drops non-string userData from the reported result", async () => {
+        const { report, getReportedResult } = await loadResult();
+
+        report(7, { userData: 42 as never });
+        jest.advanceTimersByTime(0);
+
+        expect(getReportedResult()?.userData).toBeUndefined();
+    });
+});
+
 describe("reportResult — invalid result runtime guard", () => {
     const invalidResults: Array<[string, unknown]> = [
         ["object", { score: 10 }],
@@ -399,10 +465,6 @@ describe("reportResult — invalid result runtime guard", () => {
         ["boolean true", true],
         ["boolean false", false],
     ];
-
-    function overlay(): Element | null {
-        return document.getElementById("dashboard-overlay");
-    }
 
     beforeEach(() => {
         document.body.innerHTML = "";
@@ -504,58 +566,39 @@ describe("reportResult — invalid result runtime guard", () => {
     });
 
     describe("in local testing (no host)", () => {
-        it.each(invalidResults)("rejects %s with one [MinitSDK] warning and renders no result overlay", (_label, value) => {
+        async function loadResult() {
+            jest.resetModules();
+            const { reportResult: report } = await import("./result");
+            const { getReportedResult, getTrackedEntries } = await import("./trackDevBuffer");
+            return { report, getReportedResult, getTrackedEntries };
+        }
+
+        it.each(invalidResults)("rejects %s with one [MinitSDK] warning and records no result", async (_label, value) => {
+            jest.useFakeTimers({ doNotFake: ["performance"] });
             const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
             jest.spyOn(console, "log").mockImplementation(() => {});
+            const { report, getReportedResult, getTrackedEntries } = await loadResult();
 
-            expect(() => reportResult(value as any)).not.toThrow();
-
-            expect(overlay()).toBeNull();
-            expect(warnSpy).toHaveBeenCalledTimes(1);
-            const message = warnSpy.mock.calls[0].join(" ");
-            expect(message).toMatch(/^\[MinitSDK\]/);
-            expect(message).toContain(typeof value);
-        });
-
-        it("schedules no delayed overlay for an invalid result reported with a delay", () => {
-            jest.useFakeTimers();
-            const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-            jest.spyOn(console, "log").mockImplementation(() => {});
-
-            reportResult({} as any, { delay: 500 });
+            expect(() => report(value as any, { delay: 500 })).not.toThrow();
             jest.advanceTimersByTime(1000);
 
-            expect(overlay()).toBeNull();
-            expect(jest.getTimerCount()).toBe(0);
+            expect(getReportedResult()).toBeUndefined();
+            expect(getTrackedEntries()).toEqual([]);
             expect(warnSpy).toHaveBeenCalledTimes(1);
+            expect(warnSpy.mock.calls[0].join(" ")).toMatch(/^\[MinitSDK\]/);
         });
 
-        it("renders the overlay for a valid number reported right after a rejected call", () => {
+        it("records a valid result reported right after a rejected call", async () => {
+            jest.useFakeTimers({ doNotFake: ["performance"] });
             jest.spyOn(console, "warn").mockImplementation(() => {});
             jest.spyOn(console, "log").mockImplementation(() => {});
+            const { report, getReportedResult } = await loadResult();
 
-            reportResult(undefined as any);
-            expect(overlay()).toBeNull();
+            report(undefined as any);
+            report("WIN");
+            jest.advanceTimersByTime(0);
 
-            reportResult(123);
-
-            expect(overlay()).not.toBeNull();
-            expect(overlay()?.textContent).toContain("123");
-        });
-
-        it("renders the delayed overlay for a valid string reported right after a rejected call", () => {
-            jest.useFakeTimers();
-            jest.spyOn(console, "warn").mockImplementation(() => {});
-            jest.spyOn(console, "log").mockImplementation(() => {});
-
-            reportResult(true as any, { delay: 500 });
-            reportResult("WIN", { delay: 500 });
-
-            expect(overlay()).toBeNull();
-            jest.advanceTimersByTime(500);
-
-            expect(overlay()).not.toBeNull();
-            expect(overlay()?.textContent).toContain("WIN");
+            expect(getReportedResult()?.result).toBe("WIN");
         });
     });
 });

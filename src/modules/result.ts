@@ -1,10 +1,24 @@
 import type { ResultOptions, HostResultOptions } from "../minitApi.js";
 import { callApiFunction, isTestEnvironment } from "../utils.js";
+import { closeTrackingAfterResult } from "./track.js";
+import { getPlayDurationMs, recordReportedResult, recordResultPending, recordTrackedEvent } from "./trackDevBuffer.js";
+import { showTrackDevPanel } from "./trackDevPanelLoader.js";
+import { USER_DATA_MAX_BYTES } from "./userData.js";
 
 // Hand-copied from packages/shared/src/creatorLimits.ts in the minit-root monorepo;
 // minit-sdk cannot import across repositories.
 const FLAVOR_TEXT_MAX_LENGTH = 64;
-const USER_DATA_MAX_BYTES = 1024;
+
+// Mirrors the app's getStarsFromPercentage. Dev mode has no other players' results, and the
+// host ranks a result at the 100th percentile until a game has more than 3 of them.
+const DEV_RESULT_PERCENTILE = 100;
+
+function starsFromPercentile(percentile: number): number {
+    if (percentile >= 67) {
+        return 3;
+    }
+    return percentile >= 34 ? 2 : 1;
+}
 
 /**
  * Reports the run's outcome to the host and triggers its result screen. Call once, when the run ends.
@@ -19,18 +33,32 @@ export function reportResult(result: number|string, options?: ResultOptions): vo
         console.warn(`[MinitSDK] reportResult(result) expects a number or a string, got ${typeof result}; the result was ignored and no result screen is shown.`);
         return;
     }
+    // Matches the host's track script: a non-finite number is not a play result, so tracking stays open.
+    const closesTracking = typeof result === "string" || Number.isFinite(result);
+    if (closesTracking) {
+        closeTrackingAfterResult();
+    }
 
     if(isTestEnvironment()) {
 
-        if(options?.delay) {
-            console.log(`[MinitSDK] Delaying drop result display by ${options.delay}ms`);
-            setTimeout(() => {
-                showResultScreen(result, options);
-            }, options.delay);
+        const flavorText = options?.flavorText;
+        const stars = starsFromPercentile(DEV_RESULT_PERCENTILE);
+        if (closesTracking) {
+            recordTrackedEvent("minit.result", typeof flavorText === "string" ? { result, stars, flavorText } : { result, stars });
         }
-        else {
-            showResultScreen(result, options);
+        showTrackDevPanel();
+        const reported = {
+            result,
+            stars,
+            flavorText,
+            userData: typeof options?.userData === "string" ? options.userData : undefined,
+            durationMs: getPlayDurationMs(),
+        };
+        const delay = options?.delay ?? 0;
+        if (delay > 0) {
+            recordResultPending(delay);
         }
+        setTimeout(() => recordReportedResult(reported), delay);
     }
 
     // Build the host-facing options, forwarding the single-key userData if present.
@@ -84,92 +112,3 @@ function buildHostOptions(options?: ResultOptions): HostResultOptions | undefine
 
 // Backward-compat alias
 export const reportDropResult = reportResult;
-
-function showResultScreen(result: number | string, options?: ResultOptions) {
-    const flavorText = options?.flavorText || "No flavor text provided";
-    const delay = options?.delay || 0;
-
-    const overlay = document.createElement('div');
-    overlay.id = "dashboard-overlay";
-    Object.assign(overlay.style, {
-        position: 'fixed',
-        top: '0',
-        left: '0',
-        width: '100vw',
-        height: '100vh',
-        backgroundColor: 'rgba(10, 10, 15, 0.8)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: '10000',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        opacity: '0',
-        transition: 'opacity 0.25s ease'
-    });
-
-    const card = document.createElement('div');
-    Object.assign(card.style, {
-        background: '#181825',
-        color: '#cdd6f4',
-        padding: '3rem 2.5rem 2rem 2.5rem',
-        borderRadius: '20px',
-        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-        width: '350px',
-        textAlign: 'center',
-        border: '1px solid rgba(255, 255, 255, 0.1)',
-        transform: 'scale(0.9)',
-        transition: 'transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-        position: 'relative'
-    });
-
-    card.innerHTML = `
-        <button id="destroy-btn" style="
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            color: #f38ba8;
-            font-size: 1.2rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            line-height: 0;
-        ">✕</button>
-        <div style="font-size: 0.75rem; color: #fab387; font-weight: 700; text-transform: uppercase; margin-bottom: 0.5rem;">${flavorText}</div>
-        <div style="font-size: 3.5rem; font-weight: 800; color: #fff; line-height: 1;">${result}</div>
-        <div style="margin-top: 2rem; width: 100%; height: 1px; background: rgba(255,255,255,0.05);"></div>
-        <div style="margin-top: 1.5rem; font-size: 0.6rem; color: #fdfdfd; font-family: 'Courier New', monospace;">Result Display Delay: ${delay}ms</div>
-    `;
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    requestAnimationFrame(() => {
-        overlay.style.opacity = '1';
-        card.style.transform = 'scale(1)';
-    });
-
-    const destroy = () => {
-        overlay.style.opacity = '0';
-        card.style.transform = 'scale(0.9)';
-        setTimeout(() => overlay.remove(), 250);
-    };
-
-    const btn = card.querySelector('#destroy-btn') as HTMLElement;
-
-    if (btn) {
-        btn.onclick = destroy;
-        btn.onmouseenter = () => btn.style.background = "rgba(243, 139, 168, 0.2)";
-        btn.onmouseleave = () => btn.style.background = "rgba(255, 255, 255, 0.05)";
-    }
-
-    overlay.onclick = (e) => { if (e.target === overlay) destroy(); };
-}

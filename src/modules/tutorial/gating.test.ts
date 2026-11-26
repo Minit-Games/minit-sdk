@@ -1,5 +1,5 @@
 import { USER_DATA_PARAM_KEY } from "../userData.js";
-import { shouldShowTutorial } from "./gating.js";
+import { hasPlayedGame, shouldShowTutorial } from "./gating.js";
 
 function setQuery(search: string): void {
     window.history.replaceState({}, "", search ? `?${search}` : "/");
@@ -85,6 +85,42 @@ describe("shouldShowTutorial", () => {
         it.each(["0", "false"])("force-hides with ?tutorial=%s when hasPlayedGame is absent", (value) => {
             setQuery(`tutorial=${value}`);
             expect(shouldShowTutorial()).toBe(false);
+        });
+    });
+
+    describe("?hasPlayedGame= fallback without a host flag", () => {
+        it("hides tutorial with ?hasPlayedGame=true in the testing environment", () => {
+            setQuery("hasPlayedGame=true");
+            expect(hasPlayedGame()).toBe(true);
+            expect(shouldShowTutorial()).toBe(false);
+        });
+
+        it.each(["false", "1", ""])("shows tutorial with ?hasPlayedGame=%s", (value) => {
+            setQuery(`hasPlayedGame=${value}`);
+            expect(shouldShowTutorial()).toBe(true);
+        });
+
+        it("lets an injected hasPlayedGame win over the param", () => {
+            window.minit = { hasPlayedGame: false } as never;
+            setQuery("hasPlayedGame=true");
+            expect(shouldShowTutorial()).toBe(true);
+        });
+
+        it("ignores the param outside the testing environment", () => {
+            window.minit = { environment: "app" } as never;
+            setQuery("hasPlayedGame=true");
+            expect(shouldShowTutorial()).toBe(true);
+        });
+
+        it.each(["1", "true"])("still force-shows with ?tutorial=%s over the param", (value) => {
+            setQuery(`hasPlayedGame=true&tutorial=${value}`);
+            expect(shouldShowTutorial()).toBe(true);
+        });
+
+        it("still force-shows with ?tutorial=1 over both the param and an injected flag", () => {
+            window.minit = { hasPlayedGame: true } as never;
+            setQuery("hasPlayedGame=true&tutorial=1");
+            expect(shouldShowTutorial()).toBe(true);
         });
     });
 });

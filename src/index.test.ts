@@ -11,7 +11,17 @@
  * random.test.ts.
  */
 
+import * as sdk from "./index";
 import { initializeSDK } from "./index";
+import { track } from "./modules/track";
+
+describe("public exports", () => {
+    it("re-exports track from the package entry point", () => {
+        const exported = (sdk as unknown as Record<string, unknown>).track;
+        expect(typeof exported).toBe("function");
+        expect(exported).toBe(track);
+    });
+});
 
 describe("initializeSDK — console output", () => {
     afterEach(() => {

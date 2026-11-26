@@ -530,6 +530,7 @@ When an AI assistant integrates `@minit-games/sdk` for you, double-check these �
 | `initializeSDK(config?)`         | Initialize the SDK; sets up background and backward-compat shims                                                                                |
 | `loadingDone()`                  | Signal to the app that the game is ready to be shown                                                                                            |
 | `reportResult(result, options?)` | Submit the final game result as a number or string; anything else is ignored with a warning. Optional `flavorText` (64-character cap) is for a session stat/moment, not the score, shown on the host result screen and activity feed |
+| `track(key, properties?)`        | Record a gameplay event for analytics; invalid calls and events over the per-play budget warn and drop, never throw (see [Event tracking](#event-tracking)) |
 | `getUserData()`                  | Read the player's persistent userData string (see [Persistent user data](#persistent-user-data))                                                |
 | `getConfigValue(key, default?)`  | Read one config value the host injected as a URL param — a string, or `undefined` if the key is missing and no `default` is supplied (see [`config`](#config)). `default` may also be a `() => string` factory, evaluated lazily only when the key is missing |
 | `registerAudioContext(context)`   | Opt in an `AudioContext` to auto-suspend when the browser tab hides and auto-resume when it shows (only if this listener suspended it)       |
@@ -578,7 +579,7 @@ During `npm run dev`, you can seed `getUserData` via a URL param — no app host
 ?userData=tutorialPlayed%3Dtrue
 ```
 
-`getUserData()` will return `'tutorialPlayed=true'`.
+`getUserData()` will return `'tutorialPlayed=true'`. The [dev tools panel](#dev-tools-panel)'s User data tab edits this param for you.
 
 URL-param values apply only when the host provides no userData value. Any host-provided string (including `""`) wins over the URL param — URL params are a local-dev convenience only.
 
@@ -608,6 +609,36 @@ Always read and write userData through `getUserData()` and `reportResult()` — 
 - **1 KB (1024 UTF-8 bytes)** maximum. Writes that exceed this limit are silently discarded with a successful response, and the existing value is left unchanged.
 
 Before forwarding a result, the SDK logs a `console.warn` when `flavorText` exceeds its 64-character cap or `userData` exceeds its 1024-UTF-8-byte cap. These are warnings, not errors: the SDK forwards both values unchanged, leaving truncation of `flavorText` and discarding of over-limit `userData` to the platform.
+
+## Event tracking
+
+Call `track(key, properties?)` to record gameplay moments for your Game's analytics:
+
+```ts
+import { track } from '@minit-games/sdk';
+
+track('level.start');
+track('level.complete', { level: 3, perfect: true, boss: 'slime' });
+```
+
+`track()` never throws. Any call after `reportResult()` is dropped (`after-result`). An invalid call, or an event that does not fit the budget, is dropped whole and logs `[Minit] track dropped: <reason>` via `console.warn`, at most once per reason per play.
+
+- **Key:** any non-empty string. Keys starting with `minit.` are reserved for the platform (`reserved-key`).
+- **Properties:** optional plain object with non-empty names. Values are a boolean, a finite number, or a string — no `null`, `NaN`, `Infinity`, nested objects, or arrays.
+- **Budget — the only limit:** 3 KB (3072 UTF-8 bytes) of events per play, which is about 50–75 events with 1–2 properties. Each event counts as the UTF-8 size of its stored line `[key, props, t]`. An event that does not fit the remaining budget is dropped (`budget`); a smaller later event can still fit. The budget starts over on every load and replay. There is no rate or count limit, and the platform's own `minit.*` events do not count. Outside a host (`isTestEnvironment()`) the SDK enforces the budget itself, so a Game that exceeds it shows the warning during local testing.
+
+## Dev tools panel
+
+Outside a host (`isTestEnvironment()`), the first `track()`, `loadingDone()` or `reportResult()` call adds an orange, draggable Minit launcher that opens the dev tools panel (`Ctrl+M` toggles it). It never renders on a host. Tabs:
+
+- **Config:** the config values the Game read (injected, default or missing); edit one, reset to defaults, or toggle the first-time-user flag (`?hasPlayedGame`), each followed by a reload.
+- **Tracking:** every tracked and dropped event with its time, and the budget used (`used / 3072 bytes`). Built-in events (`minit.loading_done`; `minit.result` with `result`, `stars` and `flavorText` when set) show in orange with a Minit icon. Hover or focus a row for its properties, size or drop reason.
+- **Result:** the last `reportResult()` with its stars, flavor text and play duration. Dev mode has no other players, so it always shows 3 stars.
+- **User data:** edit the `?userData` value, then Copy, Export, Clear or Apply & reload. A green notice shows when `reportResult()` updated it, a red one when it exceeds 1024 bytes.
+- **Suggestions:** an integration checklist (SDK detected, `loadingDone()`, `reportResult()`, tutorial, no external requests, `meta.json` config); the tab shows ✓ when all pass.
+- **Settings:** open the panel on the Result tab when a result arrives; close it on replay.
+
+While the panel is open, **Replay** reloads the game; **Replay with new user data** appears when a result reports a `userData` different from the loaded one and reloads with it.
 
 ## Viewability
 
@@ -772,6 +803,8 @@ The font data is tree-shaken per module — games pay only for what they import:
 
 
 Games that use neither `createHeaderBar` nor any feedback function pay no overhead. This per-module elimination applies when the game is built with a tree-shaking bundler (Vite, Rollup, esbuild, webpack); unbundled ESM consumers load whatever modules they import.
+
+The dev tools panel (dev mode only, outside the Minit app) also uses Lato. It is loaded with a dynamic `import()`, so bundlers split it into a separate chunk that hosted games never load.
 
 ## License
 

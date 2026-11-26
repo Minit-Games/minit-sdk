@@ -1,6 +1,6 @@
 import { addBackground } from "./modules/background.js";
 import type { Background } from "./modules/background.js";
-import { getConfig } from "./modules/config.js";
+import { readInjectedConfig } from "./modules/config.js";
 import { applyMetaTags } from "./modules/meta.js";
 import { installAudioVisibilityListener } from "./modules/audioVisibility.js";
 import { getEnvironment, isTestEnvironment } from "./utils.js";
@@ -11,6 +11,8 @@ export { reportResult } from "./modules/result.js";
 export { registerAudioContext, registerAudioElement } from "./modules/audioVisibility.js";
 export { getUserData } from "./modules/userData.js";
 export { loadingDone } from "./modules/loadingDone.js";
+export { track } from "./modules/track.js";
+export type { TrackProperties } from "./modules/track.js";
 export { seededRandom, patchSeed } from "./modules/random.js";
 export type { RandomModule } from "./modules/random.js";
 export { addBackground } from "./modules/background.js";
@@ -64,7 +66,7 @@ export function initializeSDK(config?: SDKConfig): void {
 
     console.log("[MinitSDK] Applied for environment:", getEnvironment());
     if(isTestEnvironment()) {
-        console.log("[MinitSDK] Config", getConfig());
+        console.log("[MinitSDK] Config", readInjectedConfig());
     }
 
 }
