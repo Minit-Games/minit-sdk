@@ -47,7 +47,6 @@ const invalidCases: InvalidCase[] = [
     { label: "number properties", key: "ok", props: 7, reason: "invalid_props" },
     { label: "Map properties", key: "ok", props: new Map([["a", 1]]), reason: "invalid_props" },
     { label: "Date properties", key: "ok", props: new Date(0), reason: "invalid_props" },
-    { label: "class-instance properties", key: "ok", props: new (class Props { a = 1; })(), reason: "invalid_props" },
     {
         label: "properties with a throwing getter",
         key: "ok",
@@ -81,6 +80,7 @@ const validCases: ValidCase[] = [
     },
     { label: "a 1000-char string value", key: "ok", props: { v: "x".repeat(1000) } },
     { label: "a null-prototype properties object", key: "ok", props: Object.assign(Object.create(null), { a: 1 }) },
+    { label: "class-instance properties, as the host injection accepts them", key: "ok", props: new (class Props { a = 1; })() as unknown as TrackProperties },
 ];
 
 function dropMessage(reason: TrackDropReason): string {

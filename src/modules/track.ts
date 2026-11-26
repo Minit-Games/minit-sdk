@@ -91,14 +91,10 @@ function validate(
 
 function snapshotEntries(properties: unknown): [string, unknown][] | undefined {
     try {
-        if (typeof properties !== "object" || properties === null) {
+        if (Object.prototype.toString.call(properties) !== "[object Object]") {
             return undefined;
         }
-        const prototype = Object.getPrototypeOf(properties);
-        if (prototype !== Object.prototype && prototype !== null) {
-            return undefined;
-        }
-        return Object.entries(properties);
+        return Object.entries(properties as object);
     } catch {
         return undefined;
     }
