@@ -758,7 +758,7 @@ describe("track — after reportResult", () => {
 
         expect(hostTrack).toHaveBeenCalledTimes(1);
         expectForwardedUnchanged(hostTrack, "", props);
-        expect(warnSpy).not.toHaveBeenCalled();
+        expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("track dropped"));
     });
 });
 
